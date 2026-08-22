@@ -1,0 +1,333 @@
+@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root{
+  --bg: #1B2430;
+  --panel: #232F3F;
+  --panel-raised: #2B3A4D;
+  --ink: #F2E9D8;
+  --muted: #93A4B8;
+  --gold: #E3A33E;
+  --gold-dim: #8A6A34;
+  --red: #C1483B;
+  --red-dim: #5A2A24;
+  --teal: #4A9384;
+  --teal-dim: #2A4A44;
+  --line: #34445A;
+  --radius: 14px;
+}
+
+*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:'Public Sans', sans-serif;
+  display:flex;
+  justify-content:center;
+  min-height:100vh;
+}
+
+.hidden{ display:none !important; }
+
+button, input, select, textarea{ font-family:inherit; }
+
+/* ---------- Andean texture strip ---------- */
+.greca{
+  height:8px;
+  width:100%;
+  background-image:
+    linear-gradient(45deg, var(--gold) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--gold) 25%, transparent 25%);
+  background-size:8px 8px;
+}
+.greca.teal{
+  background-image:
+    linear-gradient(45deg, var(--teal) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--teal) 25%, transparent 25%);
+}
+
+/* ---------- Device / shell ---------- */
+.device{
+  width:100%;
+  max-width:480px;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  position:relative;
+}
+
+/* ---------- Login screen ---------- */
+.login-screen{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:32px;
+  text-align:center;
+  gap:18px;
+}
+.login-title{
+  font-family:'Big Shoulders Display', sans-serif;
+  font-weight:800;
+  font-size:48px;
+  margin:0;
+  color:var(--gold);
+}
+.login-sub{ color:var(--muted); font-size:14px; max-width:280px; line-height:1.6; margin:0; }
+
+/* ---------- Buttons ---------- */
+.btn{
+  border:none;
+  border-radius:10px;
+  padding:12px 18px;
+  font-size:14px;
+  font-weight:600;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+.btn-primary{ background:var(--gold); color:#1B2430; }
+.btn-outline{ background:transparent; color:var(--ink); border:1px solid var(--line); }
+.btn-danger{ background:var(--red-dim); color:#E8B8AE; }
+.btn-small{ padding:7px 12px; font-size:12.5px; border-radius:8px; }
+.btn-block{ width:100%; }
+
+/* ---------- Header ---------- */
+header.app-header{
+  padding:20px 20px 14px;
+  background:var(--panel);
+  border-bottom:1px solid var(--line);
+}
+.trip-label{
+  font-family:'JetBrains Mono', monospace;
+  font-size:11px;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  color:var(--muted);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.trip-title{
+  font-family:'Big Shoulders Display', sans-serif;
+  font-weight:800;
+  font-size:30px;
+  line-height:1;
+  margin:6px 0 8px;
+}
+.countdown-row{ display:flex; align-items:baseline; gap:8px; }
+.countdown-num{ font-family:'JetBrains Mono', monospace; font-size:18px; color:var(--gold); }
+.countdown-text{ font-size:12.5px; color:var(--muted); }
+
+/* ---------- Tabs ---------- */
+nav.tabs{
+  display:flex;
+  overflow-x:auto;
+  gap:4px;
+  padding:10px 14px;
+  background:var(--panel);
+  border-bottom:1px solid var(--line);
+  scrollbar-width:none;
+}
+nav.tabs::-webkit-scrollbar{ display:none; }
+.tab{
+  flex:0 0 auto;
+  padding:7px 13px;
+  border-radius:20px;
+  font-size:12.5px;
+  font-weight:600;
+  color:var(--muted);
+  white-space:nowrap;
+  cursor:pointer;
+  border:none;
+  background:transparent;
+}
+.tab.active{ background:var(--gold); color:#1B2430; }
+
+/* ---------- Main content ---------- */
+main{ flex:1; padding:20px 18px 40px; }
+
+.screen-title{
+  font-family:'Big Shoulders Display', sans-serif;
+  font-weight:800;
+  font-size:24px;
+  margin:0 0 4px;
+}
+.screen-sub{ font-size:12.5px; color:var(--muted); margin:0 0 16px; line-height:1.5; }
+
+/* ---------- Cards / lists ---------- */
+.card{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:14px;
+  margin-bottom:10px;
+}
+.card-row{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.card-title{ font-weight:600; font-size:14.5px; }
+.card-meta{ font-size:12px; color:var(--muted); margin-top:3px; }
+
+.badge{
+  font-family:'JetBrains Mono', monospace;
+  font-size:10px;
+  letter-spacing:0.04em;
+  padding:3px 8px;
+  border-radius:6px;
+  text-transform:uppercase;
+  white-space:nowrap;
+  border:none;
+  cursor:pointer;
+}
+.badge-confirmado{ background:var(--teal-dim); color:var(--teal); }
+.badge-programado{ background:var(--gold-dim); color:var(--gold); }
+.badge-cogitando{ background:var(--line); color:var(--muted); }
+.badge-shared{ background:var(--teal-dim); color:var(--teal); }
+.badge-personal{ background:var(--red-dim); color:#E8907F; }
+.badge-pendente{ background:var(--gold-dim); color:var(--gold); }
+.badge-feito{ background:var(--teal-dim); color:var(--teal); }
+
+/* ---------- Forms ---------- */
+.form-card{
+  background:var(--panel-raised);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:14px;
+  margin-bottom:16px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.form-card input, .form-card select, .form-card textarea{
+  background:var(--bg);
+  border:1px solid var(--line);
+  color:var(--ink);
+  border-radius:8px;
+  padding:9px 10px;
+  font-size:13.5px;
+  width:100%;
+}
+.form-card label{ font-size:11.5px; color:var(--muted); margin-bottom:2px; display:block; }
+.form-row{ display:flex; gap:8px; }
+.form-row > div{ flex:1; }
+.checkbox-group{ display:flex; flex-wrap:wrap; gap:6px; }
+.checkbox-chip{
+  font-size:12px;
+  padding:5px 10px;
+  border-radius:14px;
+  border:1px solid var(--line);
+  cursor:pointer;
+  color:var(--muted);
+}
+.checkbox-chip.checked{ background:var(--gold-dim); color:var(--gold); border-color:var(--gold-dim); }
+
+.add-toggle{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:12px;
+  border:1.5px dashed var(--line);
+  border-radius:var(--radius);
+  color:var(--muted);
+  font-size:13px;
+  font-weight:600;
+  margin-bottom:16px;
+  cursor:pointer;
+  background:none;
+  width:100%;
+}
+
+/* ---------- Segmented control ---------- */
+.segmented{
+  display:flex;
+  background:var(--panel);
+  border-radius:12px;
+  padding:4px;
+  margin-bottom:16px;
+  border:1px solid var(--line);
+}
+.seg-btn{
+  flex:1;
+  text-align:center;
+  padding:9px 0;
+  border-radius:9px;
+  font-size:13px;
+  font-weight:600;
+  color:var(--muted);
+  border:none;
+  background:none;
+  cursor:pointer;
+}
+.seg-btn.active{ background:var(--teal-dim); color:var(--teal); box-shadow: inset 0 0 0 1px var(--teal); }
+
+/* ---------- Checklist item ---------- */
+.item{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:12px 14px;
+  margin-bottom:8px;
+}
+.checkbox{
+  width:22px; height:22px; border-radius:6px;
+  border:2px solid var(--muted);
+  flex:0 0 22px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; cursor:pointer; background:none;
+}
+.checkbox.checked.shared{ background:var(--teal); border-color:var(--teal); color:#0F1C19; }
+.checkbox.checked.personal{ background:var(--red); border-color:var(--red); color:#2A100C; }
+.item-name{ flex:1; font-size:14px; font-weight:500; }
+.item-name.done{ color:var(--muted); text-decoration:line-through; text-decoration-color:var(--line); }
+.item-del{ background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; padding:2px 6px; }
+
+/* ---------- Progress bars ---------- */
+.progress-card{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px 16px 6px; }
+.person-row{ margin-bottom:16px; }
+.person-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+.person-name{ font-size:13.5px; font-weight:600; }
+.person-count{ font-family:'JetBrains Mono', monospace; font-size:12px; color:var(--gold); }
+.weave-track{ height:9px; border-radius:5px; background:var(--bg); overflow:hidden; border:1px solid var(--line); }
+.weave-fill{
+  height:100%;
+  background-image: linear-gradient(45deg, var(--gold) 25%, transparent 25%, transparent 50%, var(--gold) 50%, var(--gold) 75%, transparent 75%, transparent);
+  background-size:8px 8px;
+  background-color: var(--gold-dim);
+}
+
+/* ---------- Trip picker ---------- */
+.trip-card{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:16px;
+  margin-bottom:10px;
+  cursor:pointer;
+}
+.trip-card:hover{ border-color:var(--gold-dim); }
+.trip-card-title{ font-family:'Big Shoulders Display', sans-serif; font-weight:800; font-size:20px; }
+.trip-card-meta{ font-size:12px; color:var(--muted); margin-top:4px; }
+
+/* ---------- Empty state ---------- */
+.empty{ text-align:center; color:var(--muted); font-size:13px; padding:24px 10px; }
+
+/* ---------- Log entries ---------- */
+.log-entry{ border-bottom:1px solid var(--line); padding:10px 2px; font-size:12.5px; }
+.log-author{ color:var(--gold); font-weight:600; }
+.log-time{ font-family:'JetBrains Mono', monospace; color:var(--muted); font-size:11px; }
+
+/* ---------- Balance summary (Gastos) ---------- */
+.balance-positive{ color:var(--teal); }
+.balance-negative{ color:#E8907F; }
+
+/* ---------- Top-right icon button ---------- */
+.icon-btn{
+  background:none; border:none; color:var(--muted); cursor:pointer; font-size:18px;
+}

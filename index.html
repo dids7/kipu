@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kipu — Checklist de Viagem</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="device">
+
+  <!-- LOGIN -->
+  <section id="loginScreen" class="login-screen">
+    <div class="greca" style="position:absolute; top:0; left:0;"></div>
+    <h1 class="login-title">Kipu</h1>
+    <p class="login-sub">Organize itinerário, mala e tarefas da viagem com o seu grupo — tudo num só lugar.</p>
+    <button id="loginBtn" class="btn btn-primary">Entrar com Google</button>
+  </section>
+
+  <!-- SELEÇÃO / CRIAÇÃO DE VIAGEM -->
+  <section id="tripPickerScreen" class="hidden">
+    <header class="app-header">
+      <div class="trip-label">
+        <span id="userEmailLabel"></span>
+        <button id="logoutBtn" class="icon-btn" title="Sair">⎋</button>
+      </div>
+      <h1 class="trip-title">Suas viagens</h1>
+    </header>
+    <main>
+      <div id="tripList"></div>
+      <button id="showNewTripFormBtn" class="add-toggle">＋ Criar nova viagem</button>
+      <div id="newTripForm" class="form-card hidden">
+        <div>
+          <label>Nome da viagem</label>
+          <input type="text" id="tripName" placeholder="Ex: Peru 2026">
+        </div>
+        <div>
+          <label>Destino</label>
+          <input type="text" id="tripDestination" placeholder="Ex: Cusco, Peru">
+        </div>
+        <div class="form-row">
+          <div>
+            <label>Data de início</label>
+            <input type="date" id="tripStart">
+          </div>
+          <div>
+            <label>Data de fim</label>
+            <input type="date" id="tripEnd">
+          </div>
+        </div>
+        <div>
+          <label>E-mails dos participantes (separados por vírgula, inclua o seu)</label>
+          <input type="text" id="tripParticipants" placeholder="voce@gmail.com, noiva@gmail.com">
+        </div>
+        <button id="createTripBtn" class="btn btn-primary btn-block">Criar viagem</button>
+      </div>
+    </main>
+  </section>
+
+  <!-- APP PRINCIPAL -->
+  <section id="appScreen" class="hidden">
+    <div class="greca"></div>
+    <header class="app-header">
+      <div class="trip-label">
+        <button id="backToTripsBtn" class="icon-btn" title="Trocar de viagem">← viagens</button>
+        <button id="logoutBtn2" class="icon-btn" title="Sair">⎋</button>
+      </div>
+      <h1 class="trip-title" id="currentTripTitle">—</h1>
+      <div class="countdown-row">
+        <span class="countdown-num" id="countdownNum">—</span>
+        <span class="countdown-text" id="countdownText"></span>
+      </div>
+    </header>
+
+    <nav class="tabs" id="tabNav">
+      <button class="tab active" data-tab="geral">Geral</button>
+      <button class="tab" data-tab="itinerario">Itinerário</button>
+      <button class="tab" data-tab="estadia">Estadia</button>
+      <button class="tab" data-tab="passeios">Passeios</button>
+      <button class="tab" data-tab="documentos">Documentos</button>
+      <button class="tab" data-tab="mala">Mala</button>
+      <button class="tab" data-tab="tarefas">Tarefas</button>
+      <button class="tab" data-tab="gastos">Gastos</button>
+      <button class="tab" data-tab="emergencia">Emergência</button>
+      <button class="tab" data-tab="historico">Histórico</button>
+    </nav>
+
+    <main id="mainContent">
+
+      <!-- GERAL -->
+      <div class="tab-panel" id="panel-geral">
+        <h2 class="screen-title">Visão geral</h2>
+        <div class="card">
+          <div class="card-title">Participantes</div>
+          <div id="participantsList" class="card-meta"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Destino</div>
+          <div class="card-meta" id="tripDestinationLabel">—</div>
+        </div>
+      </div>
+
+      <!-- ITINERÁRIO -->
+      <div class="tab-panel hidden" id="panel-itinerario">
+        <h2 class="screen-title">Itinerário</h2>
+        <p class="screen-sub">🟢 confirmado · 🟡 programado · ⚪ cogitando — clique no status pra alternar.</p>
+        <button class="add-toggle" data-form="itinerarioForm">＋ Adicionar item ao itinerário</button>
+        <div id="itinerarioForm" class="form-card hidden">
+          <div class="form-row">
+            <div><label>Data</label><input type="date" id="itDate"></div>
+            <div><label>Horário</label><input type="time" id="itTime"></div>
+          </div>
+          <div><label>Atividade</label><input type="text" id="itTitle" placeholder="Ex: Machu Picchu — Circuito 2"></div>
+          <div>
+            <label>Status</label>
+            <select id="itStatus">
+              <option value="cogitando">Cogitando</option>
+              <option value="programado">Programado</option>
+              <option value="confirmado">Confirmado</option>
+            </select>
+          </div>
+          <button class="btn btn-primary btn-block" id="saveItinerarioBtn">Salvar</button>
+        </div>
+        <div id="itinerarioList"></div>
+      </div>
+
+      <!-- ESTADIA -->
+      <div class="tab-panel hidden" id="panel-estadia">
+        <h2 class="screen-title">Estadia</h2>
+        <button class="add-toggle" data-form="estadiaForm">＋ Adicionar hospedagem</button>
+        <div id="estadiaForm" class="form-card hidden">
+          <div><label>Nome do hotel</label><input type="text" id="stayName" placeholder="Ex: Casa Tiyay"></div>
+          <div class="form-row">
+            <div><label>Check-in</label><input type="date" id="stayCheckin"></div>
+            <div><label>Check-out</label><input type="date" id="stayCheckout"></div>
+          </div>
+          <div><label>Endereço</label><input type="text" id="stayAddress"></div>
+          <div>
+            <label>Status de pagamento</label>
+            <select id="stayStatus">
+              <option value="pendente">Pendente</option>
+              <option value="pago">Pago</option>
+            </select>
+          </div>
+          <button class="btn btn-primary btn-block" id="saveEstadiaBtn">Salvar</button>
+        </div>
+        <div id="estadiaList"></div>
+      </div>
+
+      <!-- PASSEIOS -->
+      <div class="tab-panel hidden" id="panel-passeios">
+        <h2 class="screen-title">Passeios</h2>
+        <button class="add-toggle" data-form="passeioForm">＋ Adicionar passeio</button>
+        <div id="passeioForm" class="form-card hidden">
+          <div><label>Nome</label><input type="text" id="tourName" placeholder="Ex: Vistadome"></div>
+          <div class="form-row">
+            <div><label>Data</label><input type="date" id="tourDate"></div>
+            <div><label>Horário</label><input type="time" id="tourTime"></div>
+          </div>
+          <div><label>Valor (R$)</label><input type="number" id="tourValue" step="0.01"></div>
+          <div>
+            <label>Status de pagamento</label>
+            <select id="tourStatus">
+              <option value="pendente">Pendente</option>
+              <option value="pago">Pago</option>
+            </select>
+          </div>
+          <div><label>Responsável</label><select id="tourResponsible"></select></div>
+          <button class="btn btn-primary btn-block" id="saveTourBtn">Salvar</button>
+        </div>
+        <div id="passeiosList"></div>
+      </div>
+
+      <!-- DOCUMENTOS -->
+      <div class="tab-panel hidden" id="panel-documentos">
+        <h2 class="screen-title">Documentos e vouchers</h2>
+        <button class="add-toggle" data-form="docForm">＋ Adicionar documento</button>
+        <div id="docForm" class="form-card hidden">
+          <div><label>Título</label><input type="text" id="docTitle" placeholder="Ex: Voucher hotel Casa Tiyay"></div>
+          <div><label>Link</label><input type="text" id="docUrl" placeholder="https://..."></div>
+          <div><label>Notas</label><input type="text" id="docNotes" placeholder="Opcional"></div>
+          <button class="btn btn-primary btn-block" id="saveDocBtn">Salvar</button>
+        </div>
+        <div id="docsList"></div>
+      </div>
+
+      <!-- MALA -->
+      <div class="tab-panel hidden" id="panel-mala">
+        <h2 class="screen-title">Minha mala</h2>
+        <p class="screen-sub">Compartilhado conta no placar do grupo. Pessoal só aparece pra você.</p>
+        <div class="segmented">
+          <button class="seg-btn active" data-seg="shared">🧵 Compartilhado</button>
+          <button class="seg-btn" data-seg="personal">🔒 Pessoal</button>
+        </div>
+        <div class="form-row" style="margin-bottom:14px;">
+          <input type="text" id="newItemName" placeholder="Novo item...">
+          <button id="addItemBtn" class="btn btn-primary btn-small">Adicionar</button>
+        </div>
+        <div id="malaList"></div>
+
+        <h3 class="screen-title" style="font-size:18px; margin-top:24px;">Progresso do grupo</h3>
+        <p class="screen-sub">Só considera itens compartilhados. Itens pessoais de cada um não entram aqui.</p>
+        <div class="progress-card" id="groupProgress"></div>
+      </div>
+
+      <!-- TAREFAS -->
+      <div class="tab-panel hidden" id="panel-tarefas">
+        <h2 class="screen-title">Tarefas do grupo</h2>
+        <button class="add-toggle" data-form="taskForm">＋ Adicionar tarefa</button>
+        <div id="taskForm" class="form-card hidden">
+          <div><label>Descrição</label><input type="text" id="taskDesc" placeholder="Ex: Confirmar pagamento do trem"></div>
+          <div><label>Responsável</label><select id="taskResponsible"></select></div>
+          <button class="btn btn-primary btn-block" id="saveTaskBtn">Salvar</button>
+        </div>
+        <div id="tasksList"></div>
+      </div>
+
+      <!-- GASTOS -->
+      <div class="tab-panel hidden" id="panel-gastos">
+        <h2 class="screen-title">Divisão de gastos</h2>
+        <button class="add-toggle" data-form="expenseForm">＋ Adicionar gasto</button>
+        <div id="expenseForm" class="form-card hidden">
+          <div><label>Descrição</label><input type="text" id="expDesc" placeholder="Ex: Táxi aeroporto"></div>
+          <div><label>Valor (R$)</label><input type="number" id="expValue" step="0.01"></div>
+          <div><label>Quem pagou</label><select id="expPaidBy"></select></div>
+          <div>
+            <label>Dividir entre</label>
+            <div class="checkbox-group" id="expSplitGroup"></div>
+          </div>
+          <button class="btn btn-primary btn-block" id="saveExpenseBtn">Salvar</button>
+        </div>
+        <div id="expensesList"></div>
+        <h3 class="screen-title" style="font-size:18px; margin-top:20px;">Saldo por pessoa</h3>
+        <div class="card" id="balanceSummary"></div>
+      </div>
+
+      <!-- EMERGÊNCIA -->
+      <div class="tab-panel hidden" id="panel-emergencia">
+        <h2 class="screen-title">Informações de emergência</h2>
+        <button class="add-toggle" data-form="emergencyForm">＋ Adicionar informação</button>
+        <div id="emergencyForm" class="form-card hidden">
+          <div><label>Rótulo</label><input type="text" id="emLabel" placeholder="Ex: Agência (Landy)"></div>
+          <div><label>Valor</label><input type="text" id="emValue" placeholder="Ex: +51 999 999 999"></div>
+          <button class="btn btn-primary btn-block" id="saveEmergencyBtn">Salvar</button>
+        </div>
+        <div id="emergencyList"></div>
+      </div>
+
+      <!-- HISTÓRICO -->
+      <div class="tab-panel hidden" id="panel-historico">
+        <h2 class="screen-title">Histórico</h2>
+        <p class="screen-sub">Registro de tudo que foi alterado nessa viagem.</p>
+        <div id="historyList"></div>
+      </div>
+
+    </main>
+  </section>
+
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
