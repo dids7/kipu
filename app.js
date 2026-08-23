@@ -3,7 +3,7 @@ import {
   signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot,
+  collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
   query, where, orderBy, serverTimestamp, getDocs
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
@@ -18,7 +18,6 @@ let malaSeg = "shared";
 let unsubscribers = [];
 let calendarViewDate = null; // Date — mês sendo exibido
 let selectedCalDate = null;  // string YYYY-MM-DD selecionada
-let remindersCache = {};     // { "YYYY-MM-DD": {text, authorEmail} }
 
 // ---------- Helpers de tela ----------
 const $ = (id) => document.getElementById(id);
@@ -625,11 +624,21 @@ function subscribeHistorico() {
 }
 
 // ================= CALENDÁRIO + LEMBRETES =================
+let remindersByDate = {}; // { "YYYY-MM-DD": [{id, text, visibility, authorEmail}] }
+let currentRemVis = "personal";
+
 function subscribeReminders() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "lembretes"), (snap) => {
-    remindersCache = {};
-    snap.forEach((d) => { remindersCache[d.id] = { ...d.data(), docId: d.id }; });
+    remindersByDate = {};
+    snap.forEach((d) => {
+      const r = { id: d.id, ...d.data() };
+      const visible = r.visibility === "shared" || r.authorEmail === currentUser.email;
+      if (!visible) return;
+      if (!remindersByDate[r.date]) remindersByDate[r.date] = [];
+      remindersByDate[r.date].push(r);
+    });
     renderCalendar();
+    if (selectedCalDate) renderReminderEntries(selectedCalDate);
   });
   unsubscribers.push(unsub);
 }
@@ -670,7 +679,7 @@ function renderCalendar() {
     const cell = document.createElement("div");
     cell.className = "cal-day";
     if (iso === currentTripData.startDate) cell.classList.add("trip-day");
-    if (remindersCache[iso]) cell.classList.add("has-reminder");
+    if (remindersByDate[iso] && remindersByDate[iso].length > 0) cell.classList.add("has-reminder");
     if (iso === selectedCalDate) cell.classList.add("selected");
     cell.textContent = day;
     cell.addEventListener("click", () => selectCalendarDay(iso, day));
@@ -684,11 +693,45 @@ function selectCalendarDay(iso, day) {
   const editor = $("reminderEditor");
   editor.classList.remove("hidden");
   const m = calendarViewDate.getMonth();
-  $("reminderEditorLabel").textContent = `Lembrete para ${day}/${m + 1}`;
-  const existing = remindersCache[iso];
-  $("reminderText").value = existing ? existing.text : "";
-  $("deleteReminderBtn").classList.toggle("hidden", !existing);
+  $("reminderEditorLabel").textContent = `Lembretes para ${day}/${m + 1}`;
+  $("reminderText").value = "";
+  renderReminderEntries(iso);
 }
+
+function renderReminderEntries(iso) {
+  const listEl = $("reminderEntriesList");
+  const entries = remindersByDate[iso] || [];
+  if (entries.length === 0) { listEl.innerHTML = "<div class='empty' style='padding:8px 0;'>Nenhum lembrete ainda.</div>"; return; }
+  listEl.innerHTML = "";
+  entries.forEach((r) => {
+    const canDelete = r.visibility === "shared" || r.authorEmail === currentUser.email;
+    const row = document.createElement("div");
+    row.className = "card-row";
+    row.style.padding = "6px 0";
+    row.innerHTML = `
+      <span class="card-meta" style="display:flex; align-items:center; gap:6px;">
+        <span class="badge badge-${r.visibility}">${r.visibility === "shared" ? "grupo" : "só eu"}</span>
+        ${r.text}
+      </span>
+      ${canDelete ? `<button class="item-del">✕</button>` : ""}
+    `;
+    if (canDelete) {
+      row.querySelector("button").addEventListener("click", async () => {
+        await deleteDoc(doc(db, "trips", currentTripId, "lembretes", r.id));
+        logActivity("calendario", "lembrete removido", `${iso}: ${r.text}`);
+      });
+    }
+    listEl.appendChild(row);
+  });
+}
+
+document.querySelectorAll("[data-remvis]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("[data-remvis]").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentRemVis = btn.dataset.remvis;
+  });
+});
 
 $("calPrevBtn").addEventListener("click", () => {
   calendarViewDate.setMonth(calendarViewDate.getMonth() - 1);
@@ -702,19 +745,9 @@ $("calNextBtn").addEventListener("click", () => {
 $("saveReminderBtn").addEventListener("click", async () => {
   const text = $("reminderText").value.trim();
   if (!text || !selectedCalDate) { alert("Escreva algo pro lembrete."); return; }
-  await setDoc(doc(db, "trips", currentTripId, "lembretes", selectedCalDate), {
-    text, authorEmail: currentUser.email, date: selectedCalDate
+  await addDoc(collection(db, "trips", currentTripId, "lembretes"), {
+    text, visibility: currentRemVis, authorEmail: currentUser.email, date: selectedCalDate
   });
-  logActivity("calendario", "lembrete salvo", `${selectedCalDate}: ${text}`);
-  $("reminderEditor").classList.add("hidden");
-  selectedCalDate = null;
-});
-
-$("deleteReminderBtn").addEventListener("click", async () => {
-  if (!selectedCalDate) return;
-  const text = remindersCache[selectedCalDate]?.text || "";
-  await deleteDoc(doc(db, "trips", currentTripId, "lembretes", selectedCalDate));
-  logActivity("calendario", "lembrete removido", `${selectedCalDate}: ${text}`);
-  $("reminderEditor").classList.add("hidden");
-  selectedCalDate = null;
+  logActivity("calendario", "lembrete adicionado", `${selectedCalDate}: ${text} (${currentRemVis})`);
+  $("reminderText").value = "";
 });

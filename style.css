@@ -328,6 +328,7 @@ main{ flex:1; padding:20px 18px 40px; }
 .balance-negative{ color:#E8907F; }
 
 /* ---------- Mini calendário ---------- */
+#calendarCard{ max-width:400px; }
 .calendar-grid{
   display:grid;
   grid-template-columns: repeat(7, 1fr);
@@ -439,6 +440,10 @@ main{ flex:1; padding:20px 18px 40px; }
     padding:28px 36px;
     max-width:900px;
   }
+
+  #calendarCard{ max-width:380px; }
+  .cal-day{ font-size:11px; }
+  .cal-weekday{ font-size:9px; }
 
   /* Listas de cards em 2 colunas — pensado pra planejamento, não pra fila de leitura */
   #itinerarioList, #estadiaList, #docsList, #tasksList, #expensesList, #emergencyList{
