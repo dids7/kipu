@@ -18,6 +18,7 @@ let malaSeg = "shared";
 let unsubscribers = [];
 let calendarViewDate = null; // Date — mês sendo exibido
 let selectedCalDate = null;  // string YYYY-MM-DD selecionada
+let allUserTrips = [];       // todas as viagens onde o usuário é participante
 
 // ---------- Helpers de tela ----------
 const $ = (id) => document.getElementById(id);
@@ -138,11 +139,15 @@ async function openTrip(tripId) {
   const snap = await getDocs(query(collection(db, "trips"), where("__name__", "==", tripId)));
   snap.forEach((d) => { currentTripData = d.data(); });
 
+  // Carrega todas as viagens do usuário, pra o calendário saber qual viagem
+  // cobre cada data (pode ser esta ou outra, ex: Peru dia 4-12, Miami dia 22-26)
+  const allSnap = await getDocs(query(collection(db, "trips"), where("participantEmails", "array-contains", currentUser.email)));
+  allUserTrips = [];
+  allSnap.forEach((d) => allUserTrips.push({ id: d.id, ...d.data() }));
+
   hide($("tripPickerScreen"));
   show($("appScreen"));
   $("currentTripTitle").textContent = currentTripData.name;
-  $("tripDestinationLabel").textContent = currentTripData.destination || "—";
-  renderParticipants();
   renderCountdown();
   populateResponsibleSelects();
 
@@ -157,6 +162,9 @@ async function openTrip(tripId) {
   subscribeReminders();
 
   calendarViewDate = new Date(currentTripData.startDate + "T00:00:00");
+  selectedCalDate = null;
+  hide($("dateTripInfoCard"));
+  hide($("reminderEditor"));
   renderCalendar();
 }
 
@@ -165,9 +173,25 @@ function clearSubscriptions() {
   unsubscribers = [];
 }
 
-function renderParticipants() {
+function findTripForDate(iso) {
+  return allUserTrips.find((t) => iso >= t.startDate && iso <= t.endDate) || null;
+}
+
+function updateDateTripInfo(iso) {
+  const trip = findTripForDate(iso);
+  const card = $("dateTripInfoCard");
+  if (!trip) { hide(card); return; }
+  show(card);
+  $("dateTripNameLabel").textContent = trip.name;
+  $("dateTripDestinoLabel").textContent = trip.destination || "—";
+  const isCurrentTrip = trip.id === currentTripId;
+  renderParticipants(trip, isCurrentTrip);
+  $("participantEditRow").classList.toggle("hidden", !isCurrentTrip);
+}
+
+function renderParticipants(trip, editable) {
   const listEl = $("participantsList");
-  const emails = currentTripData.participantEmails || [];
+  const emails = trip.participantEmails || [];
   listEl.innerHTML = "";
   emails.forEach((email) => {
     const row = document.createElement("div");
@@ -176,9 +200,9 @@ function renderParticipants() {
     const isLast = emails.length === 1;
     row.innerHTML = `
       <span class="card-meta">${email}</span>
-      <button class="item-del" ${isLast ? "disabled title='precisa ter ao menos 1 participante'" : ""}>✕</button>
+      ${editable ? `<button class="item-del" ${isLast ? "disabled title='precisa ter ao menos 1 participante'" : ""}>✕</button>` : ""}
     `;
-    if (!isLast) {
+    if (editable && !isLast) {
       row.querySelector("button").addEventListener("click", () => removeParticipant(email));
     }
     listEl.appendChild(row);
@@ -190,7 +214,9 @@ async function removeParticipant(email) {
   const updated = (currentTripData.participantEmails || []).filter((e) => e !== email);
   await updateDoc(doc(db, "trips", currentTripId), { participantEmails: updated });
   currentTripData.participantEmails = updated;
-  renderParticipants();
+  const idx = allUserTrips.findIndex((t) => t.id === currentTripId);
+  if (idx >= 0) allUserTrips[idx].participantEmails = updated;
+  if (selectedCalDate) updateDateTripInfo(selectedCalDate);
   populateResponsibleSelects();
   logActivity("geral", "participante removido", email);
 }
@@ -204,7 +230,9 @@ $("addParticipantBtn").addEventListener("click", async () => {
   const updated = [...current, email];
   await updateDoc(doc(db, "trips", currentTripId), { participantEmails: updated });
   currentTripData.participantEmails = updated;
-  renderParticipants();
+  const idx = allUserTrips.findIndex((t) => t.id === currentTripId);
+  if (idx >= 0) allUserTrips[idx].participantEmails = updated;
+  if (selectedCalDate) updateDateTripInfo(selectedCalDate);
   populateResponsibleSelects();
   logActivity("geral", "participante adicionado", email);
   input.value = "";
@@ -690,6 +718,7 @@ function renderCalendar() {
 function selectCalendarDay(iso, day) {
   selectedCalDate = iso;
   renderCalendar();
+  updateDateTripInfo(iso);
   const editor = $("reminderEditor");
   editor.classList.remove("hidden");
   const m = calendarViewDate.getMonth();

@@ -330,11 +330,12 @@ main{ flex:1; padding:20px 18px 40px; }
 .balance-negative{ color:#E8907F; }
 
 /* ---------- Mini calendário ---------- */
-#calendarCard{ max-width:400px; }
+#calendarCard{ max-width:400px; padding:16px; overflow:hidden; }
 .calendar-grid{
   display:grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap:4px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap:5px;
+  width:100%;
 }
 .cal-weekday{
   font-size:10px;
@@ -448,7 +449,7 @@ main{ flex:1; padding:20px 18px 40px; }
     max-width:900px;
   }
 
-  #calendarCard{ max-width:380px; }
+  #calendarCard{ max-width:380px; padding:14px; }
   .cal-day{ font-size:11px; }
   .cal-weekday{ font-size:9px; }
 

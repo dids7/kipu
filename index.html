@@ -73,7 +73,7 @@
     </header>
 
     <nav class="tabs" id="tabNav">
-      <button class="tab active" data-tab="geral">Geral</button>
+      <button class="tab active" data-tab="geral">Calendário</button>
       <button class="tab" data-tab="itinerario">Itinerário</button>
       <button class="tab" data-tab="estadia">Estadia</button>
       <button class="tab" data-tab="documentos">Documentos</button>
@@ -86,12 +86,11 @@
 
     <main id="mainContent">
 
-      <!-- GERAL -->
+      <!-- CALENDÁRIO -->
       <div class="tab-panel" id="panel-geral">
-        <h2 class="screen-title">Visão geral</h2>
+        <h2 class="screen-title">Calendário</h2>
 
         <div class="card" id="calendarCard">
-          <div class="card-title" style="margin-bottom:10px;">Calendário</div>
           <div class="card-row" style="margin-bottom:10px;">
             <button id="calPrevBtn" class="icon-btn">‹</button>
             <div class="card-title" id="calMonthLabel">—</div>
@@ -112,17 +111,17 @@
           </div>
         </div>
 
-        <div class="card">
-          <div class="card-title">Participantes</div>
-          <div id="participantsList"></div>
-          <div class="form-row" style="margin-top:10px;">
-            <input type="email" id="newParticipantEmail" placeholder="email@gmail.com">
-            <button id="addParticipantBtn" class="btn btn-primary btn-small">Adicionar</button>
+        <div class="card hidden" id="dateTripInfoCard">
+          <div class="card-title" id="dateTripNameLabel">—</div>
+          <div class="card-meta" id="dateTripDestinoLabel"></div>
+          <div style="margin-top:12px;">
+            <div class="card-title" style="font-size:12px;">Participantes</div>
+            <div id="participantsList"></div>
+            <div class="form-row" id="participantEditRow" style="margin-top:10px;">
+              <input type="email" id="newParticipantEmail" placeholder="email@gmail.com">
+              <button id="addParticipantBtn" class="btn btn-primary btn-small">Adicionar</button>
+            </div>
           </div>
-        </div>
-        <div class="card">
-          <div class="card-title">Destino</div>
-          <div class="card-meta" id="tripDestinationLabel">—</div>
         </div>
       </div>
 
