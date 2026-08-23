@@ -161,7 +161,7 @@ async function openTrip(tripId) {
   subscribeHistorico();
   subscribeReminders();
 
-  calendarViewDate = new Date(currentTripData.startDate + "T00:00:00");
+  calendarViewDate = new Date();
   selectedCalDate = null;
   hide($("dateTripInfoCard"));
   hide($("reminderEditor"));
@@ -702,11 +702,14 @@ function renderCalendar() {
     grid.appendChild(empty);
   }
 
+  const todayISO = toISODate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+
   for (let day = 1; day <= daysInMonth; day++) {
     const iso = toISODate(y, m, day);
     const cell = document.createElement("div");
     cell.className = "cal-day";
     if (findTripForDate(iso)) cell.classList.add("trip-day");
+    if (iso === todayISO) cell.classList.add("today");
     if (remindersByDate[iso] && remindersByDate[iso].length > 0) cell.classList.add("has-reminder");
     if (iso === selectedCalDate) cell.classList.add("selected");
     cell.textContent = day;
