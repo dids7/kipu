@@ -706,7 +706,7 @@ function renderCalendar() {
     const iso = toISODate(y, m, day);
     const cell = document.createElement("div");
     cell.className = "cal-day";
-    if (iso === currentTripData.startDate) cell.classList.add("trip-day");
+    if (findTripForDate(iso)) cell.classList.add("trip-day");
     if (remindersByDate[iso] && remindersByDate[iso].length > 0) cell.classList.add("has-reminder");
     if (iso === selectedCalDate) cell.classList.add("selected");
     cell.textContent = day;

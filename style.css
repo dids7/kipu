@@ -4,6 +4,7 @@
   --bg: #1B2A41;
   --panel: #22344D;
   --panel-raised: #2A3D58;
+  --header-bg: #142033;
   --ink: #FDF6E8;
   --muted: #9FB3C8;
   --gold: #F2994A;
@@ -99,8 +100,9 @@ button, input, select, textarea{ font-family:inherit; }
 /* ---------- Header ---------- */
 header.app-header{
   padding:20px 20px 14px;
-  background:var(--panel);
+  background:var(--header-bg);
   border-bottom:1px solid var(--line);
+  text-align:center;
 }
 .trip-label{
   font-family:'JetBrains Mono', monospace;
@@ -111,15 +113,16 @@ header.app-header{
   display:flex;
   justify-content:space-between;
   align-items:center;
+  text-align:left;
 }
 .trip-title{
   font-family:'Big Shoulders Display', sans-serif;
   font-weight:800;
   font-size:30px;
   line-height:1;
-  margin:6px 0 8px;
+  margin:6px auto 8px;
 }
-.countdown-row{ display:flex; align-items:baseline; gap:8px; }
+.countdown-row{ display:flex; align-items:baseline; justify-content:center; gap:8px; }
 .countdown-num{ font-family:'JetBrains Mono', monospace; font-size:18px; color:var(--gold); }
 .countdown-text{ font-size:12.5px; color:var(--muted); }
 
@@ -149,7 +152,7 @@ nav.tabs::-webkit-scrollbar{ display:none; }
 .tab.active{ background:var(--gold); color:#1B2430; }
 
 /* ---------- Main content ---------- */
-main{ flex:1; padding:20px 18px 40px; }
+main{ flex:1; padding:20px 18px 40px; background:var(--bg); }
 
 .screen-title{
   font-family:'Big Shoulders Display', sans-serif;
@@ -480,6 +483,17 @@ main{ flex:1; padding:20px 18px 40px; }
     grid-column:2;
     grid-row: 1 / span 5;
   }
+
+  /* Calendário: informações da data selecionada ao lado, não embaixo */
+  #panel-geral{
+    display:grid;
+    grid-template-columns: 400px 1fr;
+    gap:24px;
+    align-items:start;
+  }
+  #panel-geral .screen-title{ grid-column: 1 / -1; }
+  #calendarCard{ grid-column:1; }
+  #dateTripInfoCard{ grid-column:2; }
 
   .form-card{ max-width:520px; }
 }
