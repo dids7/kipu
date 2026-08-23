@@ -1,0 +1,11 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Só usuários autenticados podem enviar ou ler arquivos.
+    // (Restrição por participante da viagem específica fica a cargo das regras
+    // do Firestore, que controlam quem enxerga o link salvo em "documentos".)
+    match /trips/{tripId}/documentos/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

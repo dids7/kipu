@@ -1,11 +1,14 @@
-import { auth, googleProvider, db } from "./firebase-config.js";
+import { auth, googleProvider, db, storage } from "./firebase-config.js";
 import {
   signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
+  collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot,
   query, where, orderBy, serverTimestamp, getDocs
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  ref, uploadBytes, getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 // ---------- Estado global ----------
 let currentUser = null;
@@ -13,6 +16,9 @@ let currentTripId = null;
 let currentTripData = null;
 let malaSeg = "shared";
 let unsubscribers = [];
+let calendarViewDate = null; // Date — mês sendo exibido
+let selectedCalDate = null;  // string YYYY-MM-DD selecionada
+let remindersCache = {};     // { "YYYY-MM-DD": {text, authorEmail} }
 
 // ---------- Helpers de tela ----------
 const $ = (id) => document.getElementById(id);
@@ -143,13 +149,16 @@ async function openTrip(tripId) {
 
   subscribeItinerario();
   subscribeEstadia();
-  subscribePasseios();
   subscribeDocumentos();
   subscribeMala();
   subscribeTarefas();
   subscribeGastos();
   subscribeEmergencia();
   subscribeHistorico();
+  subscribeReminders();
+
+  calendarViewDate = new Date(currentTripData.startDate + "T00:00:00");
+  renderCalendar();
 }
 
 function clearSubscriptions() {
@@ -158,8 +167,49 @@ function clearSubscriptions() {
 }
 
 function renderParticipants() {
-  $("participantsList").textContent = (currentTripData.participantEmails || []).join(", ");
+  const listEl = $("participantsList");
+  const emails = currentTripData.participantEmails || [];
+  listEl.innerHTML = "";
+  emails.forEach((email) => {
+    const row = document.createElement("div");
+    row.className = "card-row";
+    row.style.padding = "4px 0";
+    const isLast = emails.length === 1;
+    row.innerHTML = `
+      <span class="card-meta">${email}</span>
+      <button class="item-del" ${isLast ? "disabled title='precisa ter ao menos 1 participante'" : ""}>✕</button>
+    `;
+    if (!isLast) {
+      row.querySelector("button").addEventListener("click", () => removeParticipant(email));
+    }
+    listEl.appendChild(row);
+  });
 }
+
+async function removeParticipant(email) {
+  if (!confirm(`Remover ${email} da viagem?`)) return;
+  const updated = (currentTripData.participantEmails || []).filter((e) => e !== email);
+  await updateDoc(doc(db, "trips", currentTripId), { participantEmails: updated });
+  currentTripData.participantEmails = updated;
+  renderParticipants();
+  populateResponsibleSelects();
+  logActivity("geral", "participante removido", email);
+}
+
+$("addParticipantBtn").addEventListener("click", async () => {
+  const input = $("newParticipantEmail");
+  const email = input.value.trim().toLowerCase();
+  if (!email || !email.includes("@")) { alert("Digite um e-mail válido."); return; }
+  const current = currentTripData.participantEmails || [];
+  if (current.includes(email)) { alert("Esse participante já está na viagem."); input.value = ""; return; }
+  const updated = [...current, email];
+  await updateDoc(doc(db, "trips", currentTripId), { participantEmails: updated });
+  currentTripData.participantEmails = updated;
+  renderParticipants();
+  populateResponsibleSelects();
+  logActivity("geral", "participante adicionado", email);
+  input.value = "";
+});
 
 function renderCountdown() {
   const start = new Date(currentTripData.startDate + "T00:00:00");
@@ -175,8 +225,8 @@ function renderCountdown() {
 function populateResponsibleSelects() {
   const emails = currentTripData.participantEmails || [];
   const opts = emails.map((e) => `<option value="${e}">${e}</option>`).join("");
-  ["tourResponsible", "taskResponsible", "expPaidBy"].forEach((id) => {
-    $(id).innerHTML = opts;
+  ["itResponsible", "taskResponsible", "expPaidBy"].forEach((id) => {
+    $(id).innerHTML = (id === "itResponsible" ? "<option value=''>—</option>" : "") + opts;
   });
   const splitGroup = $("expSplitGroup");
   splitGroup.innerHTML = "";
@@ -207,7 +257,7 @@ document.querySelectorAll("[data-form]").forEach((btn) => {
   });
 });
 
-// ================= ITINERÁRIO =================
+// ================= ITINERÁRIO (inclui o que antes era Passeios) =================
 function subscribeItinerario() {
   const q = query(collection(db, "trips", currentTripId, "itinerario"), orderBy("date"));
   const unsub = onSnapshot(q, (snap) => {
@@ -216,17 +266,22 @@ function subscribeItinerario() {
     listEl.innerHTML = "";
     snap.forEach((d) => {
       const it = d.data();
+      const hasValue = it.value && Number(it.value) > 0;
       const card = document.createElement("div");
       card.className = "card";
       card.innerHTML = `
         <div class="card-row">
           <div>
             <div class="card-title">${it.title}</div>
-            <div class="card-meta">${fmtDate(it.date)} ${it.time ? "· " + it.time : ""}</div>
+            <div class="card-meta">
+              ${fmtDate(it.date)} ${it.time ? "· " + it.time : ""}
+              ${hasValue ? ` · R$ ${Number(it.value).toFixed(2)} (${it.paymentStatus || "pendente"})` : ""}
+              ${it.responsible ? ` · resp: ${it.responsible}` : ""}
+            </div>
           </div>
           <button class="badge badge-${it.status}" data-id="${d.id}" data-status="${it.status}">${it.status}</button>
         </div>`;
-      card.querySelector("button").addEventListener("click", (e) => cycleItinerarioStatus(d.id, it.status, it.title));
+      card.querySelector("button").addEventListener("click", () => cycleItinerarioStatus(d.id, it.status, it.title));
       listEl.appendChild(card);
     });
   });
@@ -241,10 +296,16 @@ async function cycleItinerarioStatus(id, current, title) {
 $("saveItinerarioBtn").addEventListener("click", async () => {
   const date = $("itDate").value, time = $("itTime").value, title = $("itTitle").value.trim();
   const status = $("itStatus").value;
+  const value = parseFloat($("itValue").value) || 0;
+  const paymentStatus = $("itPaymentStatus").value;
+  const responsible = $("itResponsible").value;
   if (!date || !title) { alert("Preencha data e atividade."); return; }
-  await addDoc(collection(db, "trips", currentTripId, "itinerario"), { date, time, title, status });
+  await addDoc(collection(db, "trips", currentTripId, "itinerario"), {
+    date, time, title, status, value, paymentStatus, responsible
+  });
   logActivity("itinerario", "item adicionado", title);
   $("itDate").value = ""; $("itTime").value = ""; $("itTitle").value = "";
+  $("itValue").value = ""; $("itResponsible").value = "";
   $("itinerarioForm").classList.add("hidden");
 });
 
@@ -282,39 +343,6 @@ $("saveEstadiaBtn").addEventListener("click", async () => {
   $("estadiaForm").classList.add("hidden");
 });
 
-// ================= PASSEIOS =================
-function subscribePasseios() {
-  const unsub = onSnapshot(collection(db, "trips", currentTripId, "passeios"), (snap) => {
-    const listEl = $("passeiosList");
-    if (snap.empty) { listEl.innerHTML = "<div class='empty'>Nenhum passeio ainda.</div>"; return; }
-    listEl.innerHTML = "";
-    snap.forEach((d) => {
-      const t = d.data();
-      const card = document.createElement("div");
-      card.className = "card";
-      card.innerHTML = `
-        <div class="card-row">
-          <div>
-            <div class="card-title">${t.name}</div>
-            <div class="card-meta">${fmtDate(t.date)} ${t.time ? "· " + t.time : ""} · R$ ${Number(t.value || 0).toFixed(2)} · resp: ${t.responsible || "—"}</div>
-          </div>
-          <span class="badge badge-${t.status === "pago" ? "confirmado" : "programado"}">${t.status}</span>
-        </div>`;
-      listEl.appendChild(card);
-    });
-  });
-  unsubscribers.push(unsub);
-}
-$("saveTourBtn").addEventListener("click", async () => {
-  const name = $("tourName").value.trim(), date = $("tourDate").value, time = $("tourTime").value;
-  const value = parseFloat($("tourValue").value) || 0, status = $("tourStatus").value, responsible = $("tourResponsible").value;
-  if (!name || !date) { alert("Preencha nome e data."); return; }
-  await addDoc(collection(db, "trips", currentTripId, "passeios"), { name, date, time, value, status, responsible });
-  logActivity("passeios", "passeio adicionado", name);
-  $("tourName").value = ""; $("tourDate").value = ""; $("tourTime").value = ""; $("tourValue").value = "";
-  $("passeioForm").classList.add("hidden");
-});
-
 // ================= DOCUMENTOS =================
 function subscribeDocumentos() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "documentos"), (snap) => {
@@ -325,10 +353,12 @@ function subscribeDocumentos() {
       const doc_ = d.data();
       const card = document.createElement("div");
       card.className = "card";
+      const isImage = doc_.fileType && doc_.fileType.startsWith("image/");
       card.innerHTML = `
         <div class="card-title">${doc_.title}</div>
         <div class="card-meta">${doc_.notes || ""}</div>
-        ${doc_.url ? `<a href="${doc_.url}" target="_blank" style="color:var(--gold); font-size:12.5px;">Abrir link ↗</a>` : ""}
+        ${isImage ? `<img src="${doc_.url}" style="max-width:100%; border-radius:8px; margin-top:8px;">` : ""}
+        ${doc_.url ? `<a href="${doc_.url}" target="_blank" style="color:var(--gold); font-size:12.5px; display:block; margin-top:6px;">Abrir ${doc_.fileName ? doc_.fileName : "link"} ↗</a>` : ""}
       `;
       listEl.appendChild(card);
     });
@@ -336,11 +366,38 @@ function subscribeDocumentos() {
   unsubscribers.push(unsub);
 }
 $("saveDocBtn").addEventListener("click", async () => {
-  const title = $("docTitle").value.trim(), url = $("docUrl").value.trim(), notes = $("docNotes").value.trim();
+  const title = $("docTitle").value.trim();
+  const notes = $("docNotes").value.trim();
+  let url = $("docUrl").value.trim();
+  const fileInput = $("docFile");
+  const file = fileInput.files[0];
+  const statusEl = $("docUploadStatus");
+
   if (!title) { alert("Preencha o título."); return; }
-  await addDoc(collection(db, "trips", currentTripId, "documentos"), { title, url, notes });
+  if (!file && !url) { alert("Anexe um arquivo ou cole um link."); return; }
+
+  let fileType = "", fileName = "";
+  if (file) {
+    statusEl.classList.remove("hidden");
+    statusEl.textContent = "Enviando arquivo...";
+    try {
+      const path = `trips/${currentTripId}/documentos/${Date.now()}_${file.name}`;
+      const fileRef = ref(storage, path);
+      await uploadBytes(fileRef, file);
+      url = await getDownloadURL(fileRef);
+      fileType = file.type;
+      fileName = file.name;
+      statusEl.textContent = "Upload concluído.";
+    } catch (err) {
+      statusEl.textContent = "Erro no upload: " + err.message;
+      return;
+    }
+  }
+
+  await addDoc(collection(db, "trips", currentTripId, "documentos"), { title, url, notes, fileType, fileName });
   logActivity("documentos", "documento adicionado", title);
-  $("docTitle").value = ""; $("docUrl").value = ""; $("docNotes").value = "";
+  $("docTitle").value = ""; $("docUrl").value = ""; $("docNotes").value = ""; fileInput.value = "";
+  statusEl.classList.add("hidden");
   $("docForm").classList.add("hidden");
 });
 
@@ -566,3 +623,98 @@ function subscribeHistorico() {
   });
   unsubscribers.push(unsub);
 }
+
+// ================= CALENDÁRIO + LEMBRETES =================
+function subscribeReminders() {
+  const unsub = onSnapshot(collection(db, "trips", currentTripId, "lembretes"), (snap) => {
+    remindersCache = {};
+    snap.forEach((d) => { remindersCache[d.id] = { ...d.data(), docId: d.id }; });
+    renderCalendar();
+  });
+  unsubscribers.push(unsub);
+}
+
+const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const DIAS_SEMANA = ["D","S","T","Q","Q","S","S"];
+
+function toISODate(y, m, day) {
+  return `${y}-${String(m + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function renderCalendar() {
+  if (!calendarViewDate) return;
+  const y = calendarViewDate.getFullYear();
+  const m = calendarViewDate.getMonth();
+  $("calMonthLabel").textContent = `${MESES[m]} ${y}`;
+
+  const grid = $("calendarGrid");
+  grid.innerHTML = "";
+  DIAS_SEMANA.forEach((d) => {
+    const el = document.createElement("div");
+    el.className = "cal-weekday";
+    el.textContent = d;
+    grid.appendChild(el);
+  });
+
+  const firstDay = new Date(y, m, 1).getDay();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+
+  for (let i = 0; i < firstDay; i++) {
+    const empty = document.createElement("div");
+    empty.className = "cal-day empty";
+    grid.appendChild(empty);
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const iso = toISODate(y, m, day);
+    const cell = document.createElement("div");
+    cell.className = "cal-day";
+    if (iso === currentTripData.startDate) cell.classList.add("trip-day");
+    if (remindersCache[iso]) cell.classList.add("has-reminder");
+    if (iso === selectedCalDate) cell.classList.add("selected");
+    cell.textContent = day;
+    cell.addEventListener("click", () => selectCalendarDay(iso, day));
+    grid.appendChild(cell);
+  }
+}
+
+function selectCalendarDay(iso, day) {
+  selectedCalDate = iso;
+  renderCalendar();
+  const editor = $("reminderEditor");
+  editor.classList.remove("hidden");
+  const m = calendarViewDate.getMonth();
+  $("reminderEditorLabel").textContent = `Lembrete para ${day}/${m + 1}`;
+  const existing = remindersCache[iso];
+  $("reminderText").value = existing ? existing.text : "";
+  $("deleteReminderBtn").classList.toggle("hidden", !existing);
+}
+
+$("calPrevBtn").addEventListener("click", () => {
+  calendarViewDate.setMonth(calendarViewDate.getMonth() - 1);
+  renderCalendar();
+});
+$("calNextBtn").addEventListener("click", () => {
+  calendarViewDate.setMonth(calendarViewDate.getMonth() + 1);
+  renderCalendar();
+});
+
+$("saveReminderBtn").addEventListener("click", async () => {
+  const text = $("reminderText").value.trim();
+  if (!text || !selectedCalDate) { alert("Escreva algo pro lembrete."); return; }
+  await setDoc(doc(db, "trips", currentTripId, "lembretes", selectedCalDate), {
+    text, authorEmail: currentUser.email, date: selectedCalDate
+  });
+  logActivity("calendario", "lembrete salvo", `${selectedCalDate}: ${text}`);
+  $("reminderEditor").classList.add("hidden");
+  selectedCalDate = null;
+});
+
+$("deleteReminderBtn").addEventListener("click", async () => {
+  if (!selectedCalDate) return;
+  const text = remindersCache[selectedCalDate]?.text || "";
+  await deleteDoc(doc(db, "trips", currentTripId, "lembretes", selectedCalDate));
+  logActivity("calendario", "lembrete removido", `${selectedCalDate}: ${text}`);
+  $("reminderEditor").classList.add("hidden");
+  selectedCalDate = null;
+});

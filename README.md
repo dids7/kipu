@@ -8,7 +8,8 @@ App base pronto para teste na viagem ao Peru. Vanilla JS, Firebase (Auth + Fires
 - `style.css` — identidade visual (paleta andina: dourado/teal/vermelho sobre fundo escuro)
 - `app.js` — toda a lógica (auth, navegação, CRUD do Firestore)
 - `firebase-config.js` — credenciais do projeto Firebase (já preenchidas)
-- `firestore.rules` — regras de segurança para colar no console
+- `firestore.rules` — regras de segurança do Firestore para colar no console
+- `storage.rules` — regras de segurança do Storage (upload de documentos) para colar no console
 
 ## Como subir pro GitHub
 
@@ -16,6 +17,14 @@ App base pronto para teste na viagem ao Peru. Vanilla JS, Firebase (Auth + Fires
 2. Commit e push (`git add . && git commit -m "App base do Kipu" && git push`)
 3. No GitHub: **Settings → Pages → Source: branch `main`, pasta `/root`** → salvar
 4. Em alguns minutos o link fica disponível em `https://SEU-USUARIO.github.io/kipu/`
+
+## Ativar o Firebase Storage (para upload de documentos)
+
+1. No [Firebase Console](https://console.firebase.google.com) → projeto **kipu-c1e97** → menu **Build → Storage**
+2. Clique em **Começar** — ele vai pedir para **fazer upgrade para o plano Blaze** (pago sob demanda). Isso é uma exigência do Google desde outubro de 2024 para qualquer novo bucket de Storage, mesmo que o uso fique dentro da faixa gratuita — é necessário cadastrar um cartão, mas não deve gerar cobrança no volume de uso de uma viagem
+3. Escolha a localização `southamerica-east1` (mesma do Firestore)
+4. Depois de criado, vá em **Regras** e cole o conteúdo de `storage.rules`
+5. Clique em **Publicar**
 
 ## Antes de testar: aplicar as regras de segurança
 
@@ -38,8 +47,10 @@ Essas regras garantem que só quem está na lista de participantes de uma viagem
 ## O que já funciona nesta base
 
 - Login com Google, múltiplas viagens por conta
-- Itinerário com status cíclico (clique no badge: cogitando → programado → confirmado)
-- Estadia, Passeios e Documentos com formulários simples
+- Itinerário com status cíclico (clique no badge: cogitando → programado → confirmado), já incluindo valor, status de pagamento e responsável de cada item (fundido com o que antes era a aba Passeios)
+- Estadia e Documentos com formulários simples (Documentos aceita upload de imagem/PDF ou link)
+- Mini calendário com lembretes por dia, visível na Visão Geral
+- Participantes editáveis (adicionar/remover e-mail) direto na Visão Geral
 - Mala com itens **compartilhados** (contam no placar do grupo) e **pessoais** (privados)
 - Placar de progresso do grupo (só considera itens compartilhados)
 - Tarefas do grupo com responsável e status

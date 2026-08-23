@@ -1,18 +1,18 @@
 @import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root{
-  --bg: #1B2430;
-  --panel: #232F3F;
-  --panel-raised: #2B3A4D;
-  --ink: #F2E9D8;
-  --muted: #93A4B8;
-  --gold: #E3A33E;
-  --gold-dim: #8A6A34;
-  --red: #C1483B;
-  --red-dim: #5A2A24;
-  --teal: #4A9384;
-  --teal-dim: #2A4A44;
-  --line: #34445A;
+  --bg: #1B2A41;
+  --panel: #22344D;
+  --panel-raised: #2A3D58;
+  --ink: #FDF6E8;
+  --muted: #9FB3C8;
+  --gold: #F2994A;
+  --gold-dim: #5C3D22;
+  --red: #D65D5D;
+  --red-dim: #5A2A2A;
+  --teal: #A8C5D6;
+  --teal-dim: #2A4152;
+  --line: #33465F;
   --radius: 14px;
 }
 
@@ -327,7 +327,146 @@ main{ flex:1; padding:20px 18px 40px; }
 .balance-positive{ color:var(--teal); }
 .balance-negative{ color:#E8907F; }
 
+/* ---------- Mini calendário ---------- */
+.calendar-grid{
+  display:grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap:4px;
+}
+.cal-weekday{
+  font-size:10px;
+  color:var(--muted);
+  text-align:center;
+  padding:2px 0;
+  font-family:'JetBrains Mono', monospace;
+}
+.cal-day{
+  aspect-ratio:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  border-radius:8px;
+  font-size:12.5px;
+  cursor:pointer;
+  color:var(--ink);
+  background:var(--bg);
+  border:1px solid transparent;
+  position:relative;
+}
+.cal-day.empty{ cursor:default; visibility:hidden; }
+.cal-day:hover{ border-color:var(--line); }
+.cal-day.trip-day{ background:var(--gold); color:#1B2430; font-weight:700; }
+.cal-day.has-reminder::after{
+  content:"";
+  width:4px; height:4px; border-radius:50%;
+  background:var(--teal);
+  position:absolute;
+  bottom:4px;
+}
+.cal-day.trip-day.has-reminder::after{ background:#1B2430; }
+.cal-day.selected{ box-shadow: inset 0 0 0 2px var(--teal); }
+
 /* ---------- Top-right icon button ---------- */
 .icon-btn{
   background:none; border:none; color:var(--muted); cursor:pointer; font-size:18px;
+}
+
+/* ======================================================
+   DESKTOP (>= 900px): nav lateral fixa + conteúdo em grid
+   ====================================================== */
+@media (min-width: 900px){
+
+  body{ align-items:flex-start; }
+
+  .device{
+    max-width:1100px;
+    min-height:100vh;
+  }
+
+  /* Login continua compacto e centralizado mesmo com o device largo */
+  .login-screen{
+    max-width:420px;
+    margin:0 auto;
+    min-height:100vh;
+  }
+
+  /* Tela de seleção de viagens: cards em grid */
+  #tripPickerScreen main{
+    max-width:900px;
+    margin:0 auto;
+    padding:28px 24px;
+  }
+  #tripList{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap:12px;
+    align-items:start;
+  }
+  #newTripForm{ max-width:480px; }
+
+  /* App principal: header no topo, nav lateral + conteúdo lado a lado */
+  #appScreen{
+    display:grid;
+    grid-template-columns: 220px 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "header header"
+      "nav main";
+    min-height:100vh;
+  }
+  #appScreen > .greca{ display:none; }
+  header.app-header{ grid-area:header; padding:22px 32px 16px; }
+
+  nav.tabs{
+    grid-area:nav;
+    flex-direction:column;
+    align-items:stretch;
+    overflow-x:visible;
+    border-right:1px solid var(--line);
+    border-bottom:none;
+    padding:18px 12px;
+    gap:3px;
+  }
+  nav.tabs .tab{
+    text-align:left;
+    border-radius:8px;
+    padding:9px 12px;
+  }
+
+  main#mainContent{
+    grid-area:main;
+    padding:28px 36px;
+    max-width:900px;
+  }
+
+  /* Listas de cards em 2 colunas — pensado pra planejamento, não pra fila de leitura */
+  #itinerarioList, #estadiaList, #docsList, #tasksList, #expensesList, #emergencyList{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:10px;
+    align-content:start;
+  }
+  #itinerarioList .card, #estadiaList .card, #docsList .card,
+  #tasksList .card, #expensesList .card, #emergencyList .card{
+    margin-bottom:0;
+  }
+
+  /* Mala: compartilhado/pessoal ao lado do placar do grupo */
+  #panel-mala{
+    display:grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap:24px;
+    align-items:start;
+  }
+  #panel-mala .screen-title, #panel-mala .screen-sub, #panel-mala .segmented,
+  #panel-mala .form-row, #panel-mala #malaList{
+    grid-column:1;
+  }
+  #panel-mala h3, #panel-mala .progress-card{
+    grid-column:2;
+    grid-row: 1 / span 5;
+  }
+
+  .form-card{ max-width:520px; }
 }
