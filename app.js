@@ -56,12 +56,23 @@ $("loginBtn").addEventListener("click", async () => {
 $("logoutBtn").addEventListener("click", () => signOut(auth));
 $("logoutBtn2").addEventListener("click", () => signOut(auth));
 
+const LS_TRIP_KEY = "kipu_last_trip_id";
+const LS_TAB_KEY = "kipu_last_tab";
+
 onAuthStateChanged(auth, (user) => {
   currentUser = user;
   if (user) {
     $("userEmailLabel").textContent = user.email;
     hide($("loginScreen"));
-    goToTripPicker();
+    const savedTripId = localStorage.getItem(LS_TRIP_KEY);
+    if (savedTripId) {
+      openTrip(savedTripId).catch(() => {
+        localStorage.removeItem(LS_TRIP_KEY);
+        goToTripPicker();
+      });
+    } else {
+      goToTripPicker();
+    }
   } else {
     show($("loginScreen"));
     hide($("tripPickerScreen"));
@@ -73,6 +84,7 @@ onAuthStateChanged(auth, (user) => {
 function goToTripPicker() {
   clearSubscriptions();
   currentTripId = null;
+  localStorage.removeItem(LS_TRIP_KEY);
   hide($("appScreen"));
   show($("tripPickerScreen"));
   loadTripList();
@@ -136,8 +148,15 @@ $("backToTripsBtn").addEventListener("click", goToTripPicker);
 // ---------- Abrir viagem ----------
 async function openTrip(tripId) {
   currentTripId = tripId;
+  currentTripData = null;
   const snap = await getDocs(query(collection(db, "trips"), where("__name__", "==", tripId)));
   snap.forEach((d) => { currentTripData = d.data(); });
+
+  if (!currentTripData) {
+    throw new Error("Viagem não encontrada ou sem acesso.");
+  }
+
+  localStorage.setItem(LS_TRIP_KEY, tripId);
 
   // Carrega todas as viagens do usuário, pra o calendário saber qual viagem
   // cobre cada data (pode ser esta ou outra, ex: Peru dia 4-12, Miami dia 22-26)
@@ -166,6 +185,10 @@ async function openTrip(tripId) {
   hide($("dateTripInfoCard"));
   hide($("reminderEditor"));
   renderCalendar();
+
+  const savedTab = localStorage.getItem(LS_TAB_KEY) || "geral";
+  const tabBtn = document.querySelector(`.tab[data-tab="${savedTab}"]`);
+  if (tabBtn) tabBtn.click();
 }
 
 function clearSubscriptions() {
@@ -274,6 +297,7 @@ document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.add("active");
     document.querySelectorAll(".tab-panel").forEach((p) => hide(p));
     show($("panel-" + tab.dataset.tab));
+    localStorage.setItem(LS_TAB_KEY, tab.dataset.tab);
   });
 });
 
