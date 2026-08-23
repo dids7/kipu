@@ -309,6 +309,8 @@ document.querySelectorAll("[data-form]").forEach((btn) => {
 });
 
 // ================= ITINERÁRIO (inclui o que antes era Passeios) =================
+let editingItinerarioId = null;
+
 function subscribeItinerario() {
   const q = query(collection(db, "trips", currentTripId, "itinerario"), orderBy("date"));
   const unsub = onSnapshot(q, (snap) => {
@@ -318,6 +320,7 @@ function subscribeItinerario() {
     snap.forEach((d) => {
       const it = d.data();
       const hasValue = it.value && Number(it.value) > 0;
+      const timeRange = it.time ? `· ${it.time}${it.endTime ? "–" + it.endTime : ""}` : "";
       const card = document.createElement("div");
       card.className = "card";
       card.innerHTML = `
@@ -325,14 +328,18 @@ function subscribeItinerario() {
           <div>
             <div class="card-title">${it.title}</div>
             <div class="card-meta">
-              ${fmtDate(it.date)} ${it.time ? "· " + it.time : ""}
+              ${fmtDate(it.date)} ${timeRange}
               ${hasValue ? ` · R$ ${Number(it.value).toFixed(2)} (${it.paymentStatus || "pendente"})` : ""}
               ${it.responsible ? ` · resp: ${it.responsible}` : ""}
             </div>
           </div>
-          <button class="badge badge-${it.status}" data-id="${d.id}" data-status="${it.status}">${it.status}</button>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="item-del" data-action="edit" title="Editar">✎</button>
+            <button class="badge badge-${it.status}" data-action="status">${it.status}</button>
+          </div>
         </div>`;
-      card.querySelector("button").addEventListener("click", () => cycleItinerarioStatus(d.id, it.status, it.title));
+      card.querySelector('[data-action="status"]').addEventListener("click", () => cycleItinerarioStatus(d.id, it.status, it.title));
+      card.querySelector('[data-action="edit"]').addEventListener("click", () => openItinerarioForEdit(d.id, it));
       listEl.appendChild(card);
     });
   });
@@ -344,20 +351,59 @@ async function cycleItinerarioStatus(id, current, title) {
   await updateDoc(doc(db, "trips", currentTripId, "itinerario", id), { status: next });
   logActivity("itinerario", "status alterado", `"${title}": ${current} → ${next}`);
 }
+
+function openItinerarioForEdit(id, it) {
+  editingItinerarioId = id;
+  $("itDate").value = it.date || "";
+  $("itTime").value = it.time || "";
+  $("itEndTime").value = it.endTime || "";
+  $("itTitle").value = it.title || "";
+  $("itStatus").value = it.status || "cogitando";
+  $("itValue").value = it.value || "";
+  $("itPaymentStatus").value = it.paymentStatus || "pendente";
+  $("itResponsible").value = it.responsible || "";
+  $("saveItinerarioBtn").textContent = "Salvar alterações";
+  $("cancelItinerarioEditBtn").classList.remove("hidden");
+  $("itinerarioForm").classList.remove("hidden");
+  $("itinerarioForm").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function resetItinerarioForm() {
+  editingItinerarioId = null;
+  $("itDate").value = ""; $("itTime").value = ""; $("itEndTime").value = ""; $("itTitle").value = "";
+  $("itValue").value = ""; $("itResponsible").value = ""; $("itStatus").value = "cogitando";
+  $("itPaymentStatus").value = "pendente";
+  $("saveItinerarioBtn").textContent = "Salvar";
+  $("cancelItinerarioEditBtn").classList.add("hidden");
+  $("itinerarioForm").classList.add("hidden");
+}
+
+$("cancelItinerarioEditBtn").addEventListener("click", resetItinerarioForm);
+$("addItinerarioToggleBtn").addEventListener("click", () => {
+  if (!$("itinerarioForm").classList.contains("hidden") || editingItinerarioId) {
+    resetItinerarioForm();
+    $("itinerarioForm").classList.remove("hidden");
+  }
+});
+
 $("saveItinerarioBtn").addEventListener("click", async () => {
-  const date = $("itDate").value, time = $("itTime").value, title = $("itTitle").value.trim();
+  const date = $("itDate").value, time = $("itTime").value, endTime = $("itEndTime").value;
+  const title = $("itTitle").value.trim();
   const status = $("itStatus").value;
   const value = parseFloat($("itValue").value) || 0;
   const paymentStatus = $("itPaymentStatus").value;
   const responsible = $("itResponsible").value;
   if (!date || !title) { alert("Preencha data e atividade."); return; }
-  await addDoc(collection(db, "trips", currentTripId, "itinerario"), {
-    date, time, title, status, value, paymentStatus, responsible
-  });
-  logActivity("itinerario", "item adicionado", title);
-  $("itDate").value = ""; $("itTime").value = ""; $("itTitle").value = "";
-  $("itValue").value = ""; $("itResponsible").value = "";
-  $("itinerarioForm").classList.add("hidden");
+  const payload = { date, time, endTime, title, status, value, paymentStatus, responsible };
+
+  if (editingItinerarioId) {
+    await updateDoc(doc(db, "trips", currentTripId, "itinerario", editingItinerarioId), payload);
+    logActivity("itinerario", "item editado", title);
+  } else {
+    await addDoc(collection(db, "trips", currentTripId, "itinerario"), payload);
+    logActivity("itinerario", "item adicionado", title);
+  }
+  resetItinerarioForm();
 });
 
 // ================= ESTADIA =================

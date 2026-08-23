@@ -128,12 +128,13 @@
       <!-- ITINERÁRIO -->
       <div class="tab-panel hidden" id="panel-itinerario">
         <h2 class="screen-title">Itinerário</h2>
-        <p class="screen-sub">🟢 confirmado · 🟡 programado · ⚪ cogitando — clique no status pra alternar.</p>
-        <button class="add-toggle" data-form="itinerarioForm">＋ Adicionar item ao itinerário</button>
+        <p class="screen-sub">🟢 confirmado · 🟡 programado · ⚪ cogitando — clique no status pra alternar. Clique no lápis pra editar.</p>
+        <button class="add-toggle" id="addItinerarioToggleBtn" data-form="itinerarioForm">＋ Adicionar item ao itinerário</button>
         <div id="itinerarioForm" class="form-card hidden">
           <div class="form-row">
             <div><label>Data</label><input type="date" id="itDate"></div>
-            <div><label>Horário</label><input type="time" id="itTime"></div>
+            <div><label>Início</label><input type="time" id="itTime"></div>
+            <div><label>Fim — opcional</label><input type="time" id="itEndTime"></div>
           </div>
           <div><label>Atividade</label><input type="text" id="itTitle" placeholder="Ex: Machu Picchu — Circuito 2"></div>
           <div>
@@ -155,7 +156,10 @@
             </div>
           </div>
           <div><label>Responsável — opcional</label><select id="itResponsible"><option value="">—</option></select></div>
-          <button class="btn btn-primary btn-block" id="saveItinerarioBtn">Salvar</button>
+          <div class="form-row">
+            <button class="btn btn-primary btn-block" id="saveItinerarioBtn">Salvar</button>
+            <button class="btn btn-outline hidden" id="cancelItinerarioEditBtn" style="flex:0 0 auto;">Cancelar</button>
+          </div>
         </div>
         <div id="itinerarioList"></div>
       </div>
