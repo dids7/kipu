@@ -263,6 +263,8 @@ main{ flex:1; padding:20px 18px 40px; }
   cursor:pointer;
 }
 .seg-btn.active{ background:var(--teal-dim); color:var(--teal); box-shadow: inset 0 0 0 1px var(--teal); }
+.seg-btn[data-remvis="personal"].active{ background:var(--red-dim); color:#E8907F; box-shadow: inset 0 0 0 1px var(--red); }
+.seg-btn[data-remvis="shared"].active{ background:var(--teal-dim); color:var(--teal); box-shadow: inset 0 0 0 1px var(--teal); }
 
 /* ---------- Checklist item ---------- */
 .item{
@@ -347,16 +349,17 @@ main{ flex:1; padding:20px 18px 40px; }
   flex-direction:column;
   align-items:center;
   justify-content:center;
-  border-radius:8px;
+  border-radius:10px;
   font-size:12.5px;
   cursor:pointer;
   color:var(--ink);
-  background:var(--bg);
+  background:var(--panel-raised);
   border:1px solid transparent;
   position:relative;
+  transition: background 0.15s, box-shadow 0.15s;
 }
 .cal-day.empty{ cursor:default; visibility:hidden; }
-.cal-day:hover{ border-color:var(--line); }
+.cal-day:hover{ background:var(--line); }
 .cal-day.trip-day{ background:var(--gold); color:#1B2430; font-weight:700; }
 .cal-day.has-reminder::after{
   content:"";
@@ -366,7 +369,11 @@ main{ flex:1; padding:20px 18px 40px; }
   bottom:4px;
 }
 .cal-day.trip-day.has-reminder::after{ background:#1B2430; }
-.cal-day.selected{ box-shadow: inset 0 0 0 2px var(--teal); }
+.cal-day.selected{
+  box-shadow: inset 0 0 0 2px var(--gold);
+  background:var(--panel-raised);
+}
+.cal-day.trip-day.selected{ box-shadow: inset 0 0 0 2px var(--ink); }
 
 /* ---------- Top-right icon button ---------- */
 .icon-btn{
