@@ -153,6 +153,7 @@ nav.tabs::-webkit-scrollbar{ display:none; }
 
 /* ---------- Main content ---------- */
 main{ flex:1; padding:20px 18px 40px; background:var(--bg); }
+.add-toggle{ display:flex; width:100%; }
 
 .screen-title{
   font-family:'Big Shoulders Display', sans-serif;
@@ -228,20 +229,19 @@ main{ flex:1; padding:20px 18px 40px; background:var(--bg); }
 .checkbox-chip.checked{ background:var(--gold-dim); color:var(--gold); border-color:var(--gold-dim); }
 
 .add-toggle{
-  display:flex;
+  display:inline-flex;
   align-items:center;
   justify-content:center;
-  gap:8px;
-  padding:12px;
+  gap:6px;
+  padding:9px 16px;
   border:1.5px dashed var(--line);
-  border-radius:var(--radius);
+  border-radius:10px;
   color:var(--muted);
-  font-size:13px;
+  font-size:12.5px;
   font-weight:600;
-  margin-bottom:16px;
+  margin-bottom:14px;
   cursor:pointer;
   background:none;
-  width:100%;
 }
 
 /* ---------- Segmented control ---------- */
@@ -466,6 +466,8 @@ main{ flex:1; padding:20px 18px 40px; background:var(--bg); }
     grid-area:main;
     padding:28px 36px;
     max-width:900px;
+    margin:0 auto;
+    width:100%;
   }
 
   #calendarCard{ max-width:380px; padding:14px; }
