@@ -579,6 +579,51 @@ $("addItemBtn").addEventListener("click", async () => {
   logActivity("mala", "item adicionado", `${name} (${malaSeg})`);
   $("newItemName").value = "";
 });
+
+const DEFAULT_PACKING_LIST = [
+  "Passaporte / documento de identidade",
+  "Cópia dos documentos (física ou digital)",
+  "Carregador de celular",
+  "Power bank",
+  "Adaptador de tomada",
+  "Fone de ouvido",
+  "Escova e pasta de dente",
+  "Remédios de uso pessoal",
+  "Protetor solar",
+  "Óculos de sol",
+  "Casaco/agasalho",
+  "Meias extras",
+  "Roupa íntima extra",
+  "Chinelo",
+  "Necessaire de higiene",
+  "Toalha de banho pequena",
+  "Máscara de dormir / tampão de ouvido",
+  "Dinheiro em espécie / cartão"
+];
+
+$("defaultListToggle").addEventListener("click", async () => {
+  const btn = $("defaultListToggle");
+  const isActive = btn.classList.contains("active");
+  if (isActive) {
+    btn.classList.remove("active");
+    btn.textContent = "Ativar";
+    return;
+  }
+  if (!confirm(`Isso vai adicionar ${DEFAULT_PACKING_LIST.length} itens essenciais na sua mala (compartilhados). Itens que você já tiver com o mesmo nome não serão duplicados. Continuar?`)) return;
+
+  const existingNames = new Set(malaItemsCache.map((i) => i.name.trim().toLowerCase()));
+  const toAdd = DEFAULT_PACKING_LIST.filter((name) => !existingNames.has(name.trim().toLowerCase()));
+
+  await Promise.all(toAdd.map((name) =>
+    addDoc(collection(db, "trips", currentTripId, "mala"), {
+      name, type: "shared", done: false, ownerEmail: currentUser.email
+    })
+  ));
+  logActivity("mala", "lista padrão adicionada", `${toAdd.length} item(ns) essenciais inseridos`);
+
+  btn.classList.add("active");
+  btn.textContent = "Ativado ✓";
+});
 function renderGroupProgress() {
   const el = $("groupProgress");
   const byOwner = {};
