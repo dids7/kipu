@@ -232,6 +232,38 @@ $("createTripBtn").addEventListener("click", async () => {
   openTrip(docRef.id);
 });
 
+$("joinCodeBtn").addEventListener("click", async () => {
+  const statusEl = $("joinCodeStatus");
+  const code = $("joinCodeInput").value.trim();
+  statusEl.classList.remove("hidden");
+  if (!code) { statusEl.textContent = "Cole o código da viagem primeiro."; return; }
+
+  statusEl.textContent = "Procurando viagem...";
+  try {
+    const snap = await getDocs(query(collection(db, "trips"), where("__name__", "==", code)));
+    let tripData = null;
+    snap.forEach((d) => { tripData = { id: d.id, ...d.data() }; });
+
+    if (!tripData) { statusEl.textContent = "Código não encontrado. Confira se copiou certinho."; return; }
+
+    const myEmail = currentUser.email.toLowerCase();
+    if ((tripData.participantEmails || []).map((e) => e.toLowerCase()).includes(myEmail)) {
+      statusEl.textContent = `Você já faz parte de "${tripData.name}" — abrindo...`;
+      openTrip(tripData.id);
+      return;
+    }
+
+    statusEl.textContent = `Encontrado: "${tripData.name}". Entrando...`;
+    await updateDoc(doc(db, "trips", tripData.id), {
+      participantEmails: [...(tripData.participantEmails || []), myEmail]
+    });
+    $("joinCodeInput").value = "";
+    openTrip(tripData.id);
+  } catch (err) {
+    statusEl.textContent = "Não foi possível entrar. Confira o código e tente de novo.";
+  }
+});
+
 $("backToTripsBtn").addEventListener("click", goToTripPicker);
 
 // ---------- Abrir viagem ----------
@@ -302,7 +334,20 @@ function updateDateTripInfo(iso) {
   const isCurrentTrip = trip.id === currentTripId;
   renderParticipants(trip, isCurrentTrip);
   $("participantEditRow").classList.toggle("hidden", !isCurrentTrip);
+  $("inviteCodeBlock").classList.toggle("hidden", !isCurrentTrip);
+  if (isCurrentTrip) $("inviteCodeValue").value = trip.id;
 }
+
+$("copyInviteCodeBtn").addEventListener("click", async () => {
+  const val = $("inviteCodeValue").value;
+  try {
+    await navigator.clipboard.writeText(val);
+    $("copyInviteCodeBtn").textContent = "Copiado ✓";
+    setTimeout(() => { $("copyInviteCodeBtn").textContent = "Copiar"; }, 1800);
+  } catch {
+    $("inviteCodeValue").select();
+  }
+});
 
 function renderParticipants(trip, editable) {
   const listEl = $("participantsList");

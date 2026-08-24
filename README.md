@@ -44,12 +44,16 @@ Essas regras garantem que só quem está na lista de participantes de uma viagem
 2. Na tela de viagens, clique em **Criar nova viagem** e preencha:
    - Nome, destino, datas
    - E-mails dos participantes (separados por vírgula — inclua o e-mail Google de cada pessoa do grupo)
-3. Abra a viagem criada e navegue pelas abas: Geral, Itinerário, Estadia, Passeios, Documentos, Mala, Tarefas, Gastos, Emergência, Histórico
-4. Cada pessoa do grupo entra com a própria conta Google (usando o mesmo link) e já vê a viagem automaticamente, desde que o e-mail dela esteja na lista de participantes
+3. Abra a viagem criada e navegue pelas abas: Calendário, Itinerário, Estadia, Documentos, Mala, Tarefas, Gastos, Emergência, Histórico
+4. **Convidar gente pra viagem — dois jeitos:**
+   - **Adicionar e-mail manualmente**: na aba Calendário, seleciona uma data da viagem, e no card que aparece adiciona o e-mail da pessoa
+   - **Código de convite**: nesse mesmo card aparece um "Código de convite" com botão de copiar — manda esse código pra pessoa (WhatsApp, etc.). Ela entra no link do Kipu, loga com a própria conta Google, cola o código na tela "Suas viagens" (campo "Foi convidado para uma viagem?") e entra sozinha, sem você precisar saber o e-mail dela de antemão
+5. Cada pessoa só vê as viagens onde o e-mail dela já está na lista de participantes — ninguém vê a lista de viagens de outra pessoa
 
 ## O que já funciona nesta base
 
-- Login com Google, múltiplas viagens por conta
+- Login com Google, múltiplas viagens por conta, entrada por código de convite
+
 - Itinerário com status cíclico (clique no badge: cogitando → programado → confirmado), já incluindo valor, status de pagamento e responsável de cada item (fundido com o que antes era a aba Passeios)
 - Estadia e Documentos com formulários simples (Documentos aceita upload de imagem/PDF ou link)
 - Mini calendário com lembretes por dia, visível na Visão Geral

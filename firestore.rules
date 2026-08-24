@@ -2,16 +2,42 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Coleção de viagens: qualquer usuário autenticado pode criar uma viagem
-    // e listar as viagens onde o e-mail dele está na lista de participantes.
     match /trips/{tripId} {
+      // Criar: qualquer usuário autenticado pode criar uma viagem nova.
       allow create: if request.auth != null;
-      allow read, update, delete: if request.auth != null
+
+      // "get" (buscar 1 viagem pelo ID/código): qualquer usuário autenticado
+      // pode buscar, mesmo sem ainda ser participante — é assim que o código
+      // de convite funciona (precisa achar a viagem antes de entrar nela).
+      allow get: if request.auth != null;
+
+      // "list" (listar/buscar várias viagens, ex: "Suas viagens"): só retorna
+      // viagens onde o e-mail do usuário já está na lista de participantes.
+      // Isso garante que ninguém vê a lista de viagens de outra pessoa.
+      allow list: if request.auth != null
         && request.auth.token.email in resource.data.participantEmails;
 
-      // Todas as subcoleções (itinerario, estadia, passeios, documentos, mala,
-      // tarefas, gastos, emergencia, activityLog) seguem a mesma regra:
-      // só participantes da viagem-pai podem ler/escrever.
+      // Editar: participantes normais podem editar qualquer campo.
+      // Um NÃO-participante só pode editar se a única mudança for
+      // adicionar o PRÓPRIO e-mail à lista de participantes — é o que
+      // acontece ao entrar com um código de convite.
+      allow update: if request.auth != null && (
+        request.auth.token.email in resource.data.participantEmails
+        ||
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantEmails']) &&
+          request.resource.data.participantEmails.size() == resource.data.participantEmails.size() + 1 &&
+          request.auth.token.email in request.resource.data.participantEmails &&
+          !(request.auth.token.email in resource.data.participantEmails)
+        )
+      );
+
+      allow delete: if request.auth != null
+        && request.auth.token.email in resource.data.participantEmails;
+
+      // Todas as subcoleções (itinerario, estadia, documentos, mala, tarefas,
+      // gastos, emergencia, activityLog, lembretes) seguem a regra estrita:
+      // só quem JÁ é participante da viagem-pai lê ou escreve os dados reais.
       match /{subcollection}/{docId} {
         allow read, write: if request.auth != null
           && request.auth.token.email in get(/databases/$(database)/documents/trips/$(tripId)).data.participantEmails;
