@@ -19,6 +19,11 @@
 
 *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 
+html{
+  scrollbar-gutter: stable;
+  overflow-y: scroll;
+}
+
 body{
   margin:0;
   background:var(--bg);
