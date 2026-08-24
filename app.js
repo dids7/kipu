@@ -78,6 +78,12 @@ const $ = (id) => document.getElementById(id);
 function show(el) { el.classList.remove("hidden"); }
 function hide(el) { el.classList.add("hidden"); }
 
+async function deleteItem(subcollection, id, label, area) {
+  if (!confirm(`Excluir "${label}"? Essa ação não pode ser desfeita.`)) return;
+  await deleteDoc(doc(db, "trips", currentTripId, subcollection, id));
+  logActivity(area, "item excluído", label);
+}
+
 function mapLink(address) {
   if (!address || !address.trim()) return "";
   const url = `https://maps.google.com/maps?q=${encodeURIComponent(address.trim())}`;
@@ -410,11 +416,13 @@ function subscribeItinerario() {
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             <button class="item-del" data-action="edit" title="Editar">✎</button>
+            <button class="item-del" data-action="delete" title="Excluir">✕</button>
             <button class="badge badge-${it.status}" data-action="status">${it.status}</button>
           </div>
         </div>`;
       card.querySelector('[data-action="status"]').addEventListener("click", () => cycleItinerarioStatus(d.id, it.status, it.title));
       card.querySelector('[data-action="edit"]').addEventListener("click", () => openItinerarioForEdit(d.id, it));
+      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("itinerario", d.id, it.title, "itinerario"));
       listEl.appendChild(card);
     });
     renderCalendar();
@@ -510,10 +518,12 @@ function subscribeEstadia() {
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             <button class="item-del" data-action="edit" title="Editar">✎</button>
+            <button class="item-del" data-action="delete" title="Excluir">✕</button>
             <span class="badge badge-${s.status === "pago" ? "confirmado" : "programado"}">${s.status}</span>
           </div>
         </div>`;
       card.querySelector('[data-action="edit"]').addEventListener("click", () => openEstadiaForEdit(d.id, s));
+      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("estadia", d.id, s.name, "estadia"));
       listEl.appendChild(card);
     });
   });
@@ -576,13 +586,17 @@ function subscribeDocumentos() {
       card.innerHTML = `
         <div class="card-row">
           <div class="card-title">${doc_.title}</div>
-          <button class="item-del" data-action="edit" title="Editar">✎</button>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="item-del" data-action="edit" title="Editar">✎</button>
+            <button class="item-del" data-action="delete" title="Excluir">✕</button>
+          </div>
         </div>
         <div class="card-meta">${doc_.notes || ""}</div>
         ${isImage ? `<img src="${doc_.url}" style="max-width:100%; border-radius:8px; margin-top:8px;">` : ""}
         ${doc_.url ? `<a href="${doc_.url}" target="_blank" style="color:var(--gold); font-size:12.5px; display:block; margin-top:6px;">Abrir ${doc_.fileName ? doc_.fileName : "link"} ↗</a>` : ""}
       `;
       card.querySelector('[data-action="edit"]').addEventListener("click", () => openDocForEdit(d.id, doc_));
+      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("documentos", d.id, doc_.title, "documentos"));
       listEl.appendChild(card);
     });
   });
@@ -836,6 +850,7 @@ function subscribeTarefas() {
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             <button class="item-del" data-action="edit" title="Editar">✎</button>
+            <button class="item-del" data-action="delete" title="Excluir">✕</button>
             <button class="badge badge-${t.status}" data-action="status">${t.status}</button>
           </div>
         </div>`;
@@ -845,6 +860,7 @@ function subscribeTarefas() {
         logActivity("tarefas", "status alterado", `"${t.description}": ${next}`);
       });
       card.querySelector('[data-action="edit"]').addEventListener("click", () => openTaskForEdit(d.id, t));
+      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("tarefas", d.id, t.description, "tarefas"));
       listEl.appendChild(card);
     });
   });
@@ -931,9 +947,13 @@ function renderExpenses() {
           <div class="card-title">${e.description} — ${fmtOriginal(e.value, currency)}${converted}</div>
           <div class="card-meta">pago por ${e.paidBy} · dividido entre ${(e.splitAmong || []).length} pessoa(s)</div>
         </div>
-        <button class="item-del" title="Editar">✎</button>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="item-del" data-action="edit" title="Editar">✎</button>
+          <button class="item-del" data-action="delete" title="Excluir">✕</button>
+        </div>
       `;
-      card.querySelector("button").addEventListener("click", () => openExpenseForEdit(e.id, e));
+      card.querySelector('[data-action="edit"]').addEventListener("click", () => openExpenseForEdit(e.id, e));
+      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("gastos", e.id, e.description, "gastos"));
       sharedListEl.appendChild(card);
     });
   }
@@ -951,9 +971,13 @@ function renderExpenses() {
       const converted = currency === "USD" ? ` (≈ ${fmtBRL(toBRL(e.value, currency))})` : "";
       card.innerHTML = `
         <div class="card-title">${e.description} — ${fmtOriginal(e.value, currency)}${converted}</div>
-        <button class="item-del" title="Editar">✎</button>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="item-del" data-action="edit" title="Editar">✎</button>
+          <button class="item-del" data-action="delete" title="Excluir">✕</button>
+        </div>
       `;
-      card.querySelector("button").addEventListener("click", () => openExpenseForEdit(e.id, e));
+      card.querySelector('[data-action="edit"]').addEventListener("click", () => openExpenseForEdit(e.id, e));
+      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("gastos", e.id, e.description, "gastos"));
       personalListEl.appendChild(card);
     });
   }
@@ -1062,9 +1086,13 @@ function subscribeEmergencia() {
       card.className = "card card-row";
       card.innerHTML = `
         <div><span class="card-title">${it.label}</span><br><span class="card-meta">${it.value}</span></div>
-        <button class="item-del" title="Editar">✎</button>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="item-del" data-action="edit" title="Editar">✎</button>
+          <button class="item-del" data-action="delete" title="Excluir">✕</button>
+        </div>
       `;
-      card.querySelector("button").addEventListener("click", () => openEmergencyForEdit(d.id, it));
+      card.querySelector('[data-action="edit"]').addEventListener("click", () => openEmergencyForEdit(d.id, it));
+      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("emergencia", d.id, it.label, "emergencia"));
       listEl.appendChild(card);
     });
   });
