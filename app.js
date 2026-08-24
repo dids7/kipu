@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
-  query, where, orderBy, serverTimestamp, getDocs, getDoc
+  query, where, orderBy, serverTimestamp, getDocs, getDoc, arrayUnion
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   ref, uploadBytes, getDownloadURL
@@ -253,12 +253,13 @@ $("joinCodeBtn").addEventListener("click", async () => {
 
     statusEl.textContent = `Encontrado: "${tripData.name}". Entrando...`;
     await updateDoc(doc(db, "trips", tripData.id), {
-      participantEmails: [...(tripData.participantEmails || []), myEmail]
+      participantEmails: arrayUnion(myEmail)
     });
     $("joinCodeInput").value = "";
     openTrip(tripData.id);
   } catch (err) {
-    statusEl.textContent = "Não foi possível entrar. Confira o código e tente de novo.";
+    statusEl.textContent = `Não foi possível entrar (${err.code || err.message}). Confira o código e tente de novo.`;
+    console.error("Erro ao entrar com código:", err);
   }
 });
 
