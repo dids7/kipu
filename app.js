@@ -281,8 +281,7 @@ function renderParticipants(trip, editable) {
   listEl.innerHTML = "";
   emails.forEach((email) => {
     const row = document.createElement("div");
-    row.className = "card-row";
-    row.style.padding = "4px 0";
+    row.className = "list-row";
     const isLast = emails.length === 1;
     row.innerHTML = `
       <span class="card-meta">${email}</span>
@@ -976,7 +975,7 @@ function renderBalance() {
   el.innerHTML = Object.entries(balances).map(([email, val]) => {
     const cls = val >= 0 ? "balance-positive" : "balance-negative";
     const label = val >= 0 ? "a receber" : "deve";
-    return `<div class="card-row" style="padding:4px 0;"><span class="card-meta">${email}</span><span class="${cls}">${fmtBRL(Math.abs(val))} ${label}</span></div>`;
+    return `<div class="list-row"><span class="card-meta">${email}</span><span class="${cls}">${fmtBRL(Math.abs(val))} ${label}</span></div>`;
   }).join("");
 }
 
