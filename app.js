@@ -721,6 +721,21 @@ function subscribeHistorico() {
   unsubscribers.push(unsub);
 }
 
+$("clearHistoryBtn").addEventListener("click", async () => {
+  if (!confirm("Isso vai apagar TODO o histórico de alterações desta viagem, sem volta. Continuar?")) return;
+  const snap = await getDocs(collection(db, "trips", currentTripId, "activityLog"));
+  const deletions = [];
+  snap.forEach((d) => deletions.push(deleteDoc(doc(db, "trips", currentTripId, "activityLog", d.id))));
+  await Promise.all(deletions);
+  await addDoc(collection(db, "trips", currentTripId, "activityLog"), {
+    authorEmail: currentUser.email,
+    area: "historico",
+    action: "histórico limpo",
+    description: `${deletions.length} registro(s) removido(s) — reinício para uso real da viagem`,
+    timestamp: serverTimestamp()
+  });
+});
+
 // ================= CALENDÁRIO + LEMBRETES =================
 let remindersByDate = {}; // { "YYYY-MM-DD": [{id, text, visibility, authorEmail}] }
 let currentRemVis = "personal";
