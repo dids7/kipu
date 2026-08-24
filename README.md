@@ -58,6 +58,7 @@ Essas regras garantem que só quem está na lista de participantes de uma viagem
 - Informações de emergência
 - Histórico completo de alterações (quem, o quê, quando)
 - Cache offline básico do Firestore (funciona para leitura sem sinal; escritas sincronizam quando a conexão volta)
+- "Ver no mapa" — link direto pro Google Maps a partir do endereço cadastrado em Estadia e no local (opcional) de cada item do Itinerário
 
 ## Rodando localmente antes de subir
 

@@ -25,6 +25,13 @@ const $ = (id) => document.getElementById(id);
 function show(el) { el.classList.remove("hidden"); }
 function hide(el) { el.classList.add("hidden"); }
 
+function mapLink(address) {
+  if (!address || !address.trim()) return "";
+  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address.trim())}`;
+  return `<a href="${url}" target="_blank" rel="noopener" class="map-link" onclick="event.stopPropagation()">📍 Ver no mapa</a>`;
+}
+
+
 function fmtDate(d) {
   if (!d) return "";
   const [y, m, day] = d.split("-");
@@ -345,7 +352,9 @@ function subscribeItinerario() {
               ${fmtDate(it.date)} ${timeRange}
               ${hasValue ? ` · R$ ${Number(it.value).toFixed(2)} (${it.paymentStatus || "pendente"})` : ""}
               ${it.responsible ? ` · resp: ${it.responsible}` : ""}
+              ${it.location ? ` · ${it.location}` : ""}
             </div>
+            ${mapLink(it.location)}
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             <button class="item-del" data-action="edit" title="Editar">✎</button>
@@ -374,6 +383,7 @@ function openItinerarioForEdit(id, it) {
   $("itTime").value = it.time || "";
   $("itEndTime").value = it.endTime || "";
   $("itTitle").value = it.title || "";
+  $("itLocation").value = it.location || "";
   $("itStatus").value = it.status || "cogitando";
   $("itValue").value = it.value || "";
   $("itPaymentStatus").value = it.paymentStatus || "pendente";
@@ -387,6 +397,7 @@ function openItinerarioForEdit(id, it) {
 function resetItinerarioForm() {
   editingItinerarioId = null;
   $("itDate").value = ""; $("itTime").value = ""; $("itEndTime").value = ""; $("itTitle").value = "";
+  $("itLocation").value = "";
   $("itValue").value = ""; $("itResponsible").value = ""; $("itStatus").value = "cogitando";
   $("itPaymentStatus").value = "pendente";
   $("saveItinerarioBtn").textContent = "Salvar";
@@ -405,12 +416,13 @@ $("addItinerarioToggleBtn").addEventListener("click", () => {
 $("saveItinerarioBtn").addEventListener("click", async () => {
   const date = $("itDate").value, time = $("itTime").value, endTime = $("itEndTime").value;
   const title = $("itTitle").value.trim();
+  const location = $("itLocation").value.trim();
   const status = $("itStatus").value;
   const value = parseFloat($("itValue").value) || 0;
   const paymentStatus = $("itPaymentStatus").value;
   const responsible = $("itResponsible").value;
   if (!date || !title) { alert("Preencha data e atividade."); return; }
-  const payload = { date, time, endTime, title, status, value, paymentStatus, responsible };
+  const payload = { date, time, endTime, title, location, status, value, paymentStatus, responsible };
 
   if (editingItinerarioId) {
     await updateDoc(doc(db, "trips", currentTripId, "itinerario", editingItinerarioId), payload);
@@ -437,6 +449,7 @@ function subscribeEstadia() {
           <div>
             <div class="card-title">${s.name}</div>
             <div class="card-meta">${fmtDate(s.checkin)} – ${fmtDate(s.checkout)} · ${s.address || ""}</div>
+            ${mapLink(s.address)}
           </div>
           <span class="badge badge-${s.status === "pago" ? "confirmado" : "programado"}">${s.status}</span>
         </div>`;
@@ -904,6 +917,7 @@ function renderItineraryForDay(iso) {
             <div>
               <div class="card-title" style="font-size:13px;">${it.title}</div>
               <div class="card-meta">${it.time ? it.time + (it.endTime ? "–" + it.endTime : "") : ""}${hasValue ? " · R$ " + Number(it.value).toFixed(2) : ""}</div>
+              ${it.location ? `<div class="card-meta">${it.location} ${mapLink(it.location)}</div>` : ""}
             </div>
             <span class="badge badge-${it.status}">${it.status}</span>
           </div>
