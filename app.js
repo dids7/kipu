@@ -531,6 +531,7 @@ function subscribeMala() {
     malaItemsCache = [];
     snap.forEach((d) => malaItemsCache.push({ id: d.id, ...d.data() }));
     renderMalaList();
+    updateDefaultToggleState();
   });
   unsubscribers.push(unsub);
 
@@ -547,7 +548,9 @@ function subscribeMala() {
 }
 function renderMalaList() {
   const listEl = $("malaList");
-  const items = malaItemsCache.filter((i) => i.type === malaSeg);
+  const items = malaItemsCache
+    .filter((i) => i.type === malaSeg)
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   if (items.length === 0) { listEl.innerHTML = "<div class='empty'>Nenhum item aqui ainda.</div>"; return; }
   listEl.innerHTML = "";
   items.forEach((it) => {
@@ -601,28 +604,33 @@ const DEFAULT_PACKING_LIST = [
   "Dinheiro em espécie / cartão"
 ];
 
+function updateDefaultToggleState() {
+  const btn = $("defaultListToggle");
+  const hasDefaults = malaItemsCache.some((i) => i.isDefault);
+  btn.classList.toggle("active", hasDefaults);
+  btn.textContent = hasDefaults ? "Ativado ✓" : "Ativar";
+}
+
 $("defaultListToggle").addEventListener("click", async () => {
   const btn = $("defaultListToggle");
-  const isActive = btn.classList.contains("active");
-  if (isActive) {
-    btn.classList.remove("active");
-    btn.textContent = "Ativar";
+  const hasDefaults = malaItemsCache.some((i) => i.isDefault);
+
+  if (hasDefaults) {
+    const toRemove = malaItemsCache.filter((i) => i.isDefault);
+    await Promise.all(toRemove.map((i) => deleteDoc(doc(db, "trips", currentTripId, "mala", i.id))));
+    logActivity("mala", "lista padrão removida", `${toRemove.length} item(ns) essenciais removidos`);
     return;
   }
-  if (!confirm(`Isso vai adicionar ${DEFAULT_PACKING_LIST.length} itens essenciais na sua mala (compartilhados). Itens que você já tiver com o mesmo nome não serão duplicados. Continuar?`)) return;
 
   const existingNames = new Set(malaItemsCache.map((i) => i.name.trim().toLowerCase()));
   const toAdd = DEFAULT_PACKING_LIST.filter((name) => !existingNames.has(name.trim().toLowerCase()));
 
   await Promise.all(toAdd.map((name) =>
     addDoc(collection(db, "trips", currentTripId, "mala"), {
-      name, type: "shared", done: false, ownerEmail: currentUser.email
+      name, type: "shared", done: false, ownerEmail: currentUser.email, isDefault: true
     })
   ));
   logActivity("mala", "lista padrão adicionada", `${toAdd.length} item(ns) essenciais inseridos`);
-
-  btn.classList.add("active");
-  btn.textContent = "Ativado ✓";
 });
 function renderGroupProgress() {
   const el = $("groupProgress");

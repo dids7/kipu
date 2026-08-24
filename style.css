@@ -276,15 +276,20 @@ main{
 .seg-btn.active{ background:var(--teal-dim); color:var(--teal); box-shadow: inset 0 0 0 1px var(--teal); }
 
 .toggle-pill{
+  -webkit-appearance:none;
+  appearance:none;
   border-radius:9px;
   font-size:12.5px;
   font-weight:600;
+  font-family:'Public Sans', sans-serif;
   color:var(--muted);
+  background-color:var(--panel-raised);
   border:1px solid var(--line);
-  background:none;
   cursor:pointer;
+  outline:none;
 }
-.toggle-pill.active{ background:var(--teal-dim); color:var(--teal); border-color:var(--teal); }
+.toggle-pill:hover{ border-color:var(--teal); }
+.toggle-pill.active{ background-color:var(--teal-dim); color:var(--teal); border-color:var(--teal); }
 .seg-btn[data-remvis="personal"].active{ background:var(--red-dim); color:#E8907F; box-shadow: inset 0 0 0 1px var(--red); }
 .seg-btn[data-remvis="shared"].active{ background:var(--teal-dim); color:var(--teal); box-shadow: inset 0 0 0 1px var(--teal); }
 
