@@ -880,6 +880,21 @@ $("saveTaskBtn").addEventListener("click", async () => {
 // ================= GASTOS =================
 let expensesCache = [];
 let editingExpenseId = null;
+let expTypeSeg = "shared";
+
+function usdRate() {
+  return parseFloat($("usdRate").value) || 1;
+}
+function toBRL(value, currency) {
+  return currency === "USD" ? value * usdRate() : value;
+}
+function fmtBRL(value) {
+  return `R$ ${value.toFixed(2)}`;
+}
+function fmtOriginal(value, currency) {
+  return currency === "USD" ? `US$ ${Number(value).toFixed(2)}` : `R$ ${Number(value).toFixed(2)}`;
+}
+
 function subscribeGastos() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "gastos"), (snap) => {
     expensesCache = [];
@@ -889,44 +904,92 @@ function subscribeGastos() {
   });
   unsubscribers.push(unsub);
 }
+
 function renderExpenses() {
-  const listEl = $("expensesList");
-  if (expensesCache.length === 0) { listEl.innerHTML = "<div class='empty'>Nenhum gasto ainda.</div>"; return; }
-  listEl.innerHTML = "";
-  expensesCache.forEach((e) => {
-    const card = document.createElement("div");
-    card.className = "card card-row";
-    card.innerHTML = `
-      <div>
-        <div class="card-title">${e.description} — R$ ${Number(e.value).toFixed(2)}</div>
-        <div class="card-meta">pago por ${e.paidBy} · dividido entre ${(e.splitAmong || []).length} pessoa(s)</div>
-      </div>
-      <button class="item-del" title="Editar">✎</button>
-    `;
-    card.querySelector("button").addEventListener("click", () => openExpenseForEdit(e.id, e));
-    listEl.appendChild(card);
-  });
+  const shared = expensesCache.filter((e) => (e.type || "shared") === "shared");
+  const personal = expensesCache.filter((e) => e.type === "personal" && e.ownerEmail === currentUser.email);
+
+  const sharedListEl = $("expensesList");
+  if (shared.length === 0) { sharedListEl.innerHTML = "<div class='empty'>Nenhum gasto compartilhado ainda.</div>"; }
+  else {
+    sharedListEl.innerHTML = "";
+    shared.forEach((e) => {
+      const card = document.createElement("div");
+      card.className = "card card-row";
+      const currency = e.currency || "BRL";
+      const converted = currency === "USD" ? ` (≈ ${fmtBRL(toBRL(e.value, currency))})` : "";
+      card.innerHTML = `
+        <div>
+          <div class="card-title">${e.description} — ${fmtOriginal(e.value, currency)}${converted}</div>
+          <div class="card-meta">pago por ${e.paidBy} · dividido entre ${(e.splitAmong || []).length} pessoa(s)</div>
+        </div>
+        <button class="item-del" title="Editar">✎</button>
+      `;
+      card.querySelector("button").addEventListener("click", () => openExpenseForEdit(e.id, e));
+      sharedListEl.appendChild(card);
+    });
+  }
+  const sharedTotalBRL = shared.reduce((sum, e) => sum + toBRL(Number(e.value), e.currency || "BRL"), 0);
+  $("sharedTotal").textContent = fmtBRL(sharedTotalBRL);
+
+  const personalListEl = $("personalExpensesList");
+  if (personal.length === 0) { personalListEl.innerHTML = "<div class='empty'>Nenhum gasto pessoal ainda.</div>"; }
+  else {
+    personalListEl.innerHTML = "";
+    personal.forEach((e) => {
+      const card = document.createElement("div");
+      card.className = "card card-row";
+      const currency = e.currency || "BRL";
+      const converted = currency === "USD" ? ` (≈ ${fmtBRL(toBRL(e.value, currency))})` : "";
+      card.innerHTML = `
+        <div class="card-title">${e.description} — ${fmtOriginal(e.value, currency)}${converted}</div>
+        <button class="item-del" title="Editar">✎</button>
+      `;
+      card.querySelector("button").addEventListener("click", () => openExpenseForEdit(e.id, e));
+      personalListEl.appendChild(card);
+    });
+  }
+  const personalTotalBRL = personal.reduce((sum, e) => sum + toBRL(Number(e.value), e.currency || "BRL"), 0);
+  $("personalTotal").textContent = fmtBRL(personalTotalBRL);
 }
+
 function renderBalance() {
+  const shared = expensesCache.filter((e) => (e.type || "shared") === "shared");
   const balances = {};
   (currentTripData.participantEmails || []).forEach((e) => { balances[e] = 0; });
-  expensesCache.forEach((e) => {
-    const per = e.value / (e.splitAmong.length || 1);
-    balances[e.paidBy] = (balances[e.paidBy] || 0) + e.value;
+  shared.forEach((e) => {
+    const valueBRL = toBRL(Number(e.value), e.currency || "BRL");
+    const per = valueBRL / (e.splitAmong.length || 1);
+    balances[e.paidBy] = (balances[e.paidBy] || 0) + valueBRL;
     e.splitAmong.forEach((p) => { balances[p] = (balances[p] || 0) - per; });
   });
   const el = $("balanceSummary");
   el.innerHTML = Object.entries(balances).map(([email, val]) => {
     const cls = val >= 0 ? "balance-positive" : "balance-negative";
     const label = val >= 0 ? "a receber" : "deve";
-    return `<div class="card-row" style="padding:4px 0;"><span class="card-meta">${email}</span><span class="${cls}">R$ ${Math.abs(val).toFixed(2)} ${label}</span></div>`;
+    return `<div class="card-row" style="padding:4px 0;"><span class="card-meta">${email}</span><span class="${cls}">${fmtBRL(Math.abs(val))} ${label}</span></div>`;
   }).join("");
 }
 
+$("usdRate").addEventListener("input", () => { renderExpenses(); renderBalance(); });
+
+document.querySelectorAll("[data-exptype]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("[data-exptype]").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    expTypeSeg = btn.dataset.exptype;
+    $("expSharedFields").classList.toggle("hidden", expTypeSeg === "personal");
+  });
+});
+
 function openExpenseForEdit(id, e) {
   editingExpenseId = id;
+  expTypeSeg = e.type || "shared";
+  document.querySelectorAll("[data-exptype]").forEach((b) => b.classList.toggle("active", b.dataset.exptype === expTypeSeg));
+  $("expSharedFields").classList.toggle("hidden", expTypeSeg === "personal");
   $("expDesc").value = e.description || "";
   $("expValue").value = e.value || "";
+  $("expCurrency").value = e.currency || "BRL";
   $("expPaidBy").value = e.paidBy || "";
   $("expSplitGroup").querySelectorAll(".checkbox-chip").forEach((chip) => {
     chip.classList.toggle("checked", (e.splitAmong || []).includes(chip.dataset.email));
@@ -937,7 +1000,10 @@ function openExpenseForEdit(id, e) {
 }
 function resetExpenseForm() {
   editingExpenseId = null;
-  $("expDesc").value = ""; $("expValue").value = "";
+  expTypeSeg = "shared";
+  document.querySelectorAll("[data-exptype]").forEach((b) => b.classList.toggle("active", b.dataset.exptype === "shared"));
+  $("expSharedFields").classList.remove("hidden");
+  $("expDesc").value = ""; $("expValue").value = ""; $("expCurrency").value = "BRL";
   $("expSplitGroup").querySelectorAll(".checkbox-chip").forEach((chip) => chip.classList.add("checked"));
   $("saveExpenseBtn").textContent = "Salvar";
   $("expenseForm").classList.add("hidden");
@@ -949,15 +1015,25 @@ $("addExpenseToggleBtn")?.addEventListener("click", () => {
 $("saveExpenseBtn").addEventListener("click", async () => {
   const description = $("expDesc").value.trim();
   const value = parseFloat($("expValue").value);
-  const paidBy = $("expPaidBy").value;
-  const splitAmong = Array.from($("expSplitGroup").querySelectorAll(".checkbox-chip.checked")).map((c) => c.dataset.email);
-  if (!description || !value || splitAmong.length === 0) { alert("Preencha descrição, valor e ao menos um participante na divisão."); return; }
-  if (editingExpenseId) {
-    await updateDoc(doc(db, "trips", currentTripId, "gastos", editingExpenseId), { description, value, paidBy, splitAmong });
-    logActivity("gastos", "gasto editado", `${description} — R$ ${value.toFixed(2)}`);
+  const currency = $("expCurrency").value;
+  if (!description || !value) { alert("Preencha descrição e valor."); return; }
+
+  let payload = { description, value, currency, type: expTypeSeg };
+  if (expTypeSeg === "shared") {
+    const paidBy = $("expPaidBy").value;
+    const splitAmong = Array.from($("expSplitGroup").querySelectorAll(".checkbox-chip.checked")).map((c) => c.dataset.email);
+    if (splitAmong.length === 0) { alert("Escolha ao menos um participante na divisão."); return; }
+    payload = { ...payload, paidBy, splitAmong };
   } else {
-    await addDoc(collection(db, "trips", currentTripId, "gastos"), { description, value, paidBy, splitAmong });
-    logActivity("gastos", "gasto adicionado", `${description} — R$ ${value.toFixed(2)}`);
+    payload.ownerEmail = currentUser.email;
+  }
+
+  if (editingExpenseId) {
+    await updateDoc(doc(db, "trips", currentTripId, "gastos", editingExpenseId), payload);
+    logActivity("gastos", "gasto editado", `${description} — ${fmtOriginal(value, currency)}`);
+  } else {
+    await addDoc(collection(db, "trips", currentTripId, "gastos"), payload);
+    logActivity("gastos", "gasto adicionado", `${description} — ${fmtOriginal(value, currency)} (${expTypeSeg})`);
   }
   resetExpenseForm();
 });

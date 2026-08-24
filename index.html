@@ -271,20 +271,62 @@
 
       <!-- GASTOS -->
       <div class="tab-panel hidden" id="panel-gastos">
-        <h2 class="screen-title">Divisão de gastos</h2>
+        <h2 class="screen-title">Gastos</h2>
+        <p class="screen-sub">Compartilhado entra na divisão do grupo. Pessoal fica só com você, mas ajuda a controlar o quanto gastou.</p>
+
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-title" style="font-size:13px; margin-bottom:8px;">Cotação do dólar</div>
+          <div class="form-row">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="card-meta">US$ 1 =</span>
+              <input type="number" id="usdRate" step="0.01" value="5.40" style="width:90px;">
+              <span class="card-meta">R$</span>
+            </div>
+          </div>
+        </div>
+
         <button class="add-toggle" id="addExpenseToggleBtn" data-form="expenseForm">＋ Adicionar gasto</button>
         <div id="expenseForm" class="form-card hidden">
-          <div><label>Descrição</label><input type="text" id="expDesc" placeholder="Ex: Táxi aeroporto"></div>
-          <div><label>Valor (R$)</label><input type="number" id="expValue" step="0.01"></div>
-          <div><label>Quem pagou</label><select id="expPaidBy"></select></div>
-          <div>
-            <label>Dividir entre</label>
-            <div class="checkbox-group" id="expSplitGroup"></div>
+          <div class="segmented">
+            <button class="seg-btn active" data-exptype="shared">🧵 Compartilhado</button>
+            <button class="seg-btn" data-exptype="personal">🔒 Pessoal</button>
+          </div>
+          <div><label>Descrição</label><input type="text" id="expDesc" placeholder="Ex: Almoço dia 6"></div>
+          <div class="form-row">
+            <div><label>Valor</label><input type="number" id="expValue" step="0.01"></div>
+            <div>
+              <label>Moeda</label>
+              <select id="expCurrency">
+                <option value="BRL">R$ Real</option>
+                <option value="USD">US$ Dólar</option>
+              </select>
+            </div>
+          </div>
+          <div id="expSharedFields">
+            <div><label>Quem pagou</label><select id="expPaidBy"></select></div>
+            <div>
+              <label>Dividir entre</label>
+              <div class="checkbox-group" id="expSplitGroup"></div>
+            </div>
           </div>
           <button class="btn btn-primary btn-block" id="saveExpenseBtn">Salvar</button>
         </div>
+
+        <h3 class="screen-title" style="font-size:16px; margin-top:18px;">🧵 Compartilhados</h3>
         <div id="expensesList"></div>
-        <h3 class="screen-title" style="font-size:18px; margin-top:20px;">Saldo por pessoa</h3>
+        <div class="card-row" style="padding:8px 4px;">
+          <span class="card-meta">Total do grupo</span>
+          <span id="sharedTotal" style="font-weight:700; color:var(--gold);">R$ 0,00</span>
+        </div>
+
+        <h3 class="screen-title" style="font-size:16px; margin-top:18px;">🔒 Meus gastos pessoais</h3>
+        <div id="personalExpensesList"></div>
+        <div class="card-row" style="padding:8px 4px;">
+          <span class="card-meta">Meu total pessoal</span>
+          <span id="personalTotal" style="font-weight:700; color:var(--teal);">R$ 0,00</span>
+        </div>
+
+        <h3 class="screen-title" style="font-size:18px; margin-top:20px;">Saldo por pessoa (compartilhado)</h3>
         <div class="card" id="balanceSummary"></div>
       </div>
 

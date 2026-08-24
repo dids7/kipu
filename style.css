@@ -567,14 +567,14 @@ main{
   .cal-weekday{ font-size:9px; }
 
   /* Listas de cards em 2 colunas — pensado pra planejamento, não pra fila de leitura */
-  #itinerarioList, #estadiaList, #docsList, #tasksList, #expensesList, #emergencyList{
+  #itinerarioList, #estadiaList, #docsList, #tasksList, #expensesList, #personalExpensesList, #emergencyList{
     display:grid;
     grid-template-columns: 1fr 1fr;
     gap:10px;
     align-content:start;
   }
   #itinerarioList .card, #estadiaList .card, #docsList .card,
-  #tasksList .card, #expensesList .card, #emergencyList .card{
+  #tasksList .card, #expensesList .card, #personalExpensesList .card, #emergencyList .card{
     margin-bottom:0;
   }
 
