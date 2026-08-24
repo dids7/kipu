@@ -540,7 +540,10 @@ function resetEstadiaForm() {
   $("estadiaForm").classList.add("hidden");
 }
 $("addEstadiaToggleBtn")?.addEventListener("click", () => {
-  if (!$("estadiaForm").classList.contains("hidden") || editingEstadiaId) resetEstadiaForm();
+  if (!$("estadiaForm").classList.contains("hidden") || editingEstadiaId) {
+    resetEstadiaForm();
+    $("estadiaForm").classList.remove("hidden");
+  }
 });
 $("saveEstadiaBtn").addEventListener("click", async () => {
   const name = $("stayName").value.trim();
@@ -603,7 +606,10 @@ function resetDocForm() {
   $("docForm").classList.add("hidden");
 }
 $("addDocToggleBtn")?.addEventListener("click", () => {
-  if (!$("docForm").classList.contains("hidden") || editingDocId) resetDocForm();
+  if (!$("docForm").classList.contains("hidden") || editingDocId) {
+    resetDocForm();
+    $("docForm").classList.remove("hidden");
+  }
 });
 
 $("saveDocBtn").addEventListener("click", async () => {
@@ -649,9 +655,9 @@ $("saveDocBtn").addEventListener("click", async () => {
 });
 
 // ================= MALA =================
-document.querySelectorAll(".seg-btn").forEach((btn) => {
+document.querySelectorAll("[data-seg]").forEach((btn) => {
   btn.addEventListener("click", () => {
-    document.querySelectorAll(".seg-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll("[data-seg]").forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
     malaSeg = btn.dataset.seg;
     renderMalaList();
@@ -861,7 +867,10 @@ function resetTaskForm() {
   $("taskForm").classList.add("hidden");
 }
 $("addTaskToggleBtn")?.addEventListener("click", () => {
-  if (!$("taskForm").classList.contains("hidden") || editingTaskId) resetTaskForm();
+  if (!$("taskForm").classList.contains("hidden") || editingTaskId) {
+    resetTaskForm();
+    $("taskForm").classList.remove("hidden");
+  }
 });
 
 $("saveTaskBtn").addEventListener("click", async () => {
@@ -1009,7 +1018,10 @@ function resetExpenseForm() {
   $("expenseForm").classList.add("hidden");
 }
 $("addExpenseToggleBtn")?.addEventListener("click", () => {
-  if (!$("expenseForm").classList.contains("hidden") || editingExpenseId) resetExpenseForm();
+  if (!$("expenseForm").classList.contains("hidden") || editingExpenseId) {
+    resetExpenseForm();
+    $("expenseForm").classList.remove("hidden");
+  }
 });
 
 $("saveExpenseBtn").addEventListener("click", async () => {
@@ -1075,7 +1087,10 @@ function resetEmergencyForm() {
   $("emergencyForm").classList.add("hidden");
 }
 $("addEmergencyToggleBtn")?.addEventListener("click", () => {
-  if (!$("emergencyForm").classList.contains("hidden") || editingEmergencyId) resetEmergencyForm();
+  if (!$("emergencyForm").classList.contains("hidden") || editingEmergencyId) {
+    resetEmergencyForm();
+    $("emergencyForm").classList.remove("hidden");
+  }
 });
 
 $("saveEmergencyBtn").addEventListener("click", async () => {
