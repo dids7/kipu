@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
-  query, where, orderBy, serverTimestamp, getDocs
+  query, where, orderBy, serverTimestamp, getDocs, getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   ref, uploadBytes, getDownloadURL
@@ -240,11 +240,9 @@ $("joinCodeBtn").addEventListener("click", async () => {
 
   statusEl.textContent = "Procurando viagem...";
   try {
-    const snap = await getDocs(query(collection(db, "trips"), where("__name__", "==", code)));
-    let tripData = null;
-    snap.forEach((d) => { tripData = { id: d.id, ...d.data() }; });
-
-    if (!tripData) { statusEl.textContent = "Código não encontrado. Confira se copiou certinho."; return; }
+    const snap = await getDoc(doc(db, "trips", code));
+    if (!snap.exists()) { statusEl.textContent = "Código não encontrado. Confira se copiou certinho."; return; }
+    const tripData = { id: snap.id, ...snap.data() };
 
     const myEmail = currentUser.email.toLowerCase();
     if ((tripData.participantEmails || []).map((e) => e.toLowerCase()).includes(myEmail)) {
