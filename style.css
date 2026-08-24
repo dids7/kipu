@@ -274,6 +274,17 @@ main{
   cursor:pointer;
 }
 .seg-btn.active{ background:var(--teal-dim); color:var(--teal); box-shadow: inset 0 0 0 1px var(--teal); }
+
+.toggle-pill{
+  border-radius:9px;
+  font-size:12.5px;
+  font-weight:600;
+  color:var(--muted);
+  border:1px solid var(--line);
+  background:none;
+  cursor:pointer;
+}
+.toggle-pill.active{ background:var(--teal-dim); color:var(--teal); border-color:var(--teal); }
 .seg-btn[data-remvis="personal"].active{ background:var(--red-dim); color:#E8907F; box-shadow: inset 0 0 0 1px var(--red); }
 .seg-btn[data-remvis="shared"].active{ background:var(--teal-dim); color:var(--teal); box-shadow: inset 0 0 0 1px var(--teal); }
 
