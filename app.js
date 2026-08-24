@@ -842,11 +842,11 @@ function renderItineraryForDay(iso) {
   const el = $("itineraryForDayList");
   const items = itinerarioByDate[iso] || [];
   if (items.length === 0) { el.innerHTML = ""; return; }
-  el.innerHTML = `<div style="font-size:11px; color:var(--muted); margin-bottom:6px;">📌 Itinerário do dia</div>` +
+  el.innerHTML = `<div style="font-size:11px; color:var(--muted); margin-bottom:6px;">📌 Itinerário do dia — clique para editar</div>` +
     items.map((it) => {
       const hasValue = it.value && Number(it.value) > 0;
       return `
-        <div class="card" style="padding:10px 12px; margin-bottom:6px;">
+        <div class="card" data-itin-id="${it.id}" style="padding:10px 12px; margin-bottom:6px; cursor:pointer;">
           <div class="card-row">
             <div>
               <div class="card-title" style="font-size:13px;">${it.title}</div>
@@ -856,6 +856,16 @@ function renderItineraryForDay(iso) {
           </div>
         </div>`;
     }).join("");
+
+  el.querySelectorAll("[data-itin-id]").forEach((card) => {
+    card.addEventListener("click", () => {
+      const it = items.find((i) => i.id === card.dataset.itinId);
+      if (!it) return;
+      const itinerarioTab = document.querySelector('.tab[data-tab="itinerario"]');
+      if (itinerarioTab) itinerarioTab.click();
+      openItinerarioForEdit(it.id, it);
+    });
+  });
 }
 
 function renderReminderEntries(iso) {
