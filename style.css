@@ -160,6 +160,7 @@ main{
   background-repeat:no-repeat;
   background-size:100% auto;
   background-position:bottom center;
+  background-attachment:fixed;
 }
 
 .screen-title{
