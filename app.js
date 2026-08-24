@@ -183,6 +183,7 @@ async function openTrip(tripId) {
   calendarViewDate = new Date();
   selectedCalDate = null;
   hide($("dateTripInfoCard"));
+  show($("dateEmptyState"));
   hide($("reminderEditor"));
   renderCalendar();
 
@@ -203,7 +204,9 @@ function findTripForDate(iso) {
 function updateDateTripInfo(iso) {
   const trip = findTripForDate(iso);
   const card = $("dateTripInfoCard");
-  if (!trip) { hide(card); return; }
+  const emptyState = $("dateEmptyState");
+  if (!trip) { hide(card); show(emptyState); return; }
+  hide(emptyState);
   show(card);
   $("dateTripNameLabel").textContent = trip.name;
   $("dateTripDestinoLabel").textContent = trip.destination || "—";
@@ -793,7 +796,12 @@ function renderCalendar() {
     const iso = toISODate(y, m, day);
     const cell = document.createElement("div");
     cell.className = "cal-day";
-    if (findTripForDate(iso)) cell.classList.add("trip-day");
+    const tripHere = findTripForDate(iso);
+    if (tripHere) {
+      cell.classList.add("trip-day");
+      const isEndpoint = iso === tripHere.startDate || iso === tripHere.endDate;
+      cell.classList.add(isEndpoint ? "trip-endpoint" : "trip-mid");
+    }
     if (iso === todayISO) cell.classList.add("today");
     if (remindersByDate[iso] && remindersByDate[iso].length > 0) cell.classList.add("has-reminder");
     if (iso === selectedCalDate) cell.classList.add("selected");
