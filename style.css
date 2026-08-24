@@ -36,6 +36,44 @@ body{
 
 .hidden{ display:none !important; }
 
+.modal-overlay{
+  position:fixed;
+  inset:0;
+  z-index:200;
+  background:rgba(15,25,39,0.72);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+}
+.modal-box{
+  background:var(--panel-raised);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:22px;
+  max-width:360px;
+  width:100%;
+  box-shadow:0 12px 40px rgba(0,0,0,0.4);
+}
+.modal-title{
+  font-family:'Big Shoulders Display', sans-serif;
+  font-weight:800;
+  font-size:20px;
+  margin-bottom:8px;
+}
+.modal-message{
+  font-size:13.5px;
+  color:var(--muted);
+  line-height:1.55;
+  margin-bottom:20px;
+}
+.modal-actions{
+  display:flex;
+  gap:10px;
+  justify-content:flex-end;
+}
+.modal-actions .btn{ padding:9px 16px; font-size:13px; }
+
 .install-banner{
   position:fixed;
   top:0; left:0; right:0;

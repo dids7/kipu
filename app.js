@@ -78,8 +78,31 @@ const $ = (id) => document.getElementById(id);
 function show(el) { el.classList.remove("hidden"); }
 function hide(el) { el.classList.add("hidden"); }
 
+function confirmDialog(message, okText = "Excluir") {
+  return new Promise((resolve) => {
+    const overlay = $("confirmModal");
+    const okBtn = $("confirmModalOkBtn");
+    const cancelBtn = $("confirmModalCancelBtn");
+    $("confirmModalMessage").textContent = message;
+    okBtn.textContent = okText;
+    overlay.classList.remove("hidden");
+
+    function cleanup(result) {
+      overlay.classList.add("hidden");
+      okBtn.removeEventListener("click", onOk);
+      cancelBtn.removeEventListener("click", onCancel);
+      resolve(result);
+    }
+    function onOk() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+    okBtn.addEventListener("click", onOk);
+    cancelBtn.addEventListener("click", onCancel);
+  });
+}
+
 async function deleteItem(subcollection, id, label, area) {
-  if (!confirm(`Excluir "${label}"? Essa ação não pode ser desfeita.`)) return;
+  const ok = await confirmDialog(`Excluir "${label}"? Essa ação não pode ser desfeita.`);
+  if (!ok) return;
   await deleteDoc(doc(db, "trips", currentTripId, subcollection, id));
   logActivity(area, "item excluído", label);
 }
@@ -301,7 +324,8 @@ function renderParticipants(trip, editable) {
 }
 
 async function removeParticipant(email) {
-  if (!confirm(`Remover ${email} da viagem?`)) return;
+  const ok = await confirmDialog(`Remover ${email} da viagem?`);
+  if (!ok) return;
   const updated = (currentTripData.participantEmails || []).filter((e) => e !== email);
   await updateDoc(doc(db, "trips", currentTripId), { participantEmails: updated });
   currentTripData.participantEmails = updated;
@@ -1153,7 +1177,8 @@ function subscribeHistorico() {
 }
 
 $("clearHistoryBtn").addEventListener("click", async () => {
-  if (!confirm("Isso vai apagar TODO o histórico de alterações desta viagem, sem volta. Continuar?")) return;
+  const ok = await confirmDialog("Isso vai apagar TODO o histórico de alterações desta viagem, sem volta. Continuar?", "Limpar tudo");
+  if (!ok) return;
   const snap = await getDocs(collection(db, "trips", currentTripId, "activityLog"));
   const deletions = [];
   snap.forEach((d) => deletions.push(deleteDoc(doc(db, "trips", currentTripId, "activityLog", d.id))));
