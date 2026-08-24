@@ -5,8 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kipu — Checklist de Viagem</title>
 <link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#0F1927">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kipu">
 </head>
 <body>
+<div id="installBanner" class="install-banner hidden">
+  <span id="installBannerText">📲 Instale o Kipu na tela inicial pra acessar mais rápido.</span>
+  <div class="install-banner-actions">
+    <button id="installBannerActionBtn" class="btn btn-primary btn-small">Instalar</button>
+    <button id="installBannerCloseBtn" class="icon-btn" title="Fechar">✕</button>
+  </div>
+</div>
 <div class="bg-scene" aria-hidden="true"></div>
 <div class="device">
 

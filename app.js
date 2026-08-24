@@ -10,6 +10,59 @@ import {
   ref, uploadBytes, getDownloadURL
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
+// ================= PWA: instalação =================
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
+
+(function setupInstallBanner() {
+  const LS_DISMISS_KEY = "kipu_install_dismissed";
+  const banner = document.getElementById("installBanner");
+  const textEl = document.getElementById("installBannerText");
+  const actionBtn = document.getElementById("installBannerActionBtn");
+  const closeBtn = document.getElementById("installBannerCloseBtn");
+
+  const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true;
+  if (isStandalone) return;
+
+  if (localStorage.getItem(LS_DISMISS_KEY)) return;
+
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  let deferredPrompt = null;
+
+  function showBanner() { banner.classList.remove("hidden"); }
+  function dismissBanner() {
+    banner.classList.add("hidden");
+    localStorage.setItem(LS_DISMISS_KEY, "1");
+  }
+
+  closeBtn.addEventListener("click", dismissBanner);
+
+  if (isIOS) {
+    textEl.textContent = "📲 Instale o Kipu: toque em Compartilhar e depois em \"Adicionar à Tela de Início\".";
+    actionBtn.textContent = "Entendi";
+    actionBtn.addEventListener("click", dismissBanner);
+    showBanner();
+  } else {
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      showBanner();
+    });
+    actionBtn.addEventListener("click", async () => {
+      if (!deferredPrompt) { dismissBanner(); return; }
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      dismissBanner();
+    });
+  }
+})();
+
 // ---------- Estado global ----------
 let currentUser = null;
 let currentTripId = null;

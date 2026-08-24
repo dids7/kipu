@@ -8,6 +8,9 @@ App base pronto para teste na viagem ao Peru. Vanilla JS, Firebase (Auth + Fires
 - `style.css` — identidade visual (paleta andina: dourado/teal/vermelho sobre fundo escuro)
 - `app.js` — toda a lógica (auth, navegação, CRUD do Firestore)
 - `firebase-config.js` — credenciais do projeto Firebase (já preenchidas)
+- `manifest.json` — configuração do PWA (nome, cores, ícones)
+- `sw.js` — service worker mínimo (necessário pro navegador permitir a instalação)
+- `icons/` — ícones do app em vários tamanhos
 - `firestore.rules` — regras de segurança do Firestore para colar no console
 - `storage.rules` — regras de segurança do Storage (upload de documentos) para colar no console
 
@@ -69,6 +72,15 @@ python3 -m http.server 8000
 ```
 
 Depois abra `http://localhost:8000` no navegador. Ou use a extensão **Live Server** no VS Code.
+
+## Instalação como app (PWA)
+
+O Kipu agora se comporta como um app instalável direto do navegador — sem passar pela loja de aplicativos:
+
+- **Android/Chrome/Edge**: aparece uma faixa no topo oferecendo "Instalar". Ao aceitar, o navegador cuida de tudo e o ícone vai pra tela inicial
+- **iPhone/Safari**: a Apple não permite instalação automática via navegador — aparece uma faixa com instrução manual ("toque em Compartilhar → Adicionar à Tela de Início")
+- A faixa só aparece se o app ainda não estiver instalado, e some para sempre depois que a pessoa clica em "Instalar"/"Entendi" ou no ✕ (fica salvo no navegador dela, `localStorage`)
+- Isso **não** cria um app "de verdade" na App Store/Play Store — é o mesmo site, só que abre em tela cheia, sem barra de endereço, com ícone próprio, como se fosse nativo
 
 ## Possíveis próximos passos
 
