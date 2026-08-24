@@ -314,14 +314,25 @@ document.querySelectorAll("[data-form]").forEach((btn) => {
 // ================= ITINERÁRIO (inclui o que antes era Passeios) =================
 let editingItinerarioId = null;
 
+let itinerarioByDate = {}; // { "YYYY-MM-DD": [items] } — alimenta os marcadores do calendário
+
 function subscribeItinerario() {
   const q = query(collection(db, "trips", currentTripId, "itinerario"), orderBy("date"));
   const unsub = onSnapshot(q, (snap) => {
+    itinerarioByDate = {};
     const listEl = $("itinerarioList");
-    if (snap.empty) { listEl.innerHTML = "<div class='empty'>Nenhum item ainda.</div>"; return; }
+    if (snap.empty) {
+      listEl.innerHTML = "<div class='empty'>Nenhum item ainda.</div>";
+      renderCalendar();
+      if (selectedCalDate) renderItineraryForDay(selectedCalDate);
+      return;
+    }
     listEl.innerHTML = "";
     snap.forEach((d) => {
       const it = d.data();
+      if (!itinerarioByDate[it.date]) itinerarioByDate[it.date] = [];
+      itinerarioByDate[it.date].push({ id: d.id, ...it });
+
       const hasValue = it.value && Number(it.value) > 0;
       const timeRange = it.time ? `· ${it.time}${it.endTime ? "–" + it.endTime : ""}` : "";
       const card = document.createElement("div");
@@ -345,6 +356,8 @@ function subscribeItinerario() {
       card.querySelector('[data-action="edit"]').addEventListener("click", () => openItinerarioForEdit(d.id, it));
       listEl.appendChild(card);
     });
+    renderCalendar();
+    if (selectedCalDate) renderItineraryForDay(selectedCalDate);
   });
   unsubscribers.push(unsub);
 }
@@ -804,6 +817,7 @@ function renderCalendar() {
     }
     if (iso === todayISO) cell.classList.add("today");
     if (remindersByDate[iso] && remindersByDate[iso].length > 0) cell.classList.add("has-reminder");
+    if (itinerarioByDate[iso] && itinerarioByDate[iso].length > 0) cell.classList.add("has-itinerary");
     if (iso === selectedCalDate) cell.classList.add("selected");
     cell.textContent = day;
     cell.addEventListener("click", () => selectCalendarDay(iso, day));
@@ -820,7 +834,28 @@ function selectCalendarDay(iso, day) {
   const m = calendarViewDate.getMonth();
   $("reminderEditorLabel").textContent = `Lembretes para ${day}/${m + 1}`;
   $("reminderText").value = "";
+  renderItineraryForDay(iso);
   renderReminderEntries(iso);
+}
+
+function renderItineraryForDay(iso) {
+  const el = $("itineraryForDayList");
+  const items = itinerarioByDate[iso] || [];
+  if (items.length === 0) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div style="font-size:11px; color:var(--muted); margin-bottom:6px;">📌 Itinerário do dia</div>` +
+    items.map((it) => {
+      const hasValue = it.value && Number(it.value) > 0;
+      return `
+        <div class="card" style="padding:10px 12px; margin-bottom:6px;">
+          <div class="card-row">
+            <div>
+              <div class="card-title" style="font-size:13px;">${it.title}</div>
+              <div class="card-meta">${it.time ? it.time + (it.endTime ? "–" + it.endTime : "") : ""}${hasValue ? " · R$ " + Number(it.value).toFixed(2) : ""}</div>
+            </div>
+            <span class="badge badge-${it.status}">${it.status}</span>
+          </div>
+        </div>`;
+    }).join("");
 }
 
 function renderReminderEntries(iso) {

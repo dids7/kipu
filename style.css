@@ -395,8 +395,18 @@ main{
   background:var(--teal);
   position:absolute;
   bottom:4px;
+  left:calc(50% + 2px);
 }
 .cal-day.trip-endpoint.has-reminder::after{ background:#1B2430; }
+.cal-day.has-itinerary::before{
+  content:"";
+  width:4px; height:4px; border-radius:50%;
+  background:var(--ink);
+  position:absolute;
+  bottom:4px;
+  left:calc(50% - 6px);
+}
+.cal-day.trip-endpoint.has-itinerary::before{ background:#1B2430; }
 .cal-day.selected{
   box-shadow: inset 0 0 0 3px var(--ink);
 }
