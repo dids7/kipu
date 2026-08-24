@@ -175,7 +175,7 @@
       <!-- ESTADIA -->
       <div class="tab-panel hidden" id="panel-estadia">
         <h2 class="screen-title">Estadia</h2>
-        <button class="add-toggle" data-form="estadiaForm">＋ Adicionar hospedagem</button>
+        <button class="add-toggle" id="addEstadiaToggleBtn" data-form="estadiaForm">＋ Adicionar hospedagem</button>
         <div id="estadiaForm" class="form-card hidden">
           <div><label>Nome do hotel</label><input type="text" id="stayName" placeholder="Ex: Casa Tiyay"></div>
           <div class="form-row">
@@ -198,7 +198,7 @@
       <!-- DOCUMENTOS -->
       <div class="tab-panel hidden" id="panel-documentos">
         <h2 class="screen-title">Documentos e vouchers</h2>
-        <button class="add-toggle" data-form="docForm">＋ Adicionar documento</button>
+        <button class="add-toggle" id="addDocToggleBtn" data-form="docForm">＋ Adicionar documento</button>
         <div id="docForm" class="form-card hidden">
           <div><label>Título</label><input type="text" id="docTitle" placeholder="Ex: Voucher hotel Casa Tiyay"></div>
           <div>
@@ -246,7 +246,7 @@
       <!-- TAREFAS -->
       <div class="tab-panel hidden" id="panel-tarefas">
         <h2 class="screen-title">Tarefas do grupo</h2>
-        <button class="add-toggle" data-form="taskForm">＋ Adicionar tarefa</button>
+        <button class="add-toggle" id="addTaskToggleBtn" data-form="taskForm">＋ Adicionar tarefa</button>
         <div id="taskForm" class="form-card hidden">
           <div><label>Descrição</label><input type="text" id="taskDesc" placeholder="Ex: Confirmar pagamento do trem"></div>
           <div><label>Responsável</label><select id="taskResponsible"></select></div>
@@ -258,7 +258,7 @@
       <!-- GASTOS -->
       <div class="tab-panel hidden" id="panel-gastos">
         <h2 class="screen-title">Divisão de gastos</h2>
-        <button class="add-toggle" data-form="expenseForm">＋ Adicionar gasto</button>
+        <button class="add-toggle" id="addExpenseToggleBtn" data-form="expenseForm">＋ Adicionar gasto</button>
         <div id="expenseForm" class="form-card hidden">
           <div><label>Descrição</label><input type="text" id="expDesc" placeholder="Ex: Táxi aeroporto"></div>
           <div><label>Valor (R$)</label><input type="number" id="expValue" step="0.01"></div>
@@ -277,7 +277,7 @@
       <!-- EMERGÊNCIA -->
       <div class="tab-panel hidden" id="panel-emergencia">
         <h2 class="screen-title">Informações de emergência</h2>
-        <button class="add-toggle" data-form="emergencyForm">＋ Adicionar informação</button>
+        <button class="add-toggle" id="addEmergencyToggleBtn" data-form="emergencyForm">＋ Adicionar informação</button>
         <div id="emergencyForm" class="form-card hidden">
           <div><label>Rótulo</label><input type="text" id="emLabel" placeholder="Ex: Agência (Landy)"></div>
           <div><label>Valor</label><input type="text" id="emValue" placeholder="Ex: +51 999 999 999"></div>

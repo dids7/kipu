@@ -435,13 +435,18 @@ $("saveItinerarioBtn").addEventListener("click", async () => {
 });
 
 // ================= ESTADIA =================
+let editingEstadiaId = null;
+let estadiaCache = [];
+
 function subscribeEstadia() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "estadia"), (snap) => {
+    estadiaCache = [];
     const listEl = $("estadiaList");
     if (snap.empty) { listEl.innerHTML = "<div class='empty'>Nenhuma hospedagem ainda.</div>"; return; }
     listEl.innerHTML = "";
     snap.forEach((d) => {
       const s = d.data();
+      estadiaCache.push({ id: d.id, ...s });
       const card = document.createElement("div");
       card.className = "card";
       card.innerHTML = `
@@ -451,25 +456,58 @@ function subscribeEstadia() {
             <div class="card-meta">${fmtDate(s.checkin)} – ${fmtDate(s.checkout)} · ${s.address || ""}</div>
             ${mapLink(s.address)}
           </div>
-          <span class="badge badge-${s.status === "pago" ? "confirmado" : "programado"}">${s.status}</span>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="item-del" data-action="edit" title="Editar">✎</button>
+            <span class="badge badge-${s.status === "pago" ? "confirmado" : "programado"}">${s.status}</span>
+          </div>
         </div>`;
+      card.querySelector('[data-action="edit"]').addEventListener("click", () => openEstadiaForEdit(d.id, s));
       listEl.appendChild(card);
     });
   });
   unsubscribers.push(unsub);
 }
+
+function openEstadiaForEdit(id, s) {
+  editingEstadiaId = id;
+  $("stayName").value = s.name || "";
+  $("stayCheckin").value = s.checkin || "";
+  $("stayCheckout").value = s.checkout || "";
+  $("stayAddress").value = s.address || "";
+  $("stayStatus").value = s.status || "pendente";
+  $("saveEstadiaBtn").textContent = "Salvar alterações";
+  $("estadiaForm").classList.remove("hidden");
+  $("estadiaForm").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function resetEstadiaForm() {
+  editingEstadiaId = null;
+  $("stayName").value = ""; $("stayCheckin").value = ""; $("stayCheckout").value = "";
+  $("stayAddress").value = ""; $("stayStatus").value = "pendente";
+  $("saveEstadiaBtn").textContent = "Salvar";
+  $("estadiaForm").classList.add("hidden");
+}
+$("addEstadiaToggleBtn")?.addEventListener("click", () => {
+  if (!$("estadiaForm").classList.contains("hidden") || editingEstadiaId) resetEstadiaForm();
+});
 $("saveEstadiaBtn").addEventListener("click", async () => {
   const name = $("stayName").value.trim();
   const checkin = $("stayCheckin").value, checkout = $("stayCheckout").value;
   const address = $("stayAddress").value.trim(), status = $("stayStatus").value;
   if (!name || !checkin || !checkout) { alert("Preencha nome e datas."); return; }
-  await addDoc(collection(db, "trips", currentTripId, "estadia"), { name, checkin, checkout, address, status });
-  logActivity("estadia", "hospedagem adicionada", name);
-  $("stayName").value = ""; $("stayCheckin").value = ""; $("stayCheckout").value = ""; $("stayAddress").value = "";
-  $("estadiaForm").classList.add("hidden");
+  const payload = { name, checkin, checkout, address, status };
+  if (editingEstadiaId) {
+    await updateDoc(doc(db, "trips", currentTripId, "estadia", editingEstadiaId), payload);
+    logActivity("estadia", "hospedagem editada", name);
+  } else {
+    await addDoc(collection(db, "trips", currentTripId, "estadia"), payload);
+    logActivity("estadia", "hospedagem adicionada", name);
+  }
+  resetEstadiaForm();
 });
 
 // ================= DOCUMENTOS =================
+let editingDocId = null;
+
 function subscribeDocumentos() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "documentos"), (snap) => {
     const listEl = $("docsList");
@@ -481,16 +519,40 @@ function subscribeDocumentos() {
       card.className = "card";
       const isImage = doc_.fileType && doc_.fileType.startsWith("image/");
       card.innerHTML = `
-        <div class="card-title">${doc_.title}</div>
+        <div class="card-row">
+          <div class="card-title">${doc_.title}</div>
+          <button class="item-del" data-action="edit" title="Editar">✎</button>
+        </div>
         <div class="card-meta">${doc_.notes || ""}</div>
         ${isImage ? `<img src="${doc_.url}" style="max-width:100%; border-radius:8px; margin-top:8px;">` : ""}
         ${doc_.url ? `<a href="${doc_.url}" target="_blank" style="color:var(--gold); font-size:12.5px; display:block; margin-top:6px;">Abrir ${doc_.fileName ? doc_.fileName : "link"} ↗</a>` : ""}
       `;
+      card.querySelector('[data-action="edit"]').addEventListener("click", () => openDocForEdit(d.id, doc_));
       listEl.appendChild(card);
     });
   });
   unsubscribers.push(unsub);
 }
+
+function openDocForEdit(id, doc_) {
+  editingDocId = id;
+  $("docTitle").value = doc_.title || "";
+  $("docUrl").value = doc_.url || "";
+  $("docNotes").value = doc_.notes || "";
+  $("saveDocBtn").textContent = "Salvar alterações";
+  $("docForm").classList.remove("hidden");
+  $("docForm").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function resetDocForm() {
+  editingDocId = null;
+  $("docTitle").value = ""; $("docUrl").value = ""; $("docNotes").value = ""; $("docFile").value = "";
+  $("saveDocBtn").textContent = "Salvar";
+  $("docForm").classList.add("hidden");
+}
+$("addDocToggleBtn")?.addEventListener("click", () => {
+  if (!$("docForm").classList.contains("hidden") || editingDocId) resetDocForm();
+});
+
 $("saveDocBtn").addEventListener("click", async () => {
   const title = $("docTitle").value.trim();
   const notes = $("docNotes").value.trim();
@@ -520,11 +582,17 @@ $("saveDocBtn").addEventListener("click", async () => {
     }
   }
 
-  await addDoc(collection(db, "trips", currentTripId, "documentos"), { title, url, notes, fileType, fileName });
-  logActivity("documentos", "documento adicionado", title);
-  $("docTitle").value = ""; $("docUrl").value = ""; $("docNotes").value = ""; fileInput.value = "";
+  if (editingDocId) {
+    const payload = { title, url, notes };
+    if (file) { payload.fileType = fileType; payload.fileName = fileName; }
+    await updateDoc(doc(db, "trips", currentTripId, "documentos", editingDocId), payload);
+    logActivity("documentos", "documento editado", title);
+  } else {
+    await addDoc(collection(db, "trips", currentTripId, "documentos"), { title, url, notes, fileType, fileName });
+    logActivity("documentos", "documento adicionado", title);
+  }
+  resetDocForm();
   statusEl.classList.add("hidden");
-  $("docForm").classList.add("hidden");
 });
 
 // ================= MALA =================
@@ -571,7 +639,7 @@ function renderMalaList() {
     row.className = "item";
     row.innerHTML = `
       <button class="checkbox ${it.done ? "checked " + it.type : ""}">${it.done ? "✓" : ""}</button>
-      <div class="item-name ${it.done ? "done" : ""}">${it.name}</div>
+      <div class="item-name ${it.done ? "done" : ""}" title="Clique duas vezes pra renomear">${it.name}</div>
       <span class="badge badge-${it.type}">${it.type === "shared" ? "grupo" : "só eu"}</span>
       <button class="item-del">✕</button>
     `;
@@ -582,6 +650,27 @@ function renderMalaList() {
     row.querySelector(".item-del").addEventListener("click", async () => {
       await deleteDoc(doc(db, "trips", currentTripId, "mala", it.id));
       logActivity("mala", "item removido", it.name);
+    });
+    row.querySelector(".item-name").addEventListener("dblclick", (e) => {
+      const nameEl = e.target;
+      const oldName = it.name;
+      nameEl.setAttribute("contenteditable", "true");
+      nameEl.focus();
+      document.execCommand("selectAll", false, null);
+      const finish = async () => {
+        nameEl.removeAttribute("contenteditable");
+        const newName = nameEl.textContent.trim();
+        if (newName && newName !== oldName) {
+          await updateDoc(doc(db, "trips", currentTripId, "mala", it.id), { name: newName });
+          logActivity("mala", "item renomeado", `"${oldName}" → "${newName}"`);
+        } else {
+          nameEl.textContent = oldName;
+        }
+      };
+      nameEl.addEventListener("blur", finish, { once: true });
+      nameEl.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") { ev.preventDefault(); nameEl.blur(); }
+      });
     });
     listEl.appendChild(row);
   });
@@ -671,6 +760,7 @@ function renderGroupProgress() {
 }
 
 // ================= TAREFAS =================
+let editingTaskId = null;
 function subscribeTarefas() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "tarefas"), (snap) => {
     const listEl = $("tasksList");
@@ -686,29 +776,57 @@ function subscribeTarefas() {
             <div class="card-title">${t.description}</div>
             <div class="card-meta">resp: ${t.responsible}</div>
           </div>
-          <button class="badge badge-${t.status}">${t.status}</button>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="item-del" data-action="edit" title="Editar">✎</button>
+            <button class="badge badge-${t.status}" data-action="status">${t.status}</button>
+          </div>
         </div>`;
-      card.querySelector("button").addEventListener("click", async () => {
+      card.querySelector('[data-action="status"]').addEventListener("click", async () => {
         const next = t.status === "pendente" ? "feito" : "pendente";
         await updateDoc(doc(db, "trips", currentTripId, "tarefas", d.id), { status: next });
         logActivity("tarefas", "status alterado", `"${t.description}": ${next}`);
       });
+      card.querySelector('[data-action="edit"]').addEventListener("click", () => openTaskForEdit(d.id, t));
       listEl.appendChild(card);
     });
   });
   unsubscribers.push(unsub);
 }
+
+function openTaskForEdit(id, t) {
+  editingTaskId = id;
+  $("taskDesc").value = t.description || "";
+  $("taskResponsible").value = t.responsible || "";
+  $("saveTaskBtn").textContent = "Salvar alterações";
+  $("taskForm").classList.remove("hidden");
+  $("taskForm").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function resetTaskForm() {
+  editingTaskId = null;
+  $("taskDesc").value = "";
+  $("saveTaskBtn").textContent = "Salvar";
+  $("taskForm").classList.add("hidden");
+}
+$("addTaskToggleBtn")?.addEventListener("click", () => {
+  if (!$("taskForm").classList.contains("hidden") || editingTaskId) resetTaskForm();
+});
+
 $("saveTaskBtn").addEventListener("click", async () => {
   const description = $("taskDesc").value.trim(), responsible = $("taskResponsible").value;
   if (!description) { alert("Preencha a descrição."); return; }
-  await addDoc(collection(db, "trips", currentTripId, "tarefas"), { description, responsible, status: "pendente" });
-  logActivity("tarefas", "tarefa adicionada", description);
-  $("taskDesc").value = "";
-  $("taskForm").classList.add("hidden");
+  if (editingTaskId) {
+    await updateDoc(doc(db, "trips", currentTripId, "tarefas", editingTaskId), { description, responsible });
+    logActivity("tarefas", "tarefa editada", description);
+  } else {
+    await addDoc(collection(db, "trips", currentTripId, "tarefas"), { description, responsible, status: "pendente" });
+    logActivity("tarefas", "tarefa adicionada", description);
+  }
+  resetTaskForm();
 });
 
 // ================= GASTOS =================
 let expensesCache = [];
+let editingExpenseId = null;
 function subscribeGastos() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "gastos"), (snap) => {
     expensesCache = [];
@@ -724,11 +842,15 @@ function renderExpenses() {
   listEl.innerHTML = "";
   expensesCache.forEach((e) => {
     const card = document.createElement("div");
-    card.className = "card";
+    card.className = "card card-row";
     card.innerHTML = `
-      <div class="card-title">${e.description} — R$ ${Number(e.value).toFixed(2)}</div>
-      <div class="card-meta">pago por ${e.paidBy} · dividido entre ${(e.splitAmong || []).length} pessoa(s)</div>
+      <div>
+        <div class="card-title">${e.description} — R$ ${Number(e.value).toFixed(2)}</div>
+        <div class="card-meta">pago por ${e.paidBy} · dividido entre ${(e.splitAmong || []).length} pessoa(s)</div>
+      </div>
+      <button class="item-del" title="Editar">✎</button>
     `;
+    card.querySelector("button").addEventListener("click", () => openExpenseForEdit(e.id, e));
     listEl.appendChild(card);
   });
 }
@@ -747,19 +869,48 @@ function renderBalance() {
     return `<div class="card-row" style="padding:4px 0;"><span class="card-meta">${email}</span><span class="${cls}">R$ ${Math.abs(val).toFixed(2)} ${label}</span></div>`;
   }).join("");
 }
+
+function openExpenseForEdit(id, e) {
+  editingExpenseId = id;
+  $("expDesc").value = e.description || "";
+  $("expValue").value = e.value || "";
+  $("expPaidBy").value = e.paidBy || "";
+  $("expSplitGroup").querySelectorAll(".checkbox-chip").forEach((chip) => {
+    chip.classList.toggle("checked", (e.splitAmong || []).includes(chip.dataset.email));
+  });
+  $("saveExpenseBtn").textContent = "Salvar alterações";
+  $("expenseForm").classList.remove("hidden");
+  $("expenseForm").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function resetExpenseForm() {
+  editingExpenseId = null;
+  $("expDesc").value = ""; $("expValue").value = "";
+  $("expSplitGroup").querySelectorAll(".checkbox-chip").forEach((chip) => chip.classList.add("checked"));
+  $("saveExpenseBtn").textContent = "Salvar";
+  $("expenseForm").classList.add("hidden");
+}
+$("addExpenseToggleBtn")?.addEventListener("click", () => {
+  if (!$("expenseForm").classList.contains("hidden") || editingExpenseId) resetExpenseForm();
+});
+
 $("saveExpenseBtn").addEventListener("click", async () => {
   const description = $("expDesc").value.trim();
   const value = parseFloat($("expValue").value);
   const paidBy = $("expPaidBy").value;
   const splitAmong = Array.from($("expSplitGroup").querySelectorAll(".checkbox-chip.checked")).map((c) => c.dataset.email);
   if (!description || !value || splitAmong.length === 0) { alert("Preencha descrição, valor e ao menos um participante na divisão."); return; }
-  await addDoc(collection(db, "trips", currentTripId, "gastos"), { description, value, paidBy, splitAmong });
-  logActivity("gastos", "gasto adicionado", `${description} — R$ ${value.toFixed(2)}`);
-  $("expDesc").value = ""; $("expValue").value = "";
-  $("expenseForm").classList.add("hidden");
+  if (editingExpenseId) {
+    await updateDoc(doc(db, "trips", currentTripId, "gastos", editingExpenseId), { description, value, paidBy, splitAmong });
+    logActivity("gastos", "gasto editado", `${description} — R$ ${value.toFixed(2)}`);
+  } else {
+    await addDoc(collection(db, "trips", currentTripId, "gastos"), { description, value, paidBy, splitAmong });
+    logActivity("gastos", "gasto adicionado", `${description} — R$ ${value.toFixed(2)}`);
+  }
+  resetExpenseForm();
 });
 
 // ================= EMERGÊNCIA =================
+let editingEmergencyId = null;
 function subscribeEmergencia() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "emergencia"), (snap) => {
     const listEl = $("emergencyList");
@@ -769,19 +920,46 @@ function subscribeEmergencia() {
       const it = d.data();
       const card = document.createElement("div");
       card.className = "card card-row";
-      card.innerHTML = `<span class="card-title">${it.label}</span><span class="card-meta">${it.value}</span>`;
+      card.innerHTML = `
+        <div><span class="card-title">${it.label}</span><br><span class="card-meta">${it.value}</span></div>
+        <button class="item-del" title="Editar">✎</button>
+      `;
+      card.querySelector("button").addEventListener("click", () => openEmergencyForEdit(d.id, it));
       listEl.appendChild(card);
     });
   });
   unsubscribers.push(unsub);
 }
+
+function openEmergencyForEdit(id, it) {
+  editingEmergencyId = id;
+  $("emLabel").value = it.label || "";
+  $("emValue").value = it.value || "";
+  $("saveEmergencyBtn").textContent = "Salvar alterações";
+  $("emergencyForm").classList.remove("hidden");
+  $("emergencyForm").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function resetEmergencyForm() {
+  editingEmergencyId = null;
+  $("emLabel").value = ""; $("emValue").value = "";
+  $("saveEmergencyBtn").textContent = "Salvar";
+  $("emergencyForm").classList.add("hidden");
+}
+$("addEmergencyToggleBtn")?.addEventListener("click", () => {
+  if (!$("emergencyForm").classList.contains("hidden") || editingEmergencyId) resetEmergencyForm();
+});
+
 $("saveEmergencyBtn").addEventListener("click", async () => {
   const label = $("emLabel").value.trim(), value = $("emValue").value.trim();
   if (!label || !value) { alert("Preencha rótulo e valor."); return; }
-  await addDoc(collection(db, "trips", currentTripId, "emergencia"), { label, value });
-  logActivity("emergencia", "informação adicionada", label);
-  $("emLabel").value = ""; $("emValue").value = "";
-  $("emergencyForm").classList.add("hidden");
+  if (editingEmergencyId) {
+    await updateDoc(doc(db, "trips", currentTripId, "emergencia", editingEmergencyId), { label, value });
+    logActivity("emergencia", "informação editada", label);
+  } else {
+    await addDoc(collection(db, "trips", currentTripId, "emergencia"), { label, value });
+    logActivity("emergencia", "informação adicionada", label);
+  }
+  resetEmergencyForm();
 });
 
 // ================= HISTÓRICO =================
