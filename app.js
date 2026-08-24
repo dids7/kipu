@@ -27,7 +27,7 @@ function hide(el) { el.classList.add("hidden"); }
 
 function mapLink(address) {
   if (!address || !address.trim()) return "";
-  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address.trim())}`;
+  const url = `https://maps.google.com/maps?q=${encodeURIComponent(address.trim())}`;
   return `<a href="${url}" target="_blank" rel="noopener" class="map-link" onclick="event.stopPropagation()">📍 Ver no mapa</a>`;
 }
 
