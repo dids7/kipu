@@ -1326,21 +1326,22 @@ function renderItineraryForDay(iso) {
   const el = $("itineraryForDayList");
   const items = itinerarioByDate[iso] || [];
   if (items.length === 0) { el.innerHTML = ""; return; }
-  el.innerHTML = `<div style="font-size:11px; color:var(--muted); margin-bottom:6px;">📌 Itinerário do dia — clique para editar</div>` +
+  el.innerHTML = `<div style="font-size:14px; font-weight:700; color:var(--gold); margin-bottom:8px; display:flex; align-items:center; gap:6px;">📌 Itinerário do dia <span style="font-weight:500; font-size:11px; color:var(--muted);">(clique para editar)</span></div>` +
     items.map((it) => {
       const hasValue = it.value && Number(it.value) > 0;
       return `
-        <div class="card" data-itin-id="${it.id}" style="padding:10px 12px; margin-bottom:6px; cursor:pointer;">
+        <div class="card" data-itin-id="${it.id}" style="padding:12px 14px; margin-bottom:8px; cursor:pointer; border-left:4px solid var(--gold);">
           <div class="card-row">
             <div>
-              <div class="card-title" style="font-size:13px;">${it.title}</div>
+              <div class="card-title" style="font-size:14px;">${it.title}</div>
               <div class="card-meta">${it.time ? it.time + (it.endTime ? "–" + it.endTime : "") : ""}${hasValue ? " · R$ " + Number(it.value).toFixed(2) : ""}</div>
               ${it.location ? `<div class="card-meta">${it.location} ${mapLink(it.location)}</div>` : ""}
             </div>
             <span class="badge badge-${it.status}">${it.status}</span>
           </div>
         </div>`;
-    }).join("");
+    }).join("") +
+    `<div style="height:14px;"></div>`;
 
   el.querySelectorAll("[data-itin-id]").forEach((card) => {
     card.addEventListener("click", () => {
