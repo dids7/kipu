@@ -780,9 +780,22 @@ function renderMalaList() {
     row.innerHTML = `
       <button class="checkbox ${it.done ? "checked " + it.type : ""}">${it.done ? "✓" : ""}</button>
       <div class="item-name ${it.done ? "done" : ""}" title="Clique duas vezes pra renomear">${it.name}</div>
+      <div class="qty-stepper">
+        <button class="qty-btn" data-action="minus">−</button>
+        <span class="qty-value">${it.qty || 1}</span>
+        <button class="qty-btn" data-action="plus">+</button>
+      </div>
       <span class="badge badge-${it.type}">${it.type === "shared" ? "grupo" : "só eu"}</span>
       <button class="item-del">✕</button>
     `;
+    row.querySelector('[data-action="minus"]').addEventListener("click", async () => {
+      const newQty = Math.max(1, (it.qty || 1) - 1);
+      await updateDoc(doc(db, "trips", currentTripId, "mala", it.id), { qty: newQty });
+    });
+    row.querySelector('[data-action="plus"]').addEventListener("click", async () => {
+      const newQty = (it.qty || 1) + 1;
+      await updateDoc(doc(db, "trips", currentTripId, "mala", it.id), { qty: newQty });
+    });
     row.querySelector(".checkbox").addEventListener("click", async () => {
       await updateDoc(doc(db, "trips", currentTripId, "mala", it.id), { done: !it.done });
       logActivity("mala", it.done ? "item desmarcado" : "item marcado", it.name);
@@ -819,7 +832,7 @@ $("addItemBtn").addEventListener("click", async () => {
   const name = $("newItemName").value.trim();
   if (!name) return;
   await addDoc(collection(db, "trips", currentTripId, "mala"), {
-    name, type: malaSeg, done: false, ownerEmail: currentUser.email
+    name, type: malaSeg, done: false, ownerEmail: currentUser.email, qty: 1
   });
   logActivity("mala", "item adicionado", `${name} (${malaSeg})`);
   $("newItemName").value = "";
@@ -869,7 +882,7 @@ $("defaultListToggle").addEventListener("click", async () => {
 
   await Promise.all(toAdd.map((name) =>
     addDoc(collection(db, "trips", currentTripId, "mala"), {
-      name, type: "shared", done: false, ownerEmail: currentUser.email, isDefault: true
+      name, type: "shared", done: false, ownerEmail: currentUser.email, isDefault: true, qty: 1
     })
   ));
   logActivity("mala", "lista padrão adicionada", `${toAdd.length} item(ns) essenciais inseridos`);
