@@ -154,8 +154,27 @@
         </div>
 
         <div class="card hidden" id="dateTripInfoCard">
-          <div class="card-title" id="dateTripNameLabel">—</div>
-          <div class="card-meta" id="dateTripDestinoLabel"></div>
+          <div class="card-row">
+            <div>
+              <div class="card-title" id="dateTripNameLabel">—</div>
+              <div class="card-meta" id="dateTripDestinoLabel"></div>
+            </div>
+            <button id="editTripBtn" class="item-del hidden" title="Editar viagem">✎</button>
+          </div>
+
+          <div id="editTripForm" class="form-card hidden" style="margin-top:12px; margin-bottom:0;">
+            <div><label>Nome da viagem</label><input type="text" id="editTripName"></div>
+            <div><label>Destino</label><input type="text" id="editTripDestination"></div>
+            <div class="form-row">
+              <div><label>Data de início</label><input type="date" id="editTripStart"></div>
+              <div><label>Data de fim</label><input type="date" id="editTripEnd"></div>
+            </div>
+            <div class="form-row">
+              <button id="saveTripEditBtn" class="btn btn-primary btn-block">Salvar</button>
+              <button id="cancelTripEditBtn" class="btn btn-outline" style="flex:0 0 auto;">Cancelar</button>
+            </div>
+          </div>
+
           <div id="inviteCodeBlock" class="hidden" style="margin-top:12px;">
             <div class="card-title" style="font-size:12px;">Código de convite</div>
             <div class="card-meta">Compartilhe pra alguém entrar sozinho nessa viagem</div>
@@ -171,6 +190,9 @@
               <input type="email" id="newParticipantEmail" placeholder="email@gmail.com">
               <button id="addParticipantBtn" class="btn btn-primary btn-small">Adicionar</button>
             </div>
+          </div>
+          <div id="deleteTripBlock" class="hidden" style="margin-top:18px; border-top:1px solid var(--line); padding-top:14px;">
+            <button id="deleteTripBtn" class="btn btn-danger btn-small btn-block">🗑 Excluir esta viagem</button>
           </div>
         </div>
       </div>

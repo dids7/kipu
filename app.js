@@ -321,10 +321,13 @@ function findTripForDate(iso) {
   return allUserTrips.find((t) => iso >= t.startDate && iso <= t.endDate) || null;
 }
 
+let currentDateTrip = null;
+
 function updateDateTripInfo(iso) {
   const trip = findTripForDate(iso);
   const card = $("dateTripInfoCard");
   const emptyState = $("dateEmptyState");
+  currentDateTrip = trip;
   if (!trip) { hide(card); show(emptyState); return; }
   hide(emptyState);
   show(card);
@@ -334,9 +337,58 @@ function updateDateTripInfo(iso) {
   renderParticipants(trip, isCurrentTrip);
   $("participantEditRow").classList.toggle("hidden", !isCurrentTrip);
   $("inviteCodeBlock").classList.toggle("hidden", !isCurrentTrip);
+  $("editTripBtn").classList.toggle("hidden", !isCurrentTrip);
+  $("deleteTripBlock").classList.toggle("hidden", !isCurrentTrip);
+  $("editTripForm").classList.add("hidden");
   if (isCurrentTrip) $("inviteCodeValue").value = trip.id;
 }
 
+$("editTripBtn").addEventListener("click", () => {
+  if (!currentDateTrip) return;
+  $("editTripName").value = currentDateTrip.name || "";
+  $("editTripDestination").value = currentDateTrip.destination || "";
+  $("editTripStart").value = currentDateTrip.startDate || "";
+  $("editTripEnd").value = currentDateTrip.endDate || "";
+  $("editTripForm").classList.remove("hidden");
+});
+$("cancelTripEditBtn").addEventListener("click", () => {
+  $("editTripForm").classList.add("hidden");
+});
+$("saveTripEditBtn").addEventListener("click", async () => {
+  const name = $("editTripName").value.trim();
+  const destination = $("editTripDestination").value.trim();
+  const startDate = $("editTripStart").value;
+  const endDate = $("editTripEnd").value;
+  if (!name || !startDate || !endDate) { alert("Preencha nome e as duas datas."); return; }
+  await updateDoc(doc(db, "trips", currentTripId), { name, destination, startDate, endDate });
+  currentTripData = { ...currentTripData, name, destination, startDate, endDate };
+  logActivity("geral", "viagem editada", `${name} (${startDate} – ${endDate})`);
+  $("currentTripTitle").textContent = name;
+  renderCountdown();
+  const allIdx = allUserTrips.findIndex((t) => t.id === currentTripId);
+  if (allIdx >= 0) allUserTrips[allIdx] = { ...allUserTrips[allIdx], name, destination, startDate, endDate };
+  renderCalendar();
+  if (selectedCalDate) updateDateTripInfo(selectedCalDate);
+  $("editTripForm").classList.add("hidden");
+});
+
+$("deleteTripBtn").addEventListener("click", async () => {
+  if (!currentDateTrip) return;
+  const ok = await confirmDialog(
+    `Excluir a viagem "${currentDateTrip.name}" de vez? Isso apaga TODO o conteúdo dela (itinerário, gastos, mala, tudo) para todo mundo. Não tem volta.`,
+    "Excluir viagem"
+  );
+  if (!ok) return;
+
+  const tripId = currentDateTrip.id;
+  const subcollections = ["itinerario", "estadia", "documentos", "mala", "tarefas", "gastos", "emergencia", "activityLog", "lembretes"];
+  for (const sub of subcollections) {
+    const snap = await getDocs(collection(db, "trips", tripId, sub));
+    await Promise.all(snap.docs.map((d) => deleteDoc(doc(db, "trips", tripId, sub, d.id))));
+  }
+  await deleteDoc(doc(db, "trips", tripId));
+  goToTripPicker();
+});
 $("copyInviteCodeBtn").addEventListener("click", async () => {
   const val = $("inviteCodeValue").value;
   try {
