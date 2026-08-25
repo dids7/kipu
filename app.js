@@ -1316,7 +1316,7 @@ function selectCalendarDay(iso, day) {
   const editor = $("reminderEditor");
   editor.classList.remove("hidden");
   const m = calendarViewDate.getMonth();
-  $("reminderEditorLabel").textContent = `Lembretes para ${day}/${m + 1}`;
+  $("reminderEditorLabel").textContent = `🔔 Lembretes para ${day}/${m + 1}`;
   $("reminderText").value = "";
   renderItineraryForDay(iso);
   renderReminderEntries(iso);
@@ -1361,15 +1361,18 @@ function renderReminderEntries(iso) {
   listEl.innerHTML = "";
   entries.forEach((r) => {
     const canDelete = r.visibility === "shared" || r.authorEmail === currentUser.email;
+    const accentColor = r.visibility === "shared" ? "var(--teal)" : "var(--red)";
     const row = document.createElement("div");
-    row.className = "card-row";
-    row.style.padding = "6px 0";
+    row.className = "card";
+    row.style.cssText = `padding:12px 14px; margin-bottom:8px; border-left:4px solid ${accentColor};`;
     row.innerHTML = `
-      <span class="card-meta" style="display:flex; align-items:center; gap:6px;">
-        <span class="badge badge-${r.visibility}">${r.visibility === "shared" ? "grupo" : "só eu"}</span>
-        ${r.text}
-      </span>
-      ${canDelete ? `<button class="item-del">✕</button>` : ""}
+      <div class="card-row">
+        <span class="card-meta" style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink);">
+          <span class="badge badge-${r.visibility}">${r.visibility === "shared" ? "grupo" : "só eu"}</span>
+          ${r.text}
+        </span>
+        ${canDelete ? `<button class="item-del">✕</button>` : ""}
+      </div>
     `;
     if (canDelete) {
       row.querySelector("button").addEventListener("click", async () => {
