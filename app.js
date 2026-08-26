@@ -9,6 +9,48 @@ import {
 import {
   ref, uploadBytes, getDownloadURL
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import { translations, SUPPORTED_LANGS, DEFAULT_LANG } from "./translations.js";
+
+// ================= IDIOMA =================
+const LS_LANG_KEY = "kipu_lang";
+let currentLang = localStorage.getItem(LS_LANG_KEY) || DEFAULT_LANG;
+if (!SUPPORTED_LANGS.includes(currentLang)) currentLang = DEFAULT_LANG;
+
+function t(key) {
+  return (translations[currentLang] && translations[currentLang][key])
+    || translations[DEFAULT_LANG][key]
+    || key;
+}
+
+function applyLanguage(lang) {
+  if (!SUPPORTED_LANGS.includes(lang)) lang = DEFAULT_LANG;
+  currentLang = lang;
+  localStorage.setItem(LS_LANG_KEY, lang);
+  document.documentElement.lang = lang === "pt" ? "pt-BR" : lang;
+
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const key = el.getAttribute("data-i18n");
+    el.innerHTML = t(key);
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+    const key = el.getAttribute("data-i18n-placeholder");
+    el.placeholder = t(key);
+  });
+  document.querySelectorAll(".lang-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.lang === lang);
+  });
+
+  // Re-renderiza listas já carregadas, pra badges/mensagens dinâmicas
+  // acompanharem o novo idioma na hora.
+  if (typeof renderMalaList === "function" && document.getElementById("malaList")) renderMalaList();
+  if (typeof renderExpenses === "function" && document.getElementById("expensesList")) renderExpenses();
+}
+
+document.querySelectorAll(".lang-btn").forEach((btn) => {
+  btn.addEventListener("click", () => applyLanguage(btn.dataset.lang));
+});
+applyLanguage(currentLang);
+
 
 // ================= PWA: instalação =================
 if ("serviceWorker" in navigator) {
@@ -185,7 +227,7 @@ async function loadTripList() {
   const q = query(collection(db, "trips"), where("participantEmails", "array-contains", currentUser.email));
   const snap = await getDocs(q);
   if (snap.empty) {
-    listEl.innerHTML = "<div class='empty'>Nenhuma viagem ainda. Crie a primeira abaixo.</div>";
+    listEl.innerHTML = `<div class='empty'>${t("empty.noTrips")}</div>`;
     return;
   }
   listEl.innerHTML = "";
@@ -507,7 +549,7 @@ function subscribeItinerario() {
     itinerarioByDate = {};
     const listEl = $("itinerarioList");
     if (snap.empty) {
-      listEl.innerHTML = "<div class='empty'>Nenhum item ainda.</div>";
+      listEl.innerHTML = `<div class='empty'>${t("empty.itinerary")}</div>`;
       renderCalendar();
       if (selectedCalDate) renderItineraryForDay(selectedCalDate);
       return;
@@ -537,7 +579,7 @@ function subscribeItinerario() {
           <div style="display:flex; align-items:center; gap:8px;">
             <button class="item-del" data-action="edit" title="Editar">✎</button>
             <button class="item-del" data-action="delete" title="Excluir">✕</button>
-            <button class="badge badge-${it.status}" data-action="status">${it.status}</button>
+            <button class="badge badge-${it.status}" data-action="status">${t("status." + it.status)}</button>
           </div>
         </div>`;
       card.querySelector('[data-action="status"]').addEventListener("click", () => cycleItinerarioStatus(d.id, it.status, it.title));
@@ -622,7 +664,7 @@ function subscribeEstadia() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "estadia"), (snap) => {
     estadiaCache = [];
     const listEl = $("estadiaList");
-    if (snap.empty) { listEl.innerHTML = "<div class='empty'>Nenhuma hospedagem ainda.</div>"; return; }
+    if (snap.empty) { listEl.innerHTML = `<div class='empty'>${t("empty.stay")}</div>`; return; }
     listEl.innerHTML = "";
     snap.forEach((d) => {
       const s = d.data();
@@ -639,7 +681,7 @@ function subscribeEstadia() {
           <div style="display:flex; align-items:center; gap:8px;">
             <button class="item-del" data-action="edit" title="Editar">✎</button>
             <button class="item-del" data-action="delete" title="Excluir">✕</button>
-            <span class="badge badge-${s.status === "pago" ? "confirmado" : "programado"}">${s.status}</span>
+            <span class="badge badge-${s.status === "pago" ? "confirmado" : "programado"}">${t("status." + s.status)}</span>
           </div>
         </div>`;
       card.querySelector('[data-action="edit"]').addEventListener("click", () => openEstadiaForEdit(d.id, s));
@@ -696,7 +738,7 @@ let editingDocId = null;
 function subscribeDocumentos() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "documentos"), (snap) => {
     const listEl = $("docsList");
-    if (snap.empty) { listEl.innerHTML = "<div class='empty'>Nenhum documento ainda.</div>"; return; }
+    if (snap.empty) { listEl.innerHTML = `<div class='empty'>${t("empty.documents")}</div>`; return; }
     listEl.innerHTML = "";
     snap.forEach((d) => {
       const doc_ = d.data();
@@ -824,7 +866,7 @@ function renderMalaList() {
   const items = malaItemsCache
     .filter((i) => i.type === malaSeg)
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-  if (items.length === 0) { listEl.innerHTML = "<div class='empty'>Nenhum item aqui ainda.</div>"; return; }
+  if (items.length === 0) { listEl.innerHTML = `<div class='empty'>${t("empty.packing")}</div>`; return; }
   listEl.innerHTML = "";
   items.forEach((it) => {
     const row = document.createElement("div");
@@ -837,7 +879,7 @@ function renderMalaList() {
         <span class="qty-value">${it.qty || 1}</span>
         <button class="qty-btn" data-action="plus">+</button>
       </div>
-      <span class="badge badge-${it.type}">${it.type === "shared" ? "grupo" : "só eu"}</span>
+      <span class="badge badge-${it.type}">${it.type === "shared" ? t("badge.group") : t("badge.onlyMe")}</span>
       <button class="item-del">✕</button>
     `;
     row.querySelector('[data-action="minus"]').addEventListener("click", async () => {
@@ -969,41 +1011,41 @@ let editingTaskId = null;
 function subscribeTarefas() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "tarefas"), (snap) => {
     const listEl = $("tasksList");
-    if (snap.empty) { listEl.innerHTML = "<div class='empty'>Nenhuma tarefa ainda.</div>"; return; }
+    if (snap.empty) { listEl.innerHTML = `<div class='empty'>${t("empty.tasks")}</div>`; return; }
     listEl.innerHTML = "";
     snap.forEach((d) => {
-      const t = d.data();
+      const task = d.data();
       const card = document.createElement("div");
       card.className = "card";
       card.innerHTML = `
         <div class="card-row">
           <div>
-            <div class="card-title">${t.description}</div>
-            <div class="card-meta">resp: ${t.responsible}</div>
+            <div class="card-title">${task.description}</div>
+            <div class="card-meta">resp: ${task.responsible}</div>
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             <button class="item-del" data-action="edit" title="Editar">✎</button>
             <button class="item-del" data-action="delete" title="Excluir">✕</button>
-            <button class="badge badge-${t.status}" data-action="status">${t.status}</button>
+            <button class="badge badge-${task.status}" data-action="status">${t("status." + task.status)}</button>
           </div>
         </div>`;
       card.querySelector('[data-action="status"]').addEventListener("click", async () => {
-        const next = t.status === "pendente" ? "feito" : "pendente";
+        const next = task.status === "pendente" ? "feito" : "pendente";
         await updateDoc(doc(db, "trips", currentTripId, "tarefas", d.id), { status: next });
-        logActivity("tarefas", "status alterado", `"${t.description}": ${next}`);
+        logActivity("tarefas", "status alterado", `"${task.description}": ${next}`);
       });
-      card.querySelector('[data-action="edit"]').addEventListener("click", () => openTaskForEdit(d.id, t));
-      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("tarefas", d.id, t.description, "tarefas"));
+      card.querySelector('[data-action="edit"]').addEventListener("click", () => openTaskForEdit(d.id, task));
+      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("tarefas", d.id, task.description, "tarefas"));
       listEl.appendChild(card);
     });
   });
   unsubscribers.push(unsub);
 }
 
-function openTaskForEdit(id, t) {
+function openTaskForEdit(id, task) {
   editingTaskId = id;
-  $("taskDesc").value = t.description || "";
-  $("taskResponsible").value = t.responsible || "";
+  $("taskDesc").value = task.description || "";
+  $("taskResponsible").value = task.responsible || "";
   $("saveTaskBtn").textContent = "Salvar alterações";
   $("taskForm").classList.remove("hidden");
   $("taskForm").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1042,14 +1084,21 @@ let expTypeSeg = "shared";
 function usdRate() {
   return parseFloat($("usdRate").value) || 1;
 }
+function penRate() {
+  return parseFloat($("penRate").value) || 1;
+}
 function toBRL(value, currency) {
-  return currency === "USD" ? value * usdRate() : value;
+  if (currency === "USD") return value * usdRate();
+  if (currency === "PEN") return value * penRate();
+  return value;
 }
 function fmtBRL(value) {
   return `R$ ${value.toFixed(2)}`;
 }
 function fmtOriginal(value, currency) {
-  return currency === "USD" ? `US$ ${Number(value).toFixed(2)}` : `R$ ${Number(value).toFixed(2)}`;
+  if (currency === "USD") return `US$ ${Number(value).toFixed(2)}`;
+  if (currency === "PEN") return `S/ ${Number(value).toFixed(2)}`;
+  return `R$ ${Number(value).toFixed(2)}`;
 }
 
 function subscribeGastos() {
@@ -1067,14 +1116,14 @@ function renderExpenses() {
   const personal = expensesCache.filter((e) => e.type === "personal" && e.ownerEmail === currentUser.email);
 
   const sharedListEl = $("expensesList");
-  if (shared.length === 0) { sharedListEl.innerHTML = "<div class='empty'>Nenhum gasto compartilhado ainda.</div>"; }
+  if (shared.length === 0) { sharedListEl.innerHTML = `<div class='empty'>${t("empty.expensesShared")}</div>`; }
   else {
     sharedListEl.innerHTML = "";
     shared.forEach((e) => {
       const card = document.createElement("div");
       card.className = "card card-row";
       const currency = e.currency || "BRL";
-      const converted = currency === "USD" ? ` (≈ ${fmtBRL(toBRL(e.value, currency))})` : "";
+      const converted = currency !== "BRL" ? ` (≈ ${fmtBRL(toBRL(e.value, currency))})` : "";
       card.innerHTML = `
         <div>
           <div class="card-title">${e.description} — ${fmtOriginal(e.value, currency)}${converted}</div>
@@ -1094,14 +1143,14 @@ function renderExpenses() {
   $("sharedTotal").textContent = fmtBRL(sharedTotalBRL);
 
   const personalListEl = $("personalExpensesList");
-  if (personal.length === 0) { personalListEl.innerHTML = "<div class='empty'>Nenhum gasto pessoal ainda.</div>"; }
+  if (personal.length === 0) { personalListEl.innerHTML = `<div class='empty'>${t("empty.expensesPersonal")}</div>`; }
   else {
     personalListEl.innerHTML = "";
     personal.forEach((e) => {
       const card = document.createElement("div");
       card.className = "card card-row";
       const currency = e.currency || "BRL";
-      const converted = currency === "USD" ? ` (≈ ${fmtBRL(toBRL(e.value, currency))})` : "";
+      const converted = currency !== "BRL" ? ` (≈ ${fmtBRL(toBRL(e.value, currency))})` : "";
       card.innerHTML = `
         <div class="card-title">${e.description} — ${fmtOriginal(e.value, currency)}${converted}</div>
         <div style="display:flex; align-items:center; gap:8px;">
@@ -1137,6 +1186,7 @@ function renderBalance() {
 }
 
 $("usdRate").addEventListener("input", () => { renderExpenses(); renderBalance(); });
+$("penRate").addEventListener("input", () => { renderExpenses(); renderBalance(); });
 
 document.querySelectorAll("[data-exptype]").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -1211,7 +1261,7 @@ let editingEmergencyId = null;
 function subscribeEmergencia() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "emergencia"), (snap) => {
     const listEl = $("emergencyList");
-    if (snap.empty) { listEl.innerHTML = "<div class='empty'>Nenhuma informação ainda.</div>"; return; }
+    if (snap.empty) { listEl.innerHTML = `<div class='empty'>${t("empty.emergency")}</div>`; return; }
     listEl.innerHTML = "";
     snap.forEach((d) => {
       const it = d.data();
@@ -1271,7 +1321,7 @@ function subscribeHistorico() {
   const q = query(collection(db, "trips", currentTripId, "activityLog"), orderBy("timestamp", "desc"));
   const unsub = onSnapshot(q, (snap) => {
     const listEl = $("historyList");
-    if (snap.empty) { listEl.innerHTML = "<div class='empty'>Nenhuma alteração registrada ainda.</div>"; return; }
+    if (snap.empty) { listEl.innerHTML = `<div class='empty'>${t("empty.history")}</div>`; return; }
     listEl.innerHTML = "";
     snap.forEach((d) => {
       const log = d.data();
@@ -1422,7 +1472,7 @@ function renderItineraryForDay(iso) {
 function renderReminderEntries(iso) {
   const listEl = $("reminderEntriesList");
   const entries = remindersByDate[iso] || [];
-  if (entries.length === 0) { listEl.innerHTML = "<div class='empty' style='padding:8px 0;'>Nenhum lembrete ainda.</div>"; return; }
+  if (entries.length === 0) { listEl.innerHTML = `<div class='empty' style='padding:8px 0;'>${t("empty.reminders")}</div>`; return; }
   listEl.innerHTML = "";
   entries.forEach((r) => {
     const canDelete = r.visibility === "shared" || r.authorEmail === currentUser.email;
@@ -1433,7 +1483,7 @@ function renderReminderEntries(iso) {
     row.innerHTML = `
       <div class="card-row">
         <span class="card-meta" style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink);">
-          <span class="badge badge-${r.visibility}">${r.visibility === "shared" ? "grupo" : "só eu"}</span>
+          <span class="badge badge-${r.visibility}">${r.visibility === "shared" ? t("badge.group") : t("badge.onlyMe")}</span>
           ${r.text}
         </span>
         ${canDelete ? `<button class="item-del">✕</button>` : ""}

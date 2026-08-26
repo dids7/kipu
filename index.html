@@ -15,9 +15,9 @@
 </head>
 <body>
 <div id="installBanner" class="install-banner hidden">
-  <span id="installBannerText">📲 Instale o Kipu na tela inicial pra acessar mais rápido.</span>
+  <span id="installBannerText" data-i18n="install.text">📲 Instale o Kipu na tela inicial pra acessar mais rápido.</span>
   <div class="install-banner-actions">
-    <button id="installBannerActionBtn" class="btn btn-primary btn-small">Instalar</button>
+    <button id="installBannerActionBtn" class="btn btn-primary btn-small" data-i18n="install.action">Instalar</button>
     <button id="installBannerCloseBtn" class="icon-btn" title="Fechar">✕</button>
   </div>
 </div>
@@ -25,11 +25,11 @@
 
 <div id="confirmModal" class="modal-overlay hidden">
   <div class="modal-box">
-    <div class="modal-title" id="confirmModalTitle">Confirmar</div>
+    <div class="modal-title" id="confirmModalTitle" data-i18n="modal.title">Confirmar</div>
     <div class="modal-message" id="confirmModalMessage"></div>
     <div class="modal-actions">
-      <button id="confirmModalCancelBtn" class="btn btn-outline">Cancelar</button>
-      <button id="confirmModalOkBtn" class="btn btn-danger">Excluir</button>
+      <button id="confirmModalCancelBtn" class="btn btn-outline" data-i18n="modal.cancel">Cancelar</button>
+      <button id="confirmModalOkBtn" class="btn btn-danger" data-i18n="modal.delete">Excluir</button>
     </div>
   </div>
 </div>
@@ -38,9 +38,14 @@
   <!-- LOGIN -->
   <section id="loginScreen" class="login-screen">
     <div class="greca" style="position:absolute; top:0; left:0;"></div>
+    <div class="lang-switch" id="langSwitchLogin">
+      <button class="lang-btn" data-lang="pt">PT</button>
+      <button class="lang-btn" data-lang="en">EN</button>
+      <button class="lang-btn" data-lang="es">ES</button>
+    </div>
     <h1 class="login-title">Kipu</h1>
-    <p class="login-sub">Organize itinerário, mala e tarefas da viagem com o seu grupo — tudo num só lugar.</p>
-    <button id="loginBtn" class="btn btn-primary">Entrar com Google</button>
+    <p class="login-sub" data-i18n="login.subtitle">Organize itinerário, mala e tarefas da viagem com o seu grupo — tudo num só lugar.</p>
+    <button id="loginBtn" class="btn btn-primary" data-i18n="login.enter">Entrar com Google</button>
   </section>
 
   <!-- SELEÇÃO / CRIAÇÃO DE VIAGEM -->
@@ -48,47 +53,47 @@
     <header class="app-header">
       <div class="trip-label">
         <span id="userEmailLabel"></span>
-        <button id="logoutBtn" class="btn btn-outline btn-small" title="Sair">Sair ⎋</button>
+        <button id="logoutBtn" class="btn btn-outline btn-small" title="Sair" data-i18n="picker.logout">Sair ⎋</button>
       </div>
-      <h1 class="trip-title">Suas viagens</h1>
+      <h1 class="trip-title" data-i18n="picker.title">Suas viagens</h1>
     </header>
     <main>
       <div id="tripList"></div>
 
       <div class="card" style="margin-bottom:14px;">
-        <div class="card-title" style="font-size:13px; margin-bottom:8px;">Foi convidado para uma viagem?</div>
+        <div class="card-title" style="font-size:13px; margin-bottom:8px;" data-i18n="picker.inviteQuestion">Foi convidado para uma viagem?</div>
         <div class="form-row">
-          <input type="text" id="joinCodeInput" placeholder="Cole o código da viagem aqui">
-          <button id="joinCodeBtn" class="btn btn-primary btn-small">Entrar</button>
+          <input type="text" id="joinCodeInput" data-i18n-placeholder="picker.invitePlaceholder" placeholder="Cole o código da viagem aqui">
+          <button id="joinCodeBtn" class="btn btn-primary btn-small" data-i18n="picker.enter">Entrar</button>
         </div>
         <div id="joinCodeStatus" class="screen-sub hidden" style="margin:8px 0 0;"></div>
       </div>
 
-      <button id="showNewTripFormBtn" class="add-toggle">＋ Criar nova viagem</button>
+      <button id="showNewTripFormBtn" class="add-toggle" data-i18n="picker.newTrip">＋ Criar nova viagem</button>
       <div id="newTripForm" class="form-card hidden">
         <div>
-          <label>Nome da viagem</label>
+          <label data-i18n="picker.tripName">Nome da viagem</label>
           <input type="text" id="tripName" placeholder="Ex: Peru 2026">
         </div>
         <div>
-          <label>Destino</label>
+          <label data-i18n="picker.destination">Destino</label>
           <input type="text" id="tripDestination" placeholder="Ex: Cusco, Peru">
         </div>
         <div class="form-row">
           <div>
-            <label>Data de início</label>
+            <label data-i18n="picker.startDate">Data de início</label>
             <input type="date" id="tripStart">
           </div>
           <div>
-            <label>Data de fim</label>
+            <label data-i18n="picker.endDate">Data de fim</label>
             <input type="date" id="tripEnd">
           </div>
         </div>
         <div>
-          <label>E-mails dos participantes (separados por vírgula, inclua o seu)</label>
+          <label data-i18n="picker.participantsLabel">E-mails dos participantes (separados por vírgula, inclua o seu)</label>
           <input type="text" id="tripParticipants" placeholder="voce@gmail.com, noiva@gmail.com">
         </div>
-        <button id="createTripBtn" class="btn btn-primary btn-block">Criar viagem</button>
+        <button id="createTripBtn" class="btn btn-primary btn-block" data-i18n="picker.create">Criar viagem</button>
       </div>
     </main>
   </section>
@@ -98,8 +103,15 @@
     <div class="greca"></div>
     <header class="app-header">
       <div class="trip-label">
-        <button id="backToTripsBtn" class="icon-btn" title="Trocar de viagem">← Viagens</button>
-        <button id="logoutBtn2" class="btn btn-outline btn-small" title="Sair">Sair ⎋</button>
+        <button id="backToTripsBtn" class="icon-btn" title="Trocar de viagem" data-i18n="header.back">← Viagens</button>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="lang-switch" id="langSwitchApp">
+            <button class="lang-btn" data-lang="pt">PT</button>
+            <button class="lang-btn" data-lang="en">EN</button>
+            <button class="lang-btn" data-lang="es">ES</button>
+          </div>
+          <button id="logoutBtn2" class="btn btn-outline btn-small" title="Sair" data-i18n="picker.logout">Sair ⎋</button>
+        </div>
       </div>
       <h1 class="trip-title" id="currentTripTitle">—</h1>
       <div class="countdown-row">
@@ -109,22 +121,22 @@
     </header>
 
     <nav class="tabs" id="tabNav">
-      <button class="tab active" data-tab="geral">Calendário</button>
-      <button class="tab" data-tab="itinerario">Itinerário</button>
-      <button class="tab" data-tab="estadia">Estadia</button>
-      <button class="tab" data-tab="documentos">Documentos</button>
-      <button class="tab" data-tab="mala">Mala</button>
-      <button class="tab" data-tab="tarefas">Tarefas</button>
-      <button class="tab" data-tab="gastos">Gastos</button>
-      <button class="tab" data-tab="emergencia">Emergência</button>
-      <button class="tab" data-tab="historico">Histórico</button>
+      <button class="tab active" data-tab="geral" data-i18n="nav.calendar">Calendário</button>
+      <button class="tab" data-tab="itinerario" data-i18n="nav.itinerary">Itinerário</button>
+      <button class="tab" data-tab="estadia" data-i18n="nav.stay">Estadia</button>
+      <button class="tab" data-tab="documentos" data-i18n="nav.documents">Documentos</button>
+      <button class="tab" data-tab="mala" data-i18n="nav.packing">Mala</button>
+      <button class="tab" data-tab="tarefas" data-i18n="nav.tasks">Tarefas</button>
+      <button class="tab" data-tab="gastos" data-i18n="nav.expenses">Gastos</button>
+      <button class="tab" data-tab="emergencia" data-i18n="nav.emergency">Emergência</button>
+      <button class="tab" data-tab="historico" data-i18n="nav.history">Histórico</button>
     </nav>
 
     <main id="mainContent">
 
       <!-- CALENDÁRIO -->
       <div class="tab-panel" id="panel-geral">
-        <h2 class="screen-title">Calendário</h2>
+        <h2 class="screen-title" data-i18n="calendar.title">Calendário</h2>
 
         <div class="card" id="calendarCard">
           <div class="card-row" style="margin-bottom:10px;">
@@ -138,19 +150,19 @@
             <div id="itineraryForDayList" style="margin-bottom:10px;"></div>
             <div id="reminderEntriesList"></div>
             <div class="form-card" style="margin-top:10px; margin-bottom:0;">
-              <input type="text" id="reminderText" placeholder="Escreva um lembrete...">
+              <input type="text" id="reminderText" data-i18n-placeholder="reminder.writePlaceholder" placeholder="Escreva um lembrete...">
               <div class="segmented">
-                <button class="seg-btn active" data-remvis="personal">🔒 Só eu</button>
-                <button class="seg-btn" data-remvis="shared">🧵 Para todos</button>
+                <button class="seg-btn active" data-remvis="personal"><span data-i18n="reminder.onlyMe">🔒 Só eu</span></button>
+                <button class="seg-btn" data-remvis="shared"><span data-i18n="reminder.everyone">🧵 Para todos</span></button>
               </div>
-              <button id="saveReminderBtn" class="btn btn-primary btn-block">＋ Adicionar</button>
+              <button id="saveReminderBtn" class="btn btn-primary btn-block" data-i18n="reminder.add">＋ Adicionar</button>
             </div>
           </div>
         </div>
 
         <div class="card" id="dateEmptyState" style="text-align:center; color:var(--muted); padding:32px 16px;">
           <div style="font-size:24px; margin-bottom:8px;">🗓️</div>
-          <div style="font-size:13px; line-height:1.6;">Selecione uma data no calendário<br>para ver os detalhes da viagem.</div>
+          <div style="font-size:13px; line-height:1.6;" data-i18n="calendar.emptyState">Selecione uma data no calendário<br>para ver os detalhes da viagem.</div>
         </div>
 
         <div class="card hidden" id="dateTripInfoCard">
@@ -163,75 +175,75 @@
           </div>
 
           <div id="editTripForm" class="form-card hidden" style="margin-top:12px; margin-bottom:0;">
-            <div><label>Nome da viagem</label><input type="text" id="editTripName"></div>
-            <div><label>Destino</label><input type="text" id="editTripDestination"></div>
+            <div><label data-i18n="picker.tripName">Nome da viagem</label><input type="text" id="editTripName"></div>
+            <div><label data-i18n="picker.destination">Destino</label><input type="text" id="editTripDestination"></div>
             <div class="form-row">
-              <div><label>Data de início</label><input type="date" id="editTripStart"></div>
-              <div><label>Data de fim</label><input type="date" id="editTripEnd"></div>
+              <div><label data-i18n="picker.startDate">Data de início</label><input type="date" id="editTripStart"></div>
+              <div><label data-i18n="picker.endDate">Data de fim</label><input type="date" id="editTripEnd"></div>
             </div>
             <div class="form-row">
-              <button id="saveTripEditBtn" class="btn btn-primary btn-block">Salvar</button>
-              <button id="cancelTripEditBtn" class="btn btn-outline" style="flex:0 0 auto;">Cancelar</button>
+              <button id="saveTripEditBtn" class="btn btn-primary btn-block" data-i18n="common.save">Salvar</button>
+              <button id="cancelTripEditBtn" class="btn btn-outline" style="flex:0 0 auto;" data-i18n="common.cancel">Cancelar</button>
             </div>
           </div>
 
           <div id="inviteCodeBlock" class="hidden" style="margin-top:12px;">
-            <div class="card-title" style="font-size:12px;">Código de convite</div>
-            <div class="card-meta">Compartilhe pra alguém entrar sozinho nessa viagem</div>
+            <div class="card-title" style="font-size:12px;" data-i18n="invite.title">Código de convite</div>
+            <div class="card-meta" data-i18n="invite.desc">Compartilhe pra alguém entrar sozinho nessa viagem</div>
             <div class="form-row" style="margin-top:8px;">
               <input type="text" id="inviteCodeValue" readonly>
-              <button id="copyInviteCodeBtn" class="btn btn-outline btn-small">Copiar</button>
+              <button id="copyInviteCodeBtn" class="btn btn-outline btn-small" data-i18n="invite.copy">Copiar</button>
             </div>
           </div>
           <div style="margin-top:12px;">
-            <div class="card-title" style="font-size:12px;">Participantes</div>
+            <div class="card-title" style="font-size:12px;" data-i18n="participants.title">Participantes</div>
             <div id="participantsList"></div>
             <div class="form-row" id="participantEditRow" style="margin-top:10px;">
               <input type="email" id="newParticipantEmail" placeholder="email@gmail.com">
-              <button id="addParticipantBtn" class="btn btn-primary btn-small">Adicionar</button>
+              <button id="addParticipantBtn" class="btn btn-primary btn-small" data-i18n="common.add">Adicionar</button>
             </div>
           </div>
           <div id="deleteTripBlock" class="hidden" style="margin-top:18px; border-top:1px solid var(--line); padding-top:14px;">
-            <button id="deleteTripBtn" class="btn btn-danger btn-small btn-block">🗑 Excluir esta viagem</button>
+            <button id="deleteTripBtn" class="btn btn-danger btn-small btn-block" data-i18n="trip.delete">🗑 Excluir esta viagem</button>
           </div>
         </div>
       </div>
 
       <!-- ITINERÁRIO -->
       <div class="tab-panel hidden" id="panel-itinerario">
-        <h2 class="screen-title">Itinerário</h2>
-        <p class="screen-sub">🟢 confirmado · 🟡 programado · ⚪ cogitando — clique no status pra alternar. Clique no lápis pra editar.</p>
-        <button class="add-toggle" id="addItinerarioToggleBtn" data-form="itinerarioForm">＋ Adicionar item ao itinerário</button>
+        <h2 class="screen-title" data-i18n="nav.itinerary">Itinerário</h2>
+        <p class="screen-sub" data-i18n="itinerary.legend">🟢 confirmado · 🟡 programado · ⚪ cogitando — clique no status pra alternar. Clique no lápis pra editar.</p>
+        <button class="add-toggle" id="addItinerarioToggleBtn" data-form="itinerarioForm" data-i18n="itinerary.addBtn">＋ Adicionar item ao itinerário</button>
         <div id="itinerarioForm" class="form-card hidden">
           <div class="form-row">
-            <div><label>Data</label><input type="date" id="itDate"></div>
-            <div><label>Início</label><input type="time" id="itTime"></div>
-            <div><label>Fim — opcional</label><input type="time" id="itEndTime"></div>
+            <div><label data-i18n="common.date">Data</label><input type="date" id="itDate"></div>
+            <div><label data-i18n="common.start">Início</label><input type="time" id="itTime"></div>
+            <div><label data-i18n="common.endOptional">Fim — opcional</label><input type="time" id="itEndTime"></div>
           </div>
-          <div><label>Atividade</label><input type="text" id="itTitle" placeholder="Ex: Machu Picchu — Circuito 2"></div>
-          <div><label>Local / endereço — opcional</label><input type="text" id="itLocation" placeholder="Ex: Aguas Calientes, Peru"></div>
+          <div><label data-i18n="itinerary.activity">Atividade</label><input type="text" id="itTitle" placeholder="Ex: Machu Picchu — Circuito 2"></div>
+          <div><label data-i18n="itinerary.location">Local / endereço — opcional</label><input type="text" id="itLocation" placeholder="Ex: Aguas Calientes, Peru"></div>
           <div>
-            <label>Status</label>
+            <label data-i18n="common.status">Status</label>
             <select id="itStatus">
-              <option value="cogitando">Cogitando</option>
-              <option value="programado">Programado</option>
-              <option value="confirmado">Confirmado</option>
+              <option value="cogitando" data-i18n="status.cogitando">Cogitando</option>
+              <option value="programado" data-i18n="status.programado">Programado</option>
+              <option value="confirmado" data-i18n="status.confirmado">Confirmado</option>
             </select>
           </div>
           <div class="form-row">
-            <div><label>Valor (R$) — opcional</label><input type="number" id="itValue" step="0.01" placeholder="0,00"></div>
+            <div><label data-i18n="itinerary.value">Valor (R$) — opcional</label><input type="number" id="itValue" step="0.01" placeholder="0,00"></div>
             <div>
-              <label>Pagamento</label>
+              <label data-i18n="common.payment">Pagamento</label>
               <select id="itPaymentStatus">
-                <option value="pendente">Pendente</option>
-                <option value="pago">Pago</option>
+                <option value="pendente" data-i18n="status.pendente">Pendente</option>
+                <option value="pago" data-i18n="status.pago">Pago</option>
               </select>
             </div>
           </div>
-          <div><label>Responsável — opcional</label><select id="itResponsible"><option value="">—</option></select></div>
+          <div><label data-i18n="itinerary.responsible">Responsável — opcional</label><select id="itResponsible"><option value="">—</option></select></div>
           <div class="form-row">
-            <button class="btn btn-primary btn-block" id="saveItinerarioBtn">Salvar</button>
-            <button class="btn btn-outline hidden" id="cancelItinerarioEditBtn" style="flex:0 0 auto;">Cancelar</button>
+            <button class="btn btn-primary btn-block" id="saveItinerarioBtn" data-i18n="common.save">Salvar</button>
+            <button class="btn btn-outline hidden" id="cancelItinerarioEditBtn" style="flex:0 0 auto;" data-i18n="common.cancel">Cancelar</button>
           </div>
         </div>
         <div id="itinerarioList"></div>
@@ -239,165 +251,171 @@
 
       <!-- ESTADIA -->
       <div class="tab-panel hidden" id="panel-estadia">
-        <h2 class="screen-title">Estadia</h2>
-        <button class="add-toggle" id="addEstadiaToggleBtn" data-form="estadiaForm">＋ Adicionar hospedagem</button>
+        <h2 class="screen-title" data-i18n="nav.stay">Estadia</h2>
+        <button class="add-toggle" id="addEstadiaToggleBtn" data-form="estadiaForm" data-i18n="stay.addBtn">＋ Adicionar hospedagem</button>
         <div id="estadiaForm" class="form-card hidden">
-          <div><label>Nome do hotel</label><input type="text" id="stayName" placeholder="Ex: Casa Tiyay"></div>
+          <div><label data-i18n="stay.hotelName">Nome do hotel</label><input type="text" id="stayName" placeholder="Ex: Casa Tiyay"></div>
           <div class="form-row">
-            <div><label>Check-in</label><input type="date" id="stayCheckin"></div>
-            <div><label>Check-out</label><input type="date" id="stayCheckout"></div>
+            <div><label data-i18n="stay.checkin">Check-in</label><input type="date" id="stayCheckin"></div>
+            <div><label data-i18n="stay.checkout">Check-out</label><input type="date" id="stayCheckout"></div>
           </div>
-          <div><label>Endereço</label><input type="text" id="stayAddress"></div>
+          <div><label data-i18n="stay.address">Endereço</label><input type="text" id="stayAddress"></div>
           <div>
-            <label>Status de pagamento</label>
+            <label data-i18n="common.paymentStatus">Status de pagamento</label>
             <select id="stayStatus">
-              <option value="pendente">Pendente</option>
-              <option value="pago">Pago</option>
+              <option value="pendente" data-i18n="status.pendente">Pendente</option>
+              <option value="pago" data-i18n="status.pago">Pago</option>
             </select>
           </div>
-          <button class="btn btn-primary btn-block" id="saveEstadiaBtn">Salvar</button>
+          <button class="btn btn-primary btn-block" id="saveEstadiaBtn" data-i18n="common.save">Salvar</button>
         </div>
         <div id="estadiaList"></div>
       </div>
 
       <!-- DOCUMENTOS -->
       <div class="tab-panel hidden" id="panel-documentos">
-        <h2 class="screen-title">Documentos e vouchers</h2>
-        <button class="add-toggle" id="addDocToggleBtn" data-form="docForm">＋ Adicionar documento</button>
+        <h2 class="screen-title" data-i18n="documents.title">Documentos e vouchers</h2>
+        <button class="add-toggle" id="addDocToggleBtn" data-form="docForm" data-i18n="documents.addBtn">＋ Adicionar documento</button>
         <div id="docForm" class="form-card hidden">
-          <div><label>Título</label><input type="text" id="docTitle" placeholder="Ex: Voucher hotel Casa Tiyay"></div>
+          <div><label data-i18n="documents.docTitle">Título</label><input type="text" id="docTitle" placeholder="Ex: Voucher hotel Casa Tiyay"></div>
           <div>
-            <label>Anexar arquivo (imagem ou PDF)</label>
+            <label data-i18n="documents.attach">Anexar arquivo (imagem ou PDF)</label>
             <input type="file" id="docFile" accept="image/*,application/pdf">
           </div>
-          <div><label>Ou cole um link — opcional se anexou arquivo</label><input type="text" id="docUrl" placeholder="https://..."></div>
-          <div><label>Notas</label><input type="text" id="docNotes" placeholder="Opcional"></div>
+          <div><label data-i18n="documents.link">Ou cole um link — opcional se anexou arquivo</label><input type="text" id="docUrl" placeholder="https://..."></div>
+          <div><label data-i18n="documents.notes">Notas</label><input type="text" id="docNotes" data-i18n-placeholder="documents.notesPh" placeholder="Opcional"></div>
           <div id="docUploadStatus" class="screen-sub hidden"></div>
-          <button class="btn btn-primary btn-block" id="saveDocBtn">Salvar</button>
+          <button class="btn btn-primary btn-block" id="saveDocBtn" data-i18n="common.save">Salvar</button>
         </div>
         <div id="docsList"></div>
       </div>
 
       <!-- MALA -->
       <div class="tab-panel hidden" id="panel-mala">
-        <h2 class="screen-title">Minha mala</h2>
-        <p class="screen-sub">Compartilhado conta no placar do grupo. Pessoal só aparece pra você.</p>
+        <h2 class="screen-title" data-i18n="packing.title">Minha mala</h2>
+        <p class="screen-sub" data-i18n="packing.sub">Compartilhado conta no placar do grupo. Pessoal só aparece pra você.</p>
 
         <div class="card" style="margin-bottom:14px;">
           <div class="card-row">
             <div>
-              <div class="card-title" style="font-size:13px;">Usar lista padrão</div>
-              <div class="card-meta">Preenche com os itens essenciais mais comuns de viagem</div>
+              <div class="card-title" style="font-size:13px;" data-i18n="packing.defaultTitle">Usar lista padrão</div>
+              <div class="card-meta" data-i18n="packing.defaultDesc">Preenche com os itens essenciais mais comuns de viagem</div>
             </div>
-            <button id="defaultListToggle" class="toggle-pill" style="flex:0 0 auto; padding:7px 14px;">Ativar</button>
+            <button id="defaultListToggle" class="toggle-pill" style="flex:0 0 auto; padding:7px 14px;" data-i18n="packing.activate">Ativar</button>
           </div>
         </div>
 
         <div class="segmented">
-          <button class="seg-btn active" data-seg="shared">🧵 Compartilhado</button>
-          <button class="seg-btn" data-seg="personal">🔒 Pessoal</button>
+          <button class="seg-btn active" data-seg="shared"><span data-i18n="packing.shared">🧵 Compartilhado</span></button>
+          <button class="seg-btn" data-seg="personal"><span data-i18n="reminder.onlyMe">🔒 Só eu</span></button>
         </div>
         <div class="form-row" style="margin-bottom:14px;">
-          <input type="text" id="newItemName" placeholder="Novo item...">
-          <button id="addItemBtn" class="btn btn-primary btn-small">Adicionar</button>
+          <input type="text" id="newItemName" data-i18n-placeholder="packing.newItemPh" placeholder="Novo item...">
+          <button id="addItemBtn" class="btn btn-primary btn-small" data-i18n="common.add">Adicionar</button>
         </div>
         <div id="malaList"></div>
 
-        <h3 class="screen-title" style="font-size:18px; margin-top:26px; margin-bottom:10px;">Progresso do grupo</h3>
-        <p class="screen-sub">Só considera itens compartilhados. Itens pessoais de cada um não entram aqui.</p>
+        <h3 class="screen-title" style="font-size:18px; margin-top:26px; margin-bottom:10px;" data-i18n="packing.groupProgress">Progresso do grupo</h3>
+        <p class="screen-sub" data-i18n="packing.groupProgressSub">Só considera itens compartilhados. Itens pessoais de cada um não entram aqui.</p>
         <div class="progress-card" id="groupProgress"></div>
       </div>
 
       <!-- TAREFAS -->
       <div class="tab-panel hidden" id="panel-tarefas">
-        <h2 class="screen-title">Tarefas do grupo</h2>
-        <button class="add-toggle" id="addTaskToggleBtn" data-form="taskForm">＋ Adicionar tarefa</button>
+        <h2 class="screen-title" data-i18n="tasks.title">Tarefas do grupo</h2>
+        <button class="add-toggle" id="addTaskToggleBtn" data-form="taskForm" data-i18n="tasks.addBtn">＋ Adicionar tarefa</button>
         <div id="taskForm" class="form-card hidden">
-          <div><label>Descrição</label><input type="text" id="taskDesc" placeholder="Ex: Confirmar pagamento do trem"></div>
-          <div><label>Responsável</label><select id="taskResponsible"></select></div>
-          <button class="btn btn-primary btn-block" id="saveTaskBtn">Salvar</button>
+          <div><label data-i18n="tasks.description">Descrição</label><input type="text" id="taskDesc" placeholder="Ex: Confirmar pagamento do trem"></div>
+          <div><label data-i18n="itinerary.responsible2">Responsável</label><select id="taskResponsible"></select></div>
+          <button class="btn btn-primary btn-block" id="saveTaskBtn" data-i18n="common.save">Salvar</button>
         </div>
         <div id="tasksList"></div>
       </div>
 
       <!-- GASTOS -->
       <div class="tab-panel hidden" id="panel-gastos">
-        <h2 class="screen-title">Gastos</h2>
-        <p class="screen-sub">Compartilhado entra na divisão do grupo. Pessoal fica só com você, mas ajuda a controlar o quanto gastou.</p>
+        <h2 class="screen-title" data-i18n="nav.expenses">Gastos</h2>
+        <p class="screen-sub" data-i18n="expenses.sub">Compartilhado entra na divisão do grupo. Pessoal fica só com você, mas ajuda a controlar o quanto gastou.</p>
 
         <div class="card" style="margin-bottom:14px;">
-          <div class="card-title" style="font-size:13px; margin-bottom:8px;">Cotação do dólar</div>
+          <div class="card-title" style="font-size:13px; margin-bottom:8px;" data-i18n="expenses.rates">Cotações</div>
           <div class="form-row">
             <div style="display:flex; align-items:center; gap:6px;">
               <span class="card-meta">US$ 1 =</span>
               <input type="number" id="usdRate" step="0.01" value="5.40" style="width:90px;">
               <span class="card-meta">R$</span>
             </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="card-meta">S/ 1 =</span>
+              <input type="number" id="penRate" step="0.01" value="1.45" style="width:90px;">
+              <span class="card-meta">R$</span>
+            </div>
           </div>
         </div>
 
-        <button class="add-toggle" id="addExpenseToggleBtn" data-form="expenseForm">＋ Adicionar gasto</button>
+        <button class="add-toggle" id="addExpenseToggleBtn" data-form="expenseForm" data-i18n="expenses.addBtn">＋ Adicionar gasto</button>
         <div id="expenseForm" class="form-card hidden">
           <div class="segmented">
-            <button class="seg-btn active" data-exptype="shared">🧵 Compartilhado</button>
-            <button class="seg-btn" data-exptype="personal">🔒 Pessoal</button>
+            <button class="seg-btn active" data-exptype="shared"><span data-i18n="packing.shared">🧵 Compartilhado</span></button>
+            <button class="seg-btn" data-exptype="personal"><span data-i18n="reminder.onlyMe">🔒 Só eu</span></button>
           </div>
-          <div><label>Descrição</label><input type="text" id="expDesc" placeholder="Ex: Almoço dia 6"></div>
+          <div><label data-i18n="tasks.description">Descrição</label><input type="text" id="expDesc" placeholder="Ex: Almoço dia 6"></div>
           <div class="form-row">
-            <div><label>Valor</label><input type="number" id="expValue" step="0.01"></div>
+            <div><label data-i18n="expenses.value">Valor</label><input type="number" id="expValue" step="0.01"></div>
             <div>
-              <label>Moeda</label>
+              <label data-i18n="expenses.currency">Moeda</label>
               <select id="expCurrency">
-                <option value="BRL">R$ Real</option>
-                <option value="USD">US$ Dólar</option>
+                <option value="BRL" data-i18n="currency.brl">R$ Real</option>
+                <option value="USD" data-i18n="currency.usd">US$ Dólar</option>
+                <option value="PEN" data-i18n="currency.pen">S/ Sol peruano</option>
               </select>
             </div>
           </div>
           <div id="expSharedFields">
-            <div><label>Quem pagou</label><select id="expPaidBy"></select></div>
+            <div><label data-i18n="expenses.paidBy">Quem pagou</label><select id="expPaidBy"></select></div>
             <div>
-              <label>Dividir entre</label>
+              <label data-i18n="expenses.splitAmong">Dividir entre</label>
               <div class="checkbox-group" id="expSplitGroup"></div>
             </div>
           </div>
-          <button class="btn btn-primary btn-block" id="saveExpenseBtn">Salvar</button>
+          <button class="btn btn-primary btn-block" id="saveExpenseBtn" data-i18n="common.save">Salvar</button>
         </div>
 
-        <h3 class="screen-title" style="font-size:16px; margin-top:26px; margin-bottom:10px;">🧵 Compartilhados</h3>
+        <h3 class="screen-title" style="font-size:16px; margin-top:26px; margin-bottom:10px;" data-i18n="expenses.sharedHeader">🧵 Compartilhados</h3>
         <div id="expensesList"></div>
         <div class="card-row" style="padding:10px 4px; margin-top:4px;">
-          <span class="card-meta">Total do grupo</span>
+          <span class="card-meta" data-i18n="expenses.groupTotal">Total do grupo</span>
           <span id="sharedTotal" style="font-weight:700; color:var(--gold);">R$ 0,00</span>
         </div>
 
-        <h3 class="screen-title" style="font-size:16px; margin-top:30px; margin-bottom:10px;">🔒 Meus gastos pessoais</h3>
+        <h3 class="screen-title" style="font-size:16px; margin-top:30px; margin-bottom:10px;" data-i18n="expenses.personalHeader">🔒 Meus gastos pessoais</h3>
         <div id="personalExpensesList"></div>
         <div class="card-row" style="padding:10px 4px; margin-top:4px;">
-          <span class="card-meta">Meu total pessoal</span>
+          <span class="card-meta" data-i18n="expenses.myTotal">Meu total pessoal</span>
           <span id="personalTotal" style="font-weight:700; color:var(--teal);">R$ 0,00</span>
         </div>
 
-        <h3 class="screen-title" style="font-size:18px; margin-top:30px; margin-bottom:10px;">Saldo por pessoa (compartilhado)</h3>
+        <h3 class="screen-title" style="font-size:18px; margin-top:30px; margin-bottom:10px;" data-i18n="expenses.balanceHeader">Saldo por pessoa (compartilhado)</h3>
         <div class="card" id="balanceSummary"></div>
       </div>
 
       <!-- EMERGÊNCIA -->
       <div class="tab-panel hidden" id="panel-emergencia">
-        <h2 class="screen-title">Informações de emergência</h2>
-        <button class="add-toggle" id="addEmergencyToggleBtn" data-form="emergencyForm">＋ Adicionar informação</button>
+        <h2 class="screen-title" data-i18n="emergency.title">Informações de emergência</h2>
+        <button class="add-toggle" id="addEmergencyToggleBtn" data-form="emergencyForm" data-i18n="emergency.addBtn">＋ Adicionar informação</button>
         <div id="emergencyForm" class="form-card hidden">
-          <div><label>Rótulo</label><input type="text" id="emLabel" placeholder="Ex: Agência (Landy)"></div>
-          <div><label>Valor</label><input type="text" id="emValue" placeholder="Ex: +51 999 999 999"></div>
-          <button class="btn btn-primary btn-block" id="saveEmergencyBtn">Salvar</button>
+          <div><label data-i18n="emergency.label">Rótulo</label><input type="text" id="emLabel" placeholder="Ex: Agência (Landy)"></div>
+          <div><label data-i18n="emergency.value">Valor</label><input type="text" id="emValue" placeholder="Ex: +51 999 999 999"></div>
+          <button class="btn btn-primary btn-block" id="saveEmergencyBtn" data-i18n="common.save">Salvar</button>
         </div>
         <div id="emergencyList"></div>
       </div>
 
       <!-- HISTÓRICO -->
       <div class="tab-panel hidden" id="panel-historico">
-        <h2 class="screen-title">Histórico</h2>
-        <p class="screen-sub">Registro de tudo que foi alterado nessa viagem.</p>
-        <button id="clearHistoryBtn" class="btn btn-danger btn-small" style="margin-bottom:14px;">Limpar histórico</button>
+        <h2 class="screen-title" data-i18n="nav.history">Histórico</h2>
+        <p class="screen-sub" data-i18n="history.sub">Registro de tudo que foi alterado nessa viagem.</p>
+        <button id="clearHistoryBtn" class="btn btn-danger btn-small" style="margin-bottom:14px;" data-i18n="history.clear">Limpar histórico</button>
         <div id="historyList"></div>
       </div>
 
