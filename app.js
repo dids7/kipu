@@ -375,7 +375,9 @@ function clearSubscriptions() {
 }
 
 function findTripForDate(iso) {
-  return allUserTrips.find((t) => iso >= t.startDate && iso <= t.endDate) || null;
+  if (!currentTripData) return null;
+  const inRange = iso >= currentTripData.startDate && iso <= currentTripData.endDate;
+  return inRange ? { id: currentTripId, ...currentTripData } : null;
 }
 
 let currentDateTrip = null;
@@ -626,7 +628,6 @@ function openItinerarioForEdit(id, it) {
   $("itPaymentStatus").value = it.paymentStatus || "pendente";
   $("itResponsible").value = it.responsible || "";
   $("saveItinerarioBtn").textContent = "Salvar alterações";
-  $("cancelItinerarioEditBtn").classList.remove("hidden");
   $("itinerarioForm").classList.remove("hidden");
   $("itinerarioForm").scrollIntoView({ behavior: "smooth", block: "center" });
 }
@@ -638,7 +639,6 @@ function resetItinerarioForm() {
   $("itValue").value = ""; $("itResponsible").value = ""; $("itStatus").value = "cogitando";
   $("itPaymentStatus").value = "pendente";
   $("saveItinerarioBtn").textContent = "Salvar";
-  $("cancelItinerarioEditBtn").classList.add("hidden");
   $("itinerarioForm").classList.add("hidden");
 }
 
@@ -731,6 +731,7 @@ $("addEstadiaToggleBtn")?.addEventListener("click", () => {
     $("estadiaForm").classList.remove("hidden");
   }
 });
+$("closeEstadiaFormBtn")?.addEventListener("click", resetEstadiaForm);
 $("saveEstadiaBtn").addEventListener("click", async () => {
   const name = $("stayName").value.trim();
   const checkin = $("stayCheckin").value, checkout = $("stayCheckout").value;
@@ -801,6 +802,7 @@ $("addDocToggleBtn")?.addEventListener("click", () => {
     $("docForm").classList.remove("hidden");
   }
 });
+$("closeDocFormBtn")?.addEventListener("click", resetDocForm);
 
 $("saveDocBtn").addEventListener("click", async () => {
   const title = $("docTitle").value.trim();
@@ -996,29 +998,45 @@ $("defaultListToggle").addEventListener("click", async () => {
   ));
   logActivity("mala", "lista padrão adicionada", `${toAdd.length} item(ns) essenciais inseridos`);
 });
+function ownerColor(email) {
+  const emails = currentTripData.participantEmails || [];
+  const palette = ["var(--gold)", "var(--teal)", "#D65D5D", "#B08BD6", "#6FB3D2", "#8FD68F"];
+  const idx = emails.indexOf(email);
+  return palette[(idx >= 0 ? idx : 0) % palette.length];
+}
+
 function renderGroupProgress() {
   const el = $("groupProgress");
-  const byOwner = {};
-  (currentTripData.participantEmails || []).forEach((e) => { byOwner[e] = { done: 0, total: 0 }; });
+  const groups = {}; // nome (minúsculo) -> { displayName, entries: [{ownerEmail, done}] }
   allSharedItemsCache.forEach((it) => {
-    if (!byOwner[it.ownerEmail]) byOwner[it.ownerEmail] = { done: 0, total: 0 };
-    byOwner[it.ownerEmail].total++;
-    if (it.done) byOwner[it.ownerEmail].done++;
+    const key = (it.name || "").trim().toLowerCase();
+    if (!key) return;
+    if (!groups[key]) groups[key] = { displayName: it.name, entries: [] };
+    groups[key].entries.push({ ownerEmail: it.ownerEmail, done: it.done });
   });
-  el.innerHTML = "";
-  Object.entries(byOwner).forEach(([email, { done, total }]) => {
-    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-    const row = document.createElement("div");
-    row.className = "person-row";
-    row.innerHTML = `
-      <div class="person-head">
-        <span class="person-name">${email}</span>
-        <span class="person-count">${done}/${total}</span>
-      </div>
-      <div class="weave-track"><div class="weave-fill" style="width:${pct}%"></div></div>
-    `;
-    el.appendChild(row);
-  });
+
+  const keys = Object.keys(groups).sort((a, b) => groups[a].displayName.localeCompare(groups[b].displayName, "pt-BR"));
+  if (keys.length === 0) {
+    el.innerHTML = `<div class="empty">${t("packing.noSharedYet")}</div>`;
+    return;
+  }
+
+  el.innerHTML = keys.map((k) => {
+    const g = groups[k];
+    const badges = g.entries.map((e) => {
+      const color = ownerColor(e.ownerEmail);
+      const initial = (e.ownerEmail || "?").trim().charAt(0).toUpperCase();
+      const style = e.done
+        ? `background:${color}; color:#1B2A41; border-color:${color};`
+        : `background:transparent; color:${color}; border-color:${color};`;
+      return `<span class="owner-badge" style="${style}" title="${e.ownerEmail}${e.done ? " ✓" : ""}">${initial}</span>`;
+    }).join("");
+    return `
+      <div class="list-row">
+        <span class="card-meta" style="color:var(--ink); font-weight:600;">${g.displayName}</span>
+        <div style="display:flex; gap:4px; flex-wrap:wrap;">${badges}</div>
+      </div>`;
+  }).join("");
 }
 
 // ================= TAREFAS =================
@@ -1077,6 +1095,7 @@ $("addTaskToggleBtn")?.addEventListener("click", () => {
     $("taskForm").classList.remove("hidden");
   }
 });
+$("closeTaskFormBtn")?.addEventListener("click", resetTaskForm);
 
 $("saveTaskBtn").addEventListener("click", async () => {
   const description = $("taskDesc").value.trim(), responsible = $("taskResponsible").value;
@@ -1319,6 +1338,7 @@ $("addExpenseToggleBtn")?.addEventListener("click", () => {
     $("expenseForm").classList.remove("hidden");
   }
 });
+$("closeExpenseFormBtn")?.addEventListener("click", resetExpenseForm);
 
 $("saveExpenseBtn").addEventListener("click", async () => {
   const description = $("expDesc").value.trim();
@@ -1392,6 +1412,7 @@ $("addEmergencyToggleBtn")?.addEventListener("click", () => {
     $("emergencyForm").classList.remove("hidden");
   }
 });
+$("closeEmergencyFormBtn")?.addEventListener("click", resetEmergencyForm);
 
 $("saveEmergencyBtn").addEventListener("click", async () => {
   const label = $("emLabel").value.trim(), value = $("emValue").value.trim();

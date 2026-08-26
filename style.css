@@ -350,6 +350,19 @@ input[type="number"]::placeholder, input[type="search"]::placeholder, input[type
   text-decoration:none;
 }
 .rate-credit:hover{ opacity:0.85; text-decoration:underline; }
+
+.owner-badge{
+  width:22px;
+  height:22px;
+  border-radius:50%;
+  border:1.5px solid;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-size:10px;
+  font-weight:700;
+  font-family:'JetBrains Mono', monospace;
+}
 .form-row > div{ flex:1; }
 .checkbox-group{ display:flex; flex-wrap:wrap; gap:9px; margin-top:2px; }
 .checkbox-chip{

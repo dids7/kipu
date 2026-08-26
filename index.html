@@ -255,7 +255,7 @@
           <div><label data-i18n="itinerary.responsible">Responsável — opcional</label><select id="itResponsible"><option value="">—</option></select></div>
           <div class="form-row">
             <button class="btn btn-primary btn-block" id="saveItinerarioBtn" data-i18n="common.save">Salvar</button>
-            <button class="btn btn-outline hidden" id="cancelItinerarioEditBtn" style="flex:0 0 auto;" data-i18n="common.cancel">Cancelar</button>
+            <button class="btn btn-outline" id="cancelItinerarioEditBtn" style="flex:0 0 auto;">✕</button>
           </div>
         </div>
         <div id="itinerarioList"></div>
@@ -279,7 +279,10 @@
               <option value="pago" data-i18n="status.pago">Pago</option>
             </select>
           </div>
-          <button class="btn btn-primary btn-block" id="saveEstadiaBtn" data-i18n="common.save">Salvar</button>
+          <div class="form-row">
+            <button class="btn btn-primary btn-block" id="saveEstadiaBtn" data-i18n="common.save">Salvar</button>
+            <button class="btn btn-outline" id="closeEstadiaFormBtn" style="flex:0 0 auto;">✕</button>
+          </div>
         </div>
         <div id="estadiaList"></div>
       </div>
@@ -297,7 +300,10 @@
           <div><label data-i18n="documents.link">Ou cole um link — opcional se anexou arquivo</label><input type="text" id="docUrl" placeholder="https://..."></div>
           <div><label data-i18n="documents.notes">Notas</label><input type="text" id="docNotes" data-i18n-placeholder="documents.notesPh" placeholder="Opcional"></div>
           <div id="docUploadStatus" class="screen-sub hidden"></div>
-          <button class="btn btn-primary btn-block" id="saveDocBtn" data-i18n="common.save">Salvar</button>
+          <div class="form-row">
+            <button class="btn btn-primary btn-block" id="saveDocBtn" data-i18n="common.save">Salvar</button>
+            <button class="btn btn-outline" id="closeDocFormBtn" style="flex:0 0 auto;">✕</button>
+          </div>
         </div>
         <div id="docsList"></div>
       </div>
@@ -339,7 +345,10 @@
         <div id="taskForm" class="form-card hidden">
           <div><label data-i18n="tasks.description">Descrição</label><input type="text" id="taskDesc" placeholder="Ex: Confirmar pagamento do trem"></div>
           <div><label data-i18n="itinerary.responsible2">Responsável</label><select id="taskResponsible"></select></div>
-          <button class="btn btn-primary btn-block" id="saveTaskBtn" data-i18n="common.save">Salvar</button>
+          <div class="form-row">
+            <button class="btn btn-primary btn-block" id="saveTaskBtn" data-i18n="common.save">Salvar</button>
+            <button class="btn btn-outline" id="closeTaskFormBtn" style="flex:0 0 auto;">✕</button>
+          </div>
         </div>
         <div id="tasksList"></div>
       </div>
@@ -395,7 +404,10 @@
               <div class="checkbox-group" id="expSplitGroup"></div>
             </div>
           </div>
-          <button class="btn btn-primary btn-block" id="saveExpenseBtn" data-i18n="common.save">Salvar</button>
+          <div class="form-row">
+            <button class="btn btn-primary btn-block" id="saveExpenseBtn" data-i18n="common.save">Salvar</button>
+            <button class="btn btn-outline" id="closeExpenseFormBtn" style="flex:0 0 auto;">✕</button>
+          </div>
         </div>
 
         <h3 class="screen-title" style="font-size:16px; margin-top:26px; margin-bottom:10px;" data-i18n="expenses.sharedHeader">🧵 Compartilhados</h3>
@@ -423,7 +435,10 @@
         <div id="emergencyForm" class="form-card hidden">
           <div><label data-i18n="emergency.label">Rótulo</label><input type="text" id="emLabel" placeholder="Ex: Agência (Landy)"></div>
           <div><label data-i18n="emergency.value">Valor</label><input type="text" id="emValue" placeholder="Ex: +51 999 999 999"></div>
-          <button class="btn btn-primary btn-block" id="saveEmergencyBtn" data-i18n="common.save">Salvar</button>
+          <div class="form-row">
+            <button class="btn btn-primary btn-block" id="saveEmergencyBtn" data-i18n="common.save">Salvar</button>
+            <button class="btn btn-outline" id="closeEmergencyFormBtn" style="flex:0 0 auto;">✕</button>
+          </div>
         </div>
         <div id="emergencyList"></div>
       </div>
