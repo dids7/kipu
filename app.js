@@ -11,6 +11,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import { translations, SUPPORTED_LANGS, DEFAULT_LANG } from "./translations.js";
 
+// Flag simples: só true depois que uma viagem foi de fato aberta.
+// Declarada bem no topo pra nunca dar erro de "usar antes de declarar".
+let appIsOpen = false;
+
 // ================= IDIOMA =================
 const LS_LANG_KEY = "kipu_lang";
 let currentLang = localStorage.getItem(LS_LANG_KEY) || DEFAULT_LANG;
@@ -41,9 +45,17 @@ function applyLanguage(lang) {
   });
 
   // Re-renderiza listas já carregadas, pra badges/mensagens dinâmicas
-  // acompanharem o novo idioma na hora.
-  if (typeof renderMalaList === "function" && document.getElementById("malaList")) renderMalaList();
-  if (typeof renderExpenses === "function" && document.getElementById("expensesList")) renderExpenses();
+  // acompanharem o novo idioma na hora. Só faz sentido (e só é seguro)
+  // quando já tem uma viagem aberta — protegido com try/catch pra nunca
+  // travar o resto do app se algo aqui falhar.
+  if (appIsOpen) {
+    try {
+      if (typeof renderMalaList === "function") renderMalaList();
+      if (typeof renderExpenses === "function") renderExpenses();
+    } catch (err) {
+      console.warn("Não foi possível re-renderizar listas ao trocar idioma:", err);
+    }
+  }
 }
 
 document.querySelectorAll(".lang-btn").forEach((btn) => {
@@ -213,6 +225,7 @@ onAuthStateChanged(auth, (user) => {
 
 // ---------- Seleção / criação de viagem ----------
 function goToTripPicker() {
+  appIsOpen = false;
   clearSubscriptions();
   currentTripId = null;
   localStorage.removeItem(LS_TRIP_KEY);
@@ -317,6 +330,7 @@ async function openTrip(tripId) {
   if (!currentTripData) {
     throw new Error("Viagem não encontrada ou sem acesso.");
   }
+  appIsOpen = true;
 
   localStorage.setItem(LS_TRIP_KEY, tripId);
 
