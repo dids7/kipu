@@ -1441,13 +1441,13 @@ function hideResetModal() {
   $("resetModal").classList.add("hidden");
 }
 
-$("resetAppBtn").addEventListener("click", showResetModal);
-$("resetModalCancelBtn").addEventListener("click", hideResetModal);
-$("resetPasswordInput").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") $("resetModalConfirmBtn").click();
+$("resetAppBtn")?.addEventListener("click", showResetModal);
+$("resetModalCancelBtn")?.addEventListener("click", hideResetModal);
+$("resetPasswordInput")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $("resetModalConfirmBtn")?.click();
 });
 
-$("resetModalConfirmBtn").addEventListener("click", async () => {
+$("resetModalConfirmBtn")?.addEventListener("click", async () => {
   const val = $("resetPasswordInput").value;
   if (val !== RESET_PASSWORD) {
     $("resetPasswordError").classList.remove("hidden");
