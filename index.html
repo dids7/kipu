@@ -33,6 +33,18 @@
     </div>
   </div>
 </div>
+<div id="resetModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-title" data-i18n="reset.title">Resetar o app</div>
+    <div class="modal-message" data-i18n="reset.warning">Isso apaga TUDO que foi inserido nesta viagem — itinerário, estadia, documentos, mala, tarefas, gastos, emergência e o histórico. A viagem em si (nome, datas, participantes) continua. Não tem volta.</div>
+    <input type="password" id="resetPasswordInput" data-i18n-placeholder="reset.passwordPlaceholder" placeholder="Senha" style="margin-bottom:8px;">
+    <div id="resetPasswordError" class="hidden" style="color:var(--red); font-size:12px; margin-bottom:10px;" data-i18n="reset.wrongPassword">Senha incorreta.</div>
+    <div class="modal-actions">
+      <button id="resetModalCancelBtn" class="btn btn-outline" data-i18n="modal.cancel">Cancelar</button>
+      <button id="resetModalConfirmBtn" class="btn btn-danger" data-i18n="reset.confirmBtn">Resetar tudo</button>
+    </div>
+  </div>
+</div>
 <div class="device">
 
   <!-- LOGIN -->
@@ -420,7 +432,7 @@
       <div class="tab-panel hidden" id="panel-historico">
         <h2 class="screen-title" data-i18n="nav.history">Histórico</h2>
         <p class="screen-sub" data-i18n="history.sub">Registro de tudo que foi alterado nessa viagem.</p>
-        <button id="clearHistoryBtn" class="btn btn-danger btn-small" style="margin-bottom:14px;" data-i18n="history.clear">Limpar histórico</button>
+        <button id="resetAppBtn" class="btn btn-danger btn-small" style="margin-bottom:14px;" data-i18n="reset.button">🔄 Resetar app (apagar tudo)</button>
         <div id="historyList"></div>
       </div>
 

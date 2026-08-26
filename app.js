@@ -1425,18 +1425,49 @@ function subscribeHistorico() {
   unsubscribers.push(unsub);
 }
 
-$("clearHistoryBtn").addEventListener("click", async () => {
-  const ok = await confirmDialog("Isso vai apagar TODO o histórico de alterações desta viagem, sem volta. Continuar?", "Limpar tudo");
-  if (!ok) return;
-  const snap = await getDocs(collection(db, "trips", currentTripId, "activityLog"));
-  const deletions = [];
-  snap.forEach((d) => deletions.push(deleteDoc(doc(db, "trips", currentTripId, "activityLog", d.id))));
-  await Promise.all(deletions);
+// Senha simples pra proteger o reset contra clique acidental de alguém
+// da família — não é segurança de verdade (o código é público no GitHub),
+// só uma trava contra "apertei sem querer".
+const RESET_PASSWORD = "#987321";
+
+function showResetModal() {
+  const input = $("resetPasswordInput");
+  input.value = "";
+  $("resetPasswordError").classList.add("hidden");
+  $("resetModal").classList.remove("hidden");
+  input.focus();
+}
+function hideResetModal() {
+  $("resetModal").classList.add("hidden");
+}
+
+$("resetAppBtn").addEventListener("click", showResetModal);
+$("resetModalCancelBtn").addEventListener("click", hideResetModal);
+$("resetPasswordInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $("resetModalConfirmBtn").click();
+});
+
+$("resetModalConfirmBtn").addEventListener("click", async () => {
+  const val = $("resetPasswordInput").value;
+  if (val !== RESET_PASSWORD) {
+    $("resetPasswordError").classList.remove("hidden");
+    return;
+  }
+  hideResetModal();
+
+  const subcollections = ["itinerario", "estadia", "documentos", "mala", "tarefas", "gastos", "emergencia", "activityLog", "lembretes"];
+  let totalDeleted = 0;
+  for (const sub of subcollections) {
+    const snap = await getDocs(collection(db, "trips", currentTripId, sub));
+    await Promise.all(snap.docs.map((d) => deleteDoc(doc(db, "trips", currentTripId, sub, d.id))));
+    totalDeleted += snap.size;
+  }
+
   await addDoc(collection(db, "trips", currentTripId, "activityLog"), {
     authorEmail: currentUser.email,
-    area: "historico",
-    action: "histórico limpo",
-    description: `${deletions.length} registro(s) removido(s) — reinício para uso real da viagem`,
+    area: "reset",
+    action: "app resetado",
+    description: `${totalDeleted} registro(s) apagado(s) — reinício com informações reais da viagem`,
     timestamp: serverTimestamp()
   });
 });
