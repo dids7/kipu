@@ -103,7 +103,7 @@
     <div class="greca"></div>
     <header class="app-header">
       <div class="trip-label">
-        <button id="backToTripsBtn" class="icon-btn" title="Trocar de viagem" data-i18n="header.back">← Viagens</button>
+        <button id="backToTripsBtn" class="icon-btn" title="Trocar de viagem">←</button>
         <div style="display:flex; align-items:center; gap:8px;">
           <div class="lang-switch" id="langSwitchApp">
             <button class="lang-btn" data-lang="pt">PT</button>
@@ -339,17 +339,19 @@
 
         <div class="card" style="margin-bottom:14px;">
           <div class="card-title" style="font-size:13px; margin-bottom:8px;" data-i18n="expenses.rates">Cotações</div>
-          <div class="form-row">
-            <div style="display:flex; align-items:center; gap:6px;">
-              <span class="card-meta">US$ 1 =</span>
-              <input type="number" id="usdRate" step="0.01" value="5.40" style="width:90px;">
-              <span class="card-meta">R$</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:6px;">
-              <span class="card-meta">S/ 1 =</span>
-              <input type="number" id="penRate" step="0.01" value="1.45" style="width:90px;">
-              <span class="card-meta">R$</span>
-            </div>
+          <div class="rate-row">
+            <span class="card-meta">1</span>
+            <select id="rateFromCurrency">
+              <option value="USD">US$</option>
+              <option value="PEN">S/</option>
+            </select>
+            <span class="card-meta">=</span>
+            <input type="number" id="rateValue" step="0.0001" value="5.40">
+            <select id="rateToCurrency">
+              <option value="BRL">R$</option>
+              <option value="PEN">S/</option>
+              <option value="USD">US$</option>
+            </select>
           </div>
         </div>
 

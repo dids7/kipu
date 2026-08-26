@@ -1095,12 +1095,13 @@ let expensesCache = [];
 let editingExpenseId = null;
 let expTypeSeg = "shared";
 
-function usdRate() {
-  return parseFloat($("usdRate").value) || 1;
-}
-function penRate() {
-  return parseFloat($("penRate").value) || 1;
-}
+// Cotações vs Real (moeda-base pra todos os totais/saldos do app).
+// Persistidas no navegador pra não precisar redigitar toda vez.
+let usdToBrlRate = parseFloat(localStorage.getItem("kipu_usd_brl")) || 5.40;
+let penToBrlRate = parseFloat(localStorage.getItem("kipu_pen_brl")) || 1.45;
+
+function usdRate() { return usdToBrlRate; }
+function penRate() { return penToBrlRate; }
 function toBRL(value, currency) {
   if (currency === "USD") return value * usdRate();
   if (currency === "PEN") return value * penRate();
@@ -1199,8 +1200,50 @@ function renderBalance() {
   }).join("");
 }
 
-$("usdRate").addEventListener("input", () => { renderExpenses(); renderBalance(); });
-$("penRate").addEventListener("input", () => { renderExpenses(); renderBalance(); });
+const CURRENCY_LABELS = { BRL: "R$", USD: "US$", PEN: "S/" };
+
+function populateRateToOptions() {
+  const from = $("rateFromCurrency").value;
+  const toSel = $("rateToCurrency");
+  const prevTo = toSel.value;
+  const options = ["BRL", "PEN", "USD"].filter((c) => c !== from);
+  toSel.innerHTML = options.map((c) => `<option value="${c}">${CURRENCY_LABELS[c]}</option>`).join("");
+  toSel.value = options.includes(prevTo) ? prevTo : "BRL";
+}
+
+function updateRateWidget() {
+  const from = $("rateFromCurrency").value;
+  const to = $("rateToCurrency").value;
+  const valueInput = $("rateValue");
+  const fromToBRL = from === "USD" ? usdToBrlRate : penToBrlRate;
+
+  if (to === "BRL") {
+    valueInput.value = fromToBRL;
+    valueInput.readOnly = false;
+  } else {
+    const toToBRL = to === "USD" ? usdToBrlRate : penToBrlRate;
+    valueInput.value = (fromToBRL / toToBRL).toFixed(4).replace(/\.?0+$/, "");
+    valueInput.readOnly = true;
+  }
+}
+
+$("rateFromCurrency").addEventListener("change", () => {
+  populateRateToOptions();
+  updateRateWidget();
+});
+$("rateToCurrency").addEventListener("change", updateRateWidget);
+$("rateValue").addEventListener("input", () => {
+  if ($("rateValue").readOnly) return;
+  const from = $("rateFromCurrency").value;
+  const val = parseFloat($("rateValue").value) || 1;
+  if (from === "USD") { usdToBrlRate = val; localStorage.setItem("kipu_usd_brl", val); }
+  else { penToBrlRate = val; localStorage.setItem("kipu_pen_brl", val); }
+  renderExpenses();
+  renderBalance();
+});
+
+populateRateToOptions();
+updateRateWidget();
 
 document.querySelectorAll("[data-exptype]").forEach((btn) => {
   btn.addEventListener("click", () => {
