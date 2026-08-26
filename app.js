@@ -355,6 +355,7 @@ async function openTrip(tripId) {
   subscribeEmergencia();
   subscribeHistorico();
   subscribeReminders();
+  autoFetchRates();
 
   calendarViewDate = new Date();
   selectedCalDate = null;
@@ -1100,6 +1101,37 @@ let expTypeSeg = "shared";
 let usdToBrlRate = parseFloat(localStorage.getItem("kipu_usd_brl")) || 5.40;
 let penToBrlRate = parseFloat(localStorage.getItem("kipu_pen_brl")) || 1.45;
 
+const LS_RATE_FETCH_DATE = "kipu_rate_fetch_date";
+const LS_RATE_MANUAL_DATE = "kipu_rate_manual_date";
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+
+// Busca a cotação do dia automaticamente (uma vez por dia, cacheada).
+// Se o usuário já editou manualmente hoje, não sobrescreve o que ele digitou.
+async function autoFetchRates() {
+  const today = todayStr();
+  if (localStorage.getItem(LS_RATE_FETCH_DATE) === today) return;
+  if (localStorage.getItem(LS_RATE_MANUAL_DATE) === today) {
+    localStorage.setItem(LS_RATE_FETCH_DATE, today);
+    return;
+  }
+  try {
+    const res = await fetch("https://open.er-api.com/v6/latest/USD");
+    const data = await res.json();
+    if (data.result === "success" && data.rates && data.rates.BRL && data.rates.PEN) {
+      usdToBrlRate = data.rates.BRL;
+      penToBrlRate = data.rates.BRL / data.rates.PEN;
+      localStorage.setItem("kipu_usd_brl", usdToBrlRate);
+      localStorage.setItem("kipu_pen_brl", penToBrlRate);
+      localStorage.setItem(LS_RATE_FETCH_DATE, today);
+      if (document.getElementById("rateFromCurrency")) updateRateWidget();
+      renderExpenses();
+      renderBalance();
+    }
+  } catch (err) {
+    console.warn("Não foi possível buscar a cotação automática (offline?):", err);
+  }
+}
+
 function usdRate() { return usdToBrlRate; }
 function penRate() { return penToBrlRate; }
 function toBRL(value, currency) {
@@ -1238,6 +1270,7 @@ $("rateValue").addEventListener("input", () => {
   const val = parseFloat($("rateValue").value) || 1;
   if (from === "USD") { usdToBrlRate = val; localStorage.setItem("kipu_usd_brl", val); }
   else { penToBrlRate = val; localStorage.setItem("kipu_pen_brl", val); }
+  localStorage.setItem(LS_RATE_MANUAL_DATE, todayStr());
   renderExpenses();
   renderBalance();
 });

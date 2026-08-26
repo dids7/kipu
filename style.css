@@ -342,6 +342,14 @@ input[type="number"]::placeholder, input[type="search"]::placeholder{
 }
 .rate-row select{ width:auto; min-width:64px; flex:0 0 auto; }
 .rate-row input{ width:90px; flex:0 0 auto; }
+
+.rate-credit{
+  font-size:9.5px;
+  color:var(--muted);
+  opacity:0.55;
+  text-decoration:none;
+}
+.rate-credit:hover{ opacity:0.85; text-decoration:underline; }
 .form-row > div{ flex:1; }
 .checkbox-group{ display:flex; flex-wrap:wrap; gap:9px; margin-top:2px; }
 .checkbox-chip{
