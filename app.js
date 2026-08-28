@@ -167,6 +167,50 @@ function mapLink(address) {
   return `<a href="${url}" target="_blank" rel="noopener" class="map-link" onclick="event.stopPropagation()">📍 Ver no mapa</a>`;
 }
 
+function googleCalendarUrl(it) {
+  if (!it.date) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  const dateCompact = it.date.replace(/-/g, "");
+  let startStr, endStr;
+
+  if (it.time) {
+    const [sh, sm] = it.time.split(":").map(Number);
+    startStr = `${dateCompact}T${pad(sh)}${pad(sm)}00`;
+    let eh = sh + 1, em = sm;
+    if (it.endTime) {
+      const [ph, pm] = it.endTime.split(":").map(Number);
+      eh = ph; em = pm;
+    }
+    endStr = `${dateCompact}T${pad(eh % 24)}${pad(em)}00`;
+  } else {
+    const [y, m, d] = it.date.split("-").map(Number);
+    const start = new Date(y, m - 1, d);
+    const end = new Date(y, m - 1, d + 1);
+    const fmt = (dt) => `${dt.getFullYear()}${pad(dt.getMonth() + 1)}${pad(dt.getDate())}`;
+    startStr = fmt(start);
+    endStr = fmt(end);
+  }
+
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: it.title || "",
+    dates: `${startStr}/${endStr}`
+  });
+  if (it.location) params.set("location", it.location);
+  const detailParts = [];
+  if (it.value) detailParts.push(`Valor: R$ ${Number(it.value).toFixed(2)}`);
+  if (it.responsible) detailParts.push(`Responsável: ${nameFor(it.responsible)}`);
+  if (detailParts.length) params.set("details", detailParts.join(" · "));
+
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function calendarLink(it) {
+  const url = googleCalendarUrl(it);
+  if (!url) return "";
+  return `<a href="${url}" target="_blank" rel="noopener" class="map-link" onclick="event.stopPropagation()">📅 ${t("itinerary.addToCalendar")}</a>`;
+}
+
 
 function fmtDate(d) {
   if (!d) return "";
@@ -657,7 +701,7 @@ function subscribeItinerario() {
               ${it.responsible ? ` · resp: ${nameFor(it.responsible)}` : ""}
               ${it.location ? ` · ${it.location}` : ""}
             </div>
-            ${mapLink(it.location)}
+            ${mapLink(it.location)} ${calendarLink(it)}
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             <button class="item-del" data-action="edit" title="Editar">✎</button>
@@ -1660,6 +1704,7 @@ function renderItineraryForDay(iso) {
               <div class="card-title" style="font-size:14px;">${it.title}</div>
               <div class="card-meta">${it.time ? it.time + (it.endTime ? "–" + it.endTime : "") : ""}${hasValue ? " · R$ " + Number(it.value).toFixed(2) : ""}</div>
               ${it.location ? `<div class="card-meta">${it.location} ${mapLink(it.location)}</div>` : ""}
+              <div class="card-meta">${calendarLink(it)}</div>
             </div>
             <span class="badge badge-${it.status}">${it.status}</span>
           </div>
