@@ -65,7 +65,7 @@ applyLanguage(currentLang);
 
 // ================= TEMA (cor do app) =================
 const LS_THEME_KEY = "kipu_theme";
-const VALID_THEMES = ["default", "warm", "cool", "night"];
+const VALID_THEMES = ["default", "forest", "volcanic", "night"];
 let currentTheme = localStorage.getItem(LS_THEME_KEY) || "default";
 if (!VALID_THEMES.includes(currentTheme)) currentTheme = "default";
 
