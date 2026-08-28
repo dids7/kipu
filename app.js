@@ -1103,15 +1103,12 @@ $("addItemBtn").addEventListener("click", async () => {
 });
 
 const DEFAULT_PACKING_LIST = [
+  // 🔒 Pessoal — cada um leva o próprio
   { name: "Passaporte / documento de identidade", shared: false },
   { name: "Cópia dos documentos (física ou digital)", shared: false },
-  { name: "Carregador de celular", shared: false },
-  { name: "Power bank", shared: true },
-  { name: "Adaptador de tomada", shared: true },
   { name: "Fone de ouvido", shared: false },
   { name: "Escova e pasta de dente", shared: false },
   { name: "Remédios de uso pessoal", shared: false },
-  { name: "Protetor solar", shared: true },
   { name: "Óculos de sol", shared: false },
   { name: "Casaco/agasalho", shared: false },
   { name: "Meias extras", shared: false },
@@ -1120,7 +1117,21 @@ const DEFAULT_PACKING_LIST = [
   { name: "Necessaire de higiene", shared: false },
   { name: "Toalha de banho pequena", shared: false },
   { name: "Máscara de dormir / tampão de ouvido", shared: false },
-  { name: "Dinheiro em espécie / cartão", shared: false }
+  { name: "Dinheiro em espécie / cartão", shared: false },
+  { name: "Squeeze / garrafa de água", shared: false },
+  { name: "Boné/chapéu", shared: false },
+  { name: "Travesseiro de pescoço", shared: false },
+  { name: "Guarda-chuva compactável / capa de chuva", shared: false },
+  { name: "Protetor labial", shared: false },
+  { name: "Escova de cabelo/pente", shared: false },
+  { name: "Desodorante", shared: false },
+  // 🧵 Compartilhado — vale coordenar quem leva
+  { name: "Power bank", shared: true },
+  { name: "Adaptador de tomada", shared: true },
+  { name: "Protetor solar", shared: true },
+  { name: "Kit de primeiros socorros", shared: true },
+  { name: "Repelente de insetos", shared: true },
+  { name: "Carregador de celular", shared: true }
 ];
 
 function updateDefaultToggleState() {
