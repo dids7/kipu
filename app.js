@@ -609,9 +609,9 @@ function subscribeItinerario() {
   });
   unsubscribers.push(unsub);
 }
-const statusCycle = { cogitando: "programado", programado: "confirmado", confirmado: "cogitando" };
+const statusCycle = { programado: "confirmado", confirmado: "programado" };
 async function cycleItinerarioStatus(id, current, title) {
-  const next = statusCycle[current];
+  const next = statusCycle[current] || "programado";
   await updateDoc(doc(db, "trips", currentTripId, "itinerario", id), { status: next });
   logActivity("itinerario", "status alterado", `"${title}": ${current} → ${next}`);
 }
@@ -623,7 +623,7 @@ function openItinerarioForEdit(id, it) {
   $("itEndTime").value = it.endTime || "";
   $("itTitle").value = it.title || "";
   $("itLocation").value = it.location || "";
-  $("itStatus").value = it.status || "cogitando";
+  $("itStatus").value = it.status && it.status !== "cogitando" ? it.status : "programado";
   $("itValue").value = it.value || "";
   $("itPaymentStatus").value = it.paymentStatus || "pendente";
   $("itResponsible").value = it.responsible || "";
@@ -636,7 +636,7 @@ function resetItinerarioForm() {
   editingItinerarioId = null;
   $("itDate").value = ""; $("itTime").value = ""; $("itEndTime").value = ""; $("itTitle").value = "";
   $("itLocation").value = "";
-  $("itValue").value = ""; $("itResponsible").value = ""; $("itStatus").value = "cogitando";
+  $("itValue").value = ""; $("itResponsible").value = ""; $("itStatus").value = "programado";
   $("itPaymentStatus").value = "pendente";
   $("saveItinerarioBtn").textContent = "Salvar";
   $("itinerarioForm").classList.add("hidden");
