@@ -63,6 +63,31 @@ document.querySelectorAll(".lang-btn").forEach((btn) => {
 });
 applyLanguage(currentLang);
 
+// ================= TEMA (cor do app) =================
+const LS_THEME_KEY = "kipu_theme";
+const VALID_THEMES = ["default", "warm", "cool", "night"];
+let currentTheme = localStorage.getItem(LS_THEME_KEY) || "default";
+if (!VALID_THEMES.includes(currentTheme)) currentTheme = "default";
+
+function applyTheme(theme) {
+  if (!VALID_THEMES.includes(theme)) theme = "default";
+  currentTheme = theme;
+  localStorage.setItem(LS_THEME_KEY, theme);
+  if (theme === "default") {
+    document.documentElement.removeAttribute("data-theme");
+  } else {
+    document.documentElement.setAttribute("data-theme", theme);
+  }
+  document.querySelectorAll(".theme-swatch").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.theme === theme);
+  });
+}
+
+document.querySelectorAll(".theme-swatch").forEach((btn) => {
+  btn.addEventListener("click", () => applyTheme(btn.dataset.theme));
+});
+applyTheme(currentTheme);
+
 
 // ================= PWA: instalação =================
 if ("serviceWorker" in navigator) {

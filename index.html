@@ -49,8 +49,29 @@
   <div class="modal-box">
     <div class="modal-title" data-i18n="profile.title">Como podemos te chamar?</div>
     <div class="modal-message" data-i18n="profile.desc">Seu nome aparece pro grupo no lugar do seu e-mail em todo o app — mais fácil de reconhecer quem é quem.</div>
-    <input type="text" id="profileNameInput" data-i18n-placeholder="profile.namePlaceholder" placeholder="Seu nome" style="margin-bottom:14px;">
-    <div class="modal-actions">
+    <input type="text" id="profileNameInput" data-i18n-placeholder="profile.namePlaceholder" placeholder="Seu nome" style="margin-bottom:16px;">
+
+    <div class="card-title" style="font-size:12px; margin-bottom:8px;" data-i18n="profile.themeTitle">Cor do app</div>
+    <div class="theme-picker" id="themePicker">
+      <button class="theme-swatch" data-theme="default">
+        <span class="swatch-dot" style="background:#F2994A;"></span>
+        <span data-i18n="theme.default">Padrão</span>
+      </button>
+      <button class="theme-swatch" data-theme="warm">
+        <span class="swatch-dot" style="background:#E8703A;"></span>
+        <span data-i18n="theme.warm">Quente</span>
+      </button>
+      <button class="theme-swatch" data-theme="cool">
+        <span class="swatch-dot" style="background:#4FA3D1;"></span>
+        <span data-i18n="theme.cool">Frio</span>
+      </button>
+      <button class="theme-swatch" data-theme="night">
+        <span class="swatch-dot" style="background:#C2A878;"></span>
+        <span data-i18n="theme.night">Noturno</span>
+      </button>
+    </div>
+
+    <div class="modal-actions" style="margin-top:16px;">
       <button id="profileNameSkipBtn" class="btn btn-outline" data-i18n="profile.skip">Agora não</button>
       <button id="profileNameSaveBtn" class="btn btn-primary" data-i18n="common.save">Salvar</button>
     </div>
