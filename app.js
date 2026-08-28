@@ -1143,17 +1143,21 @@ function updateDefaultToggleState() {
 
 $("defaultListToggle").addEventListener("click", async () => {
   const btn = $("defaultListToggle");
+  const feedbackEl = $("defaultListFeedback");
   const hasDefaults = malaItemsCache.some((i) => i.isDefault);
 
   if (hasDefaults) {
     const toRemove = malaItemsCache.filter((i) => i.isDefault);
     await Promise.all(toRemove.map((i) => deleteDoc(doc(db, "trips", currentTripId, "mala", i.id))));
     logActivity("mala", "lista padrão removida", `${toRemove.length} item(ns) essenciais removidos`);
+    feedbackEl.classList.add("hidden");
     return;
   }
 
   const existingNames = new Set(malaItemsCache.map((i) => i.name.trim().toLowerCase()));
   const toAdd = DEFAULT_PACKING_LIST.filter((item) => !existingNames.has(item.name.trim().toLowerCase()));
+  const sharedCount = toAdd.filter((i) => i.shared).length;
+  const personalCount = toAdd.filter((i) => !i.shared).length;
 
   await Promise.all(toAdd.map((item) =>
     addDoc(collection(db, "trips", currentTripId, "mala"), {
@@ -1161,6 +1165,9 @@ $("defaultListToggle").addEventListener("click", async () => {
     })
   ));
   logActivity("mala", "lista padrão adicionada", `${toAdd.length} item(ns) essenciais inseridos`);
+
+  feedbackEl.textContent = `✓ ${t("packing.addedTo")} — 🔒 ${personalCount} ${t("badge.onlyMe")} · 🧵 ${sharedCount} ${t("badge.group")}`;
+  feedbackEl.classList.remove("hidden");
 });
 function ownerColor(email) {
   const emails = currentTripData.participantEmails || [];
