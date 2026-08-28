@@ -3,7 +3,7 @@ import {
   signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
+  collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot,
   query, where, orderBy, serverTimestamp, getDocs, getDoc, arrayUnion
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
@@ -202,20 +202,82 @@ $("logoutBtn2").addEventListener("click", () => signOut(auth));
 const LS_TRIP_KEY = "kipu_last_trip_id";
 const LS_TAB_KEY = "kipu_last_tab";
 
+let myDisplayName = null;
+let participantNames = {}; // email -> nome
+
+function nameFor(email) {
+  if (!email) return "";
+  return participantNames[email] || email;
+}
+
+async function loadParticipantNames(emails) {
+  participantNames = {};
+  await Promise.all((emails || []).map(async (email) => {
+    try {
+      const snap = await getDoc(doc(db, "users", email));
+      if (snap.exists() && snap.data().name) participantNames[email] = snap.data().name;
+    } catch (err) { /* segue sem nome pra esse e-mail */ }
+  }));
+}
+
+function checkAndPromptProfile() {
+  return new Promise(async (resolve) => {
+    try {
+      const snap = await getDoc(doc(db, "users", currentUser.email));
+      if (snap.exists() && snap.data().name) {
+        myDisplayName = snap.data().name;
+        resolve();
+        return;
+      }
+    } catch (err) {
+      console.warn("Não foi possível checar o perfil:", err);
+      resolve();
+      return;
+    }
+
+    $("profileNameInput").value = "";
+    $("nameModal").classList.remove("hidden");
+    $("profileNameInput").focus();
+
+    const onSkip = () => { cleanup(); resolve(); };
+    const onSave = async () => {
+      const name = $("profileNameInput").value.trim();
+      if (name) {
+        await setDoc(doc(db, "users", currentUser.email), { name, email: currentUser.email }, { merge: true });
+        myDisplayName = name;
+      }
+      cleanup();
+      resolve();
+    };
+    const onEnter = (e) => { if (e.key === "Enter") onSave(); };
+    function cleanup() {
+      $("nameModal").classList.add("hidden");
+      $("profileNameSkipBtn").removeEventListener("click", onSkip);
+      $("profileNameSaveBtn").removeEventListener("click", onSave);
+      $("profileNameInput").removeEventListener("keydown", onEnter);
+    }
+    $("profileNameSkipBtn").addEventListener("click", onSkip);
+    $("profileNameSaveBtn").addEventListener("click", onSave);
+    $("profileNameInput").addEventListener("keydown", onEnter);
+  });
+}
+
 onAuthStateChanged(auth, (user) => {
   currentUser = user;
   if (user) {
-    $("userEmailLabel").textContent = user.email;
     hide($("loginScreen"));
-    const savedTripId = localStorage.getItem(LS_TRIP_KEY);
-    if (savedTripId) {
-      openTrip(savedTripId).catch(() => {
-        localStorage.removeItem(LS_TRIP_KEY);
+    checkAndPromptProfile().then(() => {
+      $("userEmailLabel").textContent = myDisplayName || user.email;
+      const savedTripId = localStorage.getItem(LS_TRIP_KEY);
+      if (savedTripId) {
+        openTrip(savedTripId).catch(() => {
+          localStorage.removeItem(LS_TRIP_KEY);
+          goToTripPicker();
+        });
+      } else {
         goToTripPicker();
-      });
-    } else {
-      goToTripPicker();
-    }
+      }
+    });
   } else {
     show($("loginScreen"));
     hide($("tripPickerScreen"));
@@ -339,6 +401,8 @@ async function openTrip(tripId) {
   const allSnap = await getDocs(query(collection(db, "trips"), where("participantEmails", "array-contains", currentUser.email)));
   allUserTrips = [];
   allSnap.forEach((d) => allUserTrips.push({ id: d.id, ...d.data() }));
+
+  await loadParticipantNames(currentTripData.participantEmails);
 
   hide($("tripPickerScreen"));
   show($("appScreen"));
@@ -468,7 +532,7 @@ function renderParticipants(trip, editable) {
     row.className = "list-row";
     const isLast = emails.length === 1;
     row.innerHTML = `
-      <span class="card-meta">${email}</span>
+      <span class="card-meta" title="${email}">${nameFor(email)}</span>
       ${editable ? `<button class="item-del" ${isLast ? "disabled title='precisa ter ao menos 1 participante'" : ""}>✕</button>` : ""}
     `;
     if (editable && !isLast) {
@@ -486,6 +550,7 @@ async function removeParticipant(email) {
   currentTripData.participantEmails = updated;
   const idx = allUserTrips.findIndex((t) => t.id === currentTripId);
   if (idx >= 0) allUserTrips[idx].participantEmails = updated;
+  await loadParticipantNames(currentTripData.participantEmails);
   if (selectedCalDate) updateDateTripInfo(selectedCalDate);
   populateResponsibleSelects();
   logActivity("geral", "participante removido", email);
@@ -502,6 +567,7 @@ $("addParticipantBtn").addEventListener("click", async () => {
   currentTripData.participantEmails = updated;
   const idx = allUserTrips.findIndex((t) => t.id === currentTripId);
   if (idx >= 0) allUserTrips[idx].participantEmails = updated;
+  await loadParticipantNames(currentTripData.participantEmails);
   if (selectedCalDate) updateDateTripInfo(selectedCalDate);
   populateResponsibleSelects();
   logActivity("geral", "participante adicionado", email);
@@ -521,7 +587,7 @@ function renderCountdown() {
 
 function populateResponsibleSelects() {
   const emails = currentTripData.participantEmails || [];
-  const opts = emails.map((e) => `<option value="${e}">${e}</option>`).join("");
+  const opts = emails.map((e) => `<option value="${e}">${nameFor(e)}</option>`).join("");
   ["itResponsible", "taskResponsible", "expPaidBy"].forEach((id) => {
     $(id).innerHTML = (id === "itResponsible" ? "<option value=''>—</option>" : "") + opts;
   });
@@ -530,7 +596,7 @@ function populateResponsibleSelects() {
   emails.forEach((e) => {
     const chip = document.createElement("div");
     chip.className = "checkbox-chip checked";
-    chip.textContent = e;
+    chip.textContent = nameFor(e);
     chip.dataset.email = e;
     chip.addEventListener("click", () => chip.classList.toggle("checked"));
     splitGroup.appendChild(chip);
@@ -588,7 +654,7 @@ function subscribeItinerario() {
             <div class="card-meta">
               ${fmtDate(it.date)} ${timeRange}
               ${hasValue ? ` · R$ ${Number(it.value).toFixed(2)} (${it.paymentStatus || "pendente"})` : ""}
-              ${it.responsible ? ` · resp: ${it.responsible}` : ""}
+              ${it.responsible ? ` · resp: ${nameFor(it.responsible)}` : ""}
               ${it.location ? ` · ${it.location}` : ""}
             </div>
             ${mapLink(it.location)}
@@ -1025,11 +1091,12 @@ function renderGroupProgress() {
     const g = groups[k];
     const badges = g.entries.map((e) => {
       const color = ownerColor(e.ownerEmail);
-      const initial = (e.ownerEmail || "?").trim().charAt(0).toUpperCase();
+      const displayName = nameFor(e.ownerEmail);
+      const initial = (displayName || "?").trim().charAt(0).toUpperCase();
       const style = e.done
         ? `background:${color}; color:#1B2A41; border-color:${color};`
         : `background:transparent; color:${color}; border-color:${color};`;
-      return `<span class="owner-badge" style="${style}" title="${e.ownerEmail}${e.done ? " ✓" : ""}">${initial}</span>`;
+      return `<span class="owner-badge" style="${style}" title="${displayName}${e.done ? " ✓" : ""}">${initial}</span>`;
     }).join("");
     return `
       <div class="list-row">
@@ -1054,7 +1121,7 @@ function subscribeTarefas() {
         <div class="card-row">
           <div>
             <div class="card-title">${task.description}</div>
-            <div class="card-meta">resp: ${task.responsible}</div>
+            <div class="card-meta">resp: ${nameFor(task.responsible)}</div>
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             <button class="item-del" data-action="edit" title="Editar">✎</button>
@@ -1193,7 +1260,7 @@ function renderExpenses() {
       card.innerHTML = `
         <div>
           <div class="card-title">${e.description} — ${fmtOriginal(e.value, currency)}${converted}</div>
-          <div class="card-meta">pago por ${e.paidBy} · dividido entre ${(e.splitAmong || []).length} pessoa(s)</div>
+          <div class="card-meta">pago por ${nameFor(e.paidBy)} · dividido entre ${(e.splitAmong || []).length} pessoa(s)</div>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
           <button class="item-del" data-action="edit" title="Editar">✎</button>
@@ -1247,7 +1314,7 @@ function renderBalance() {
   el.innerHTML = Object.entries(balances).map(([email, val]) => {
     const cls = val >= 0 ? "balance-positive" : "balance-negative";
     const label = val >= 0 ? "a receber" : "deve";
-    return `<div class="list-row"><span class="card-meta">${email}</span><span class="${cls}">${fmtBRL(Math.abs(val))} ${label}</span></div>`;
+    return `<div class="list-row"><span class="card-meta">${nameFor(email)}</span><span class="${cls}">${fmtBRL(Math.abs(val))} ${label}</span></div>`;
   }).join("");
 }
 
@@ -1439,7 +1506,7 @@ function subscribeHistorico() {
       const row = document.createElement("div");
       row.className = "log-entry";
       const time = log.timestamp ? log.timestamp.toDate().toLocaleString("pt-BR") : "agora";
-      row.innerHTML = `<span class="log-author">${log.authorEmail}</span> — ${log.action}: ${log.description} <div class="log-time">${time}</div>`;
+      row.innerHTML = `<span class="log-author">${nameFor(log.authorEmail)}</span> — ${log.action}: ${log.description} <div class="log-time">${time}</div>`;
       listEl.appendChild(row);
     });
   });

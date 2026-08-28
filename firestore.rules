@@ -26,7 +26,6 @@ service cloud.firestore {
         ||
         (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantEmails']) &&
-          request.resource.data.participantEmails.size() == resource.data.participantEmails.size() + 1 &&
           request.auth.token.email in request.resource.data.participantEmails &&
           !(request.auth.token.email in resource.data.participantEmails)
         )
@@ -42,6 +41,16 @@ service cloud.firestore {
         allow read, write: if request.auth != null
           && request.auth.token.email in get(/databases/$(database)/documents/trips/$(tripId)).data.participantEmails;
       }
+    }
+
+    // Perfis de usuário (nome de exibição). O ID do documento é o próprio
+    // e-mail. Qualquer usuário logado pode LER qualquer perfil (precisa
+    // pra mostrar o nome de outros participantes), mas só pode ESCREVER
+    // no próprio perfil (o e-mail do documento tem que bater com o e-mail
+    // de quem está logado).
+    match /users/{userEmail} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.email == userEmail;
     }
   }
 }
