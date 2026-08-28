@@ -821,11 +821,14 @@ input[type="number"]::placeholder, input[type="search"]::placeholder, input[type
     grid-column:1;
     min-width:0;
   }
-  #panel-mala h3, #panel-mala .progress-card{
+  #panel-mala #groupItemsTitle, #panel-mala .progress-card{
     grid-column:2;
     grid-row: 1 / span 6;
     min-width:0;
   }
+  #panel-mala .progress-card{ padding:8px 18px; }
+  #panel-mala .progress-card .list-row{ padding:13px 2px; }
+  #panel-mala .owner-badge{ width:24px; height:24px; font-size:11px; }
 
   /* Calendário: informações da data selecionada ao lado, não embaixo */
   #panel-geral{

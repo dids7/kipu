@@ -1103,24 +1103,24 @@ $("addItemBtn").addEventListener("click", async () => {
 });
 
 const DEFAULT_PACKING_LIST = [
-  "Passaporte / documento de identidade",
-  "Cópia dos documentos (física ou digital)",
-  "Carregador de celular",
-  "Power bank",
-  "Adaptador de tomada",
-  "Fone de ouvido",
-  "Escova e pasta de dente",
-  "Remédios de uso pessoal",
-  "Protetor solar",
-  "Óculos de sol",
-  "Casaco/agasalho",
-  "Meias extras",
-  "Roupa íntima extra",
-  "Chinelo",
-  "Necessaire de higiene",
-  "Toalha de banho pequena",
-  "Máscara de dormir / tampão de ouvido",
-  "Dinheiro em espécie / cartão"
+  { name: "Passaporte / documento de identidade", shared: false },
+  { name: "Cópia dos documentos (física ou digital)", shared: false },
+  { name: "Carregador de celular", shared: false },
+  { name: "Power bank", shared: true },
+  { name: "Adaptador de tomada", shared: true },
+  { name: "Fone de ouvido", shared: false },
+  { name: "Escova e pasta de dente", shared: false },
+  { name: "Remédios de uso pessoal", shared: false },
+  { name: "Protetor solar", shared: true },
+  { name: "Óculos de sol", shared: false },
+  { name: "Casaco/agasalho", shared: false },
+  { name: "Meias extras", shared: false },
+  { name: "Roupa íntima extra", shared: false },
+  { name: "Chinelo", shared: false },
+  { name: "Necessaire de higiene", shared: false },
+  { name: "Toalha de banho pequena", shared: false },
+  { name: "Máscara de dormir / tampão de ouvido", shared: false },
+  { name: "Dinheiro em espécie / cartão", shared: false }
 ];
 
 function updateDefaultToggleState() {
@@ -1142,11 +1142,11 @@ $("defaultListToggle").addEventListener("click", async () => {
   }
 
   const existingNames = new Set(malaItemsCache.map((i) => i.name.trim().toLowerCase()));
-  const toAdd = DEFAULT_PACKING_LIST.filter((name) => !existingNames.has(name.trim().toLowerCase()));
+  const toAdd = DEFAULT_PACKING_LIST.filter((item) => !existingNames.has(item.name.trim().toLowerCase()));
 
-  await Promise.all(toAdd.map((name) =>
+  await Promise.all(toAdd.map((item) =>
     addDoc(collection(db, "trips", currentTripId, "mala"), {
-      name, type: "shared", done: false, ownerEmail: currentUser.email, isDefault: true, qty: 1
+      name: item.name, type: item.shared ? "shared" : "personal", done: false, ownerEmail: currentUser.email, isDefault: true, qty: 1
     })
   ));
   logActivity("mala", "lista padrão adicionada", `${toAdd.length} item(ns) essenciais inseridos`);
