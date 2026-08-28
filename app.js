@@ -684,6 +684,10 @@ function subscribeItinerario() {
     listEl.innerHTML = "";
     snap.forEach((d) => {
       const it = d.data();
+      if (it.status === "cogitando") {
+        updateDoc(doc(db, "trips", currentTripId, "itinerario", d.id), { status: "programado" }).catch(() => {});
+        it.status = "programado";
+      }
       if (!itinerarioByDate[it.date]) itinerarioByDate[it.date] = [];
       itinerarioByDate[it.date].push({ id: d.id, ...it });
 
@@ -1706,7 +1710,7 @@ function renderItineraryForDay(iso) {
               ${it.location ? `<div class="card-meta">${it.location} ${mapLink(it.location)}</div>` : ""}
               <div class="card-meta">${calendarLink(it)}</div>
             </div>
-            <span class="badge badge-${it.status}">${it.status}</span>
+            <span class="badge badge-${it.status}">${t("status." + it.status)}</span>
           </div>
         </div>`;
     }).join("") +
