@@ -264,26 +264,14 @@ async function loadParticipantNames(emails) {
   }));
 }
 
-function checkAndPromptProfile() {
-  return new Promise(async (resolve) => {
-    try {
-      const snap = await getDoc(doc(db, "users", currentUser.email));
-      if (snap.exists() && snap.data().name) {
-        myDisplayName = snap.data().name;
-        resolve();
-        return;
-      }
-    } catch (err) {
-      console.warn("Não foi possível checar o perfil:", err);
-      resolve();
-      return;
-    }
-
-    $("profileNameInput").value = "";
+function showNameModal({ prefill = "", skipText = null } = {}) {
+  return new Promise((resolve) => {
+    $("profileNameInput").value = prefill;
+    if (skipText) $("profileNameSkipBtn").textContent = skipText;
     $("nameModal").classList.remove("hidden");
     $("profileNameInput").focus();
 
-    const onSkip = () => { cleanup(); resolve(); };
+    const onSkip = () => { cleanup(); resolve(null); };
     const onSave = async () => {
       const name = $("profileNameInput").value.trim();
       if (name) {
@@ -291,7 +279,7 @@ function checkAndPromptProfile() {
         myDisplayName = name;
       }
       cleanup();
-      resolve();
+      resolve(name || null);
     };
     const onEnter = (e) => { if (e.key === "Enter") onSave(); };
     function cleanup() {
@@ -306,12 +294,38 @@ function checkAndPromptProfile() {
   });
 }
 
+function checkAndPromptProfile() {
+  return new Promise(async (resolve) => {
+    try {
+      const snap = await getDoc(doc(db, "users", currentUser.email));
+      if (snap.exists() && snap.data().name) {
+        myDisplayName = snap.data().name;
+        resolve();
+        return;
+      }
+    } catch (err) {
+      console.warn("Não foi possível checar o perfil:", err);
+      resolve();
+      return;
+    }
+    await showNameModal({ prefill: "" });
+    resolve();
+  });
+}
+
+$("profileBtn")?.addEventListener("click", async () => {
+  await showNameModal({ prefill: myDisplayName || "", skipText: t("common.cancel") });
+  $("userEmailLabel").textContent = myDisplayName || currentUser.email;
+  $("userEmailLabel").title = currentUser.email;
+});
+
 onAuthStateChanged(auth, (user) => {
   currentUser = user;
   if (user) {
     hide($("loginScreen"));
     checkAndPromptProfile().then(() => {
       $("userEmailLabel").textContent = myDisplayName || user.email;
+      $("userEmailLabel").title = user.email;
       const savedTripId = localStorage.getItem(LS_TRIP_KEY);
       if (savedTripId) {
         openTrip(savedTripId).catch(() => {
