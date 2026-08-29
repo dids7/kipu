@@ -221,7 +221,8 @@
     </header>
 
     <nav class="tabs" id="tabNav">
-      <button class="tab active" data-tab="geral" data-i18n="nav.calendar">Calendário</button>
+      <button class="tab active" data-tab="hoje" data-i18n="nav.today">Hoje</button>
+      <button class="tab" data-tab="geral" data-i18n="nav.calendar">Calendário</button>
       <button class="tab" data-tab="itinerario" data-i18n="nav.itinerary">Itinerário</button>
       <button class="tab" data-tab="estadia" data-i18n="nav.stay">Estadia</button>
       <button class="tab" data-tab="documentos" data-i18n="nav.documents">Documentos</button>
@@ -234,8 +235,16 @@
 
     <main id="mainContent">
 
+      <!-- HOJE -->
+      <div class="tab-panel" id="panel-hoje">
+        <h2 class="screen-title" data-i18n="hoje.title">Hoje</h2>
+        <p class="screen-sub" id="hojeStatusLine"></p>
+        <div id="hojeItineraryList"></div>
+        <div id="hojeReminderList"></div>
+      </div>
+
       <!-- CALENDÁRIO -->
-      <div class="tab-panel" id="panel-geral">
+      <div class="tab-panel hidden" id="panel-geral">
         <h2 class="screen-title" data-i18n="calendar.title">Calendário</h2>
 
         <div class="card" id="calendarCard">

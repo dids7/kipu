@@ -767,6 +767,7 @@ async function openTrip(tripId) {
   show($("appScreen"));
   $("currentTripTitle").textContent = currentTripData.name;
   renderCountdown();
+  renderHojeTab();
   populateResponsibleSelects();
 
   subscribeItinerario();
@@ -787,8 +788,11 @@ async function openTrip(tripId) {
   hide($("reminderEditor"));
   renderCalendar();
 
-  const savedTab = localStorage.getItem(LS_TAB_KEY) || "geral";
-  const tabBtn = document.querySelector(`.tab[data-tab="${savedTab}"]`);
+  // Sempre que o app É ABERTO numa viagem (login, seleção de viagem, ou volta
+  // do fundo depois de muito tempo — o que dispara loadTrip de novo), cai na
+  // aba "Hoje". Trocar de aba durante a sessão continua funcionando normal;
+  // só a ENTRADA na viagem é fixa em "Hoje", não lembra a última aba usada.
+  const tabBtn = document.querySelector('.tab[data-tab="hoje"]');
   if (tabBtn) tabBtn.click();
 }
 
@@ -967,6 +971,79 @@ function renderCountdown() {
     : `dias desde o início da viagem`;
 }
 
+// ================= HOJE =================
+// Aba de entrada: sempre que o app é aberto numa viagem, cai aqui — mostra só
+// o que importa pro dia de hoje (itinerário + lembretes), sem precisar navegar.
+function renderHojeTab() {
+  if (!currentTripData) return;
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const statusEl = $("hojeStatusLine");
+  if (todayISO < currentTripData.startDate) {
+    const diffDays = Math.ceil((new Date(currentTripData.startDate + "T00:00:00") - new Date(todayISO + "T00:00:00")) / 86400000);
+    statusEl.textContent = t("hoje.beforeTrip").replace("{d}", diffDays);
+  } else if (todayISO > currentTripData.endDate) {
+    statusEl.textContent = t("hoje.afterTrip");
+  } else {
+    const totalDays = Math.round((new Date(currentTripData.endDate + "T00:00:00") - new Date(currentTripData.startDate + "T00:00:00")) / 86400000) + 1;
+    const dayNum = Math.round((new Date(todayISO + "T00:00:00") - new Date(currentTripData.startDate + "T00:00:00")) / 86400000) + 1;
+    statusEl.textContent = t("hoje.duringTrip").replace("{day}", dayNum).replace("{total}", totalDays);
+  }
+
+  const itItems = itinerarioByDate[todayISO] || [];
+  const itEl = $("hojeItineraryList");
+  if (itItems.length === 0) {
+    itEl.innerHTML = "";
+  } else {
+    itEl.innerHTML = `<div class="card-title" style="font-size:13px; margin:12px 0 8px;">📌 ${t("hoje.itineraryHeader")}</div>` +
+      itItems.map((it) => {
+        const hasValue = it.value && Number(it.value) > 0;
+        return `
+          <div class="card" data-itin-id="${it.id}" style="padding:12px 14px; margin-bottom:8px; cursor:pointer; border-left:4px solid var(--gold);">
+            <div class="card-row">
+              <div>
+                <div class="card-title" style="font-size:14px;">${it.title}</div>
+                <div class="card-meta">${it.time ? it.time + (it.endTime ? "–" + it.endTime : "") : ""}${hasValue ? " · R$ " + Number(it.value).toFixed(2) : ""}</div>
+                ${it.location ? `<div class="card-meta">${it.location} ${mapLink(it.location)}</div>` : ""}
+              </div>
+              <span class="badge badge-${it.status}">${t("status." + it.status)}</span>
+            </div>
+          </div>`;
+      }).join("");
+    itEl.querySelectorAll("[data-itin-id]").forEach((card) => {
+      card.addEventListener("click", () => {
+        const it = itItems.find((i) => i.id === card.dataset.itinId);
+        if (!it) return;
+        const itinerarioTab = document.querySelector('.tab[data-tab="itinerario"]');
+        if (itinerarioTab) itinerarioTab.click();
+        openItinerarioForEdit(it.id, it);
+      });
+    });
+  }
+
+  const remItems = remindersByDate[todayISO] || [];
+  const remEl = $("hojeReminderList");
+  if (remItems.length === 0) {
+    remEl.innerHTML = "";
+  } else {
+    remEl.innerHTML = `<div class="card-title" style="font-size:13px; margin:12px 0 8px;">💬 ${t("hoje.remindersHeader")}</div>` +
+      remItems.map((r) => {
+        const accentColor = r.visibility === "shared" ? "var(--teal)" : "var(--red)";
+        return `
+          <div class="card" style="padding:12px 14px; margin-bottom:8px; border-left:4px solid ${accentColor};">
+            <span class="card-meta" style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink);">
+              <span class="badge badge-${r.visibility}">${r.visibility === "shared" ? t("badge.group") : t("badge.onlyMe")}</span>
+              ${r.text}
+            </span>
+          </div>`;
+      }).join("");
+  }
+
+  if (itItems.length === 0 && remItems.length === 0) {
+    itEl.innerHTML = `<div class="empty">${t("hoje.empty")}</div>`;
+  }
+}
+
+
 function populateResponsibleSelects() {
   const emails = currentTripData.participantEmails || [];
   const opts = emails.map((e) => `<option value="${e}">${nameFor(e)}</option>`).join("");
@@ -1017,6 +1094,7 @@ function subscribeItinerario() {
       listEl.innerHTML = `<div class='empty'>${t("empty.itinerary")}</div>`;
       renderCalendar();
       if (selectedCalDate) renderItineraryForDay(selectedCalDate);
+      renderHojeTab();
       return;
     }
     listEl.innerHTML = "";
@@ -1062,6 +1140,7 @@ function subscribeItinerario() {
     });
     renderCalendar();
     if (selectedCalDate) renderItineraryForDay(selectedCalDate);
+    renderHojeTab();
   });
   unsubscribers.push(unsub);
 }
@@ -2169,6 +2248,7 @@ function subscribeReminders() {
     });
     renderCalendar();
     if (selectedCalDate) renderReminderEntries(selectedCalDate);
+    renderHojeTab();
   });
   unsubscribers.push(unsub);
 }
