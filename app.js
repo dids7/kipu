@@ -152,6 +152,95 @@ document.querySelectorAll(".theme-swatch").forEach((btn) => {
 });
 applyTheme(currentTheme);
 
+// ================= ORDEM DAS ABAS (personalização por pessoa) =================
+// "Hoje" fica sempre fixa em primeiro (ver seção 5.3 da doc) — só as demais
+// abas são reordenáveis, uma preferência por pessoa (users/{email}.tabOrder),
+// não por aparelho, pra acompanhar quem usa o Kipu em mais de um lugar.
+const REORDERABLE_TABS = ["geral", "itinerario", "estadia", "documentos", "mala", "tarefas", "gastos", "emergencia", "historico"];
+const TAB_NAV_KEYS = {
+  geral: "nav.calendar", itinerario: "nav.itinerary", estadia: "nav.stay",
+  documentos: "nav.documents", mala: "nav.packing", tarefas: "nav.tasks",
+  gastos: "nav.expenses", emergencia: "nav.emergency", historico: "nav.history"
+};
+let myTabOrder = [...REORDERABLE_TABS];
+
+function sanitizeTabOrder(arr) {
+  if (!Array.isArray(arr)) return [...REORDERABLE_TABS];
+  const valid = arr.filter((id) => REORDERABLE_TABS.includes(id));
+  // Aba nova que a gente adicionar no futuro entra no fim, sem quebrar quem já customizou.
+  const missing = REORDERABLE_TABS.filter((id) => !valid.includes(id));
+  return [...valid, ...missing];
+}
+
+function applyTabOrderToNav() {
+  const nav = $("tabNav");
+  if (!nav) return;
+  ["hoje", ...myTabOrder].forEach((id) => {
+    const btn = nav.querySelector(`.tab[data-tab="${id}"]`);
+    if (btn) nav.appendChild(btn);
+  });
+}
+
+async function saveTabOrder() {
+  if (!currentUser) return;
+  try {
+    await setDoc(doc(db, "users", currentUser.email), { tabOrder: myTabOrder }, { merge: true });
+  } catch (err) {
+    console.warn("Não foi possível salvar a ordem das abas:", err);
+  }
+}
+
+function updateTabOrderDots() {
+  const listEl = $("tabOrderList");
+  const dotsEl = $("tabOrderDots");
+  if (!listEl || !dotsEl) return;
+  const rows = Array.from(listEl.children);
+  const dots = Array.from(dotsEl.children);
+  if (rows.length === 0 || dots.length === 0) return;
+  // Pontinho aceso = a linha mais próxima do topo visível da lista (indicador
+  // de posição de rolagem, como num carrossel) — não é "página", é "onde estou".
+  let closestIdx = 0;
+  let closestDist = Infinity;
+  rows.forEach((row, idx) => {
+    const dist = Math.abs(row.offsetTop - listEl.scrollTop);
+    if (dist < closestDist) { closestDist = dist; closestIdx = idx; }
+  });
+  dots.forEach((dot, idx) => dot.classList.toggle("active", idx === closestIdx));
+}
+$("tabOrderList")?.addEventListener("scroll", updateTabOrderDots);
+
+function renderTabOrderEditor() {
+  const listEl = $("tabOrderList");
+  const dotsEl = $("tabOrderDots");
+  if (!listEl || !dotsEl) return;
+
+  listEl.innerHTML = myTabOrder.map((id, idx) => `
+    <div class="list-row" data-tab-id="${id}" style="padding:8px 4px;">
+      <span class="card-meta" style="color:var(--ink); font-size:13px;">${t(TAB_NAV_KEYS[id])}</span>
+      <div style="display:flex; gap:2px;">
+        <button class="icon-btn" data-dir="up" ${idx === 0 ? "disabled" : ""} title="↑">↑</button>
+        <button class="icon-btn" data-dir="down" ${idx === myTabOrder.length - 1 ? "disabled" : ""} title="↓">↓</button>
+      </div>
+    </div>`).join("");
+
+  listEl.querySelectorAll("[data-dir]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest("[data-tab-id]");
+      const id = row.dataset.tabId;
+      const idx = myTabOrder.indexOf(id);
+      const swapWith = btn.dataset.dir === "up" ? idx - 1 : idx + 1;
+      if (swapWith < 0 || swapWith >= myTabOrder.length) return;
+      [myTabOrder[idx], myTabOrder[swapWith]] = [myTabOrder[swapWith], myTabOrder[idx]];
+      saveTabOrder();
+      renderTabOrderEditor();
+      applyTabOrderToNav();
+    });
+  });
+
+  dotsEl.innerHTML = myTabOrder.map(() => `<span class="tab-order-dot"></span>`).join("");
+  updateTabOrderDots();
+}
+
 
 // ================= PWA: instalação =================
 if ("serviceWorker" in navigator) {
@@ -359,6 +448,7 @@ function showNameModal({ prefill = "", skipText = null } = {}) {
     if (skipText) $("profileNameSkipBtn").textContent = skipText;
     $("nameModal").classList.remove("hidden");
     $("profileNameInput").focus();
+    renderTabOrderEditor();
 
     const onSkip = () => { cleanup(); resolve(null); };
     const onSave = async () => {
@@ -387,10 +477,15 @@ function checkAndPromptProfile() {
   return new Promise(async (resolve) => {
     try {
       const snap = await getDoc(doc(db, "users", currentUser.email));
-      if (snap.exists() && snap.data().name) {
-        myDisplayName = snap.data().name;
-        resolve();
-        return;
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.tabOrder) myTabOrder = sanitizeTabOrder(data.tabOrder);
+        applyTabOrderToNav();
+        if (data.name) {
+          myDisplayName = data.name;
+          resolve();
+          return;
+        }
       }
     } catch (err) {
       console.warn("Não foi possível checar o perfil:", err);

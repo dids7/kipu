@@ -701,6 +701,15 @@ input[type="number"]::placeholder, input[type="search"]::placeholder, input[type
 .icon-btn{
   background:none; border:none; color:var(--muted); cursor:pointer; font-size:18px;
 }
+.icon-btn:disabled{ opacity:0.25; cursor:default; }
+
+/* ---------- Reordenação de abas (perfil) ---------- */
+.tab-order-dot{
+  width:6px; height:6px; border-radius:50%;
+  background:transparent; border:1.5px solid var(--line);
+  transition: background 0.15s, border-color 0.15s;
+}
+.tab-order-dot.active{ background:var(--gold); border-color:var(--gold); }
 
 .map-link{
   display:inline-block;
