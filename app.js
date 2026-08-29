@@ -15,6 +15,64 @@ import { translations, SUPPORTED_LANGS, DEFAULT_LANG } from "./translations.js";
 // Declarada bem no topo pra nunca dar erro de "usar antes de declarar".
 let appIsOpen = false;
 
+// ================= PERMISSÕES (papéis) =================
+let myRole = "colaborador";
+
+const ROLE_PERMS = {
+  admin:       { viewCalendar: 1, editCalendar: 1, viewMala: 1, editMala: "all", viewTarefas: 1, editTarefas: "all", viewDocs: 1, editDocs: 1, viewHistorico: 1, addReminder: 1, addParticipant: true, removeParticipant: true, promote: true, editTrip: true, deleteTrip: true, reset: true },
+  colaborador: { viewCalendar: 1, editCalendar: 1, viewMala: 1, editMala: "all", viewTarefas: 1, editTarefas: "all", viewDocs: 1, editDocs: 1, viewHistorico: 1, addReminder: 1, addParticipant: true, removeParticipant: true, promote: false, editTrip: true, deleteTrip: false, reset: false },
+  agencia:     { viewCalendar: 1, editCalendar: 1, viewMala: 0, editMala: "none", viewTarefas: 0, editTarefas: "none", viewDocs: 0, editDocs: 0, viewHistorico: 0, addReminder: 0, addParticipant: "beforeTripStart", removeParticipant: false, promote: false, editTrip: false, deleteTrip: false, reset: false },
+  convidado:   { viewCalendar: 1, editCalendar: 0, viewMala: 1, editMala: "own", viewTarefas: 1, editTarefas: "toggle", viewDocs: 1, editDocs: 1, viewHistorico: 1, addReminder: 1, addParticipant: false, removeParticipant: false, promote: false, editTrip: false, deleteTrip: false, reset: false }
+};
+const ROLE_ORDER = ["admin", "colaborador", "agencia", "convidado"];
+
+function myPerms() {
+  return ROLE_PERMS[myRole] || ROLE_PERMS.colaborador;
+}
+function can(action) {
+  return !!myPerms()[action];
+}
+function canAddParticipant() {
+  const val = myPerms().addParticipant;
+  if (val === true) return true;
+  if (val === "beforeTripStart") {
+    return currentTripData && new Date().toISOString().slice(0, 10) < currentTripData.startDate;
+  }
+  return false;
+}
+function computeMyRole() {
+  if (!currentTripData || !currentUser) return "colaborador";
+  const roles = currentTripData.participantRoles || {};
+  return roles[currentUser.email] || "colaborador";
+}
+function roleLabel(role) {
+  return t("role." + (role || "colaborador"));
+}
+
+function applyRolePermissions() {
+  // Abas: Agência só enxerga Calendário, Itinerário e Estadia.
+  const restrictedTabs = ["mala", "tarefas", "documentos", "gastos", "emergencia", "historico"];
+  document.querySelectorAll(".tab").forEach((btn) => {
+    const tabName = btn.dataset.tab;
+    const hide = !can("viewCalendar") ? false : (myRole === "agencia" && restrictedTabs.includes(tabName));
+    btn.classList.toggle("hidden", hide);
+  });
+
+  // Botões de adicionar item, por aba.
+  $("addItinerarioToggleBtn")?.classList.toggle("hidden", !can("editCalendar"));
+  $("addEstadiaToggleBtn")?.classList.toggle("hidden", !can("editCalendar"));
+  $("addDocToggleBtn")?.classList.toggle("hidden", myPerms().editDocs !== 1 && myPerms().editDocs !== true);
+  $("addExpenseToggleBtn")?.classList.toggle("hidden", myPerms().editDocs !== 1 && myPerms().editDocs !== true);
+  $("addEmergencyToggleBtn")?.classList.toggle("hidden", myPerms().editDocs !== 1 && myPerms().editDocs !== true);
+  $("addTaskToggleBtn")?.classList.toggle("hidden", myPerms().editTarefas !== "all");
+  $("addItemBtn")?.classList.toggle("hidden", myPerms().editMala === "none");
+  $("newItemName")?.classList.toggle("hidden", myPerms().editMala === "none");
+  $("defaultListToggle")?.classList.toggle("hidden", myPerms().editMala === "none");
+
+  // Ações administrativas.
+  $("resetAppBtn")?.classList.toggle("hidden", !can("reset"));
+}
+
 // ================= IDIOMA =================
 const LS_LANG_KEY = "kipu_lang";
 let currentLang = localStorage.getItem(LS_LANG_KEY) || DEFAULT_LANG;
@@ -391,13 +449,24 @@ async function loadTripList() {
   listEl.innerHTML = "";
   snap.forEach((d) => {
     const trip = d.data();
+    const myTripRole = (trip.participantRoles || {})[currentUser.email] || (trip.participantRoles ? "colaborador" : "admin");
     const card = document.createElement("div");
     card.className = "trip-card";
     card.innerHTML = `
-      <div class="trip-card-title">${trip.name}</div>
-      <div class="trip-card-meta">${trip.destination || ""} · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}</div>
+      <div class="card-row">
+        <div>
+          <div class="trip-card-title">${trip.name}</div>
+          <div class="trip-card-meta">${trip.destination || ""} · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}</div>
+        </div>
+        ${myTripRole === "admin" ? `<button class="icon-btn" data-admin-gear title="Gerenciar viagem" style="flex:0 0 auto;">⚙️</button>` : ""}
+      </div>
     `;
-    card.addEventListener("click", () => openTrip(d.id));
+    card.addEventListener("click", (e) => {
+      if (e.target.closest("[data-admin-gear]")) return;
+      openTrip(d.id);
+    });
+    const gearBtn = card.querySelector("[data-admin-gear]");
+    if (gearBtn) gearBtn.addEventListener("click", (e) => { e.stopPropagation(); openAdminPanel(d.id); });
     listEl.appendChild(card);
   });
 }
@@ -417,12 +486,17 @@ $("createTripBtn").addEventListener("click", async () => {
     return;
   }
   const participantEmails = emailsRaw.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-  if (!participantEmails.includes(currentUser.email.toLowerCase())) {
-    participantEmails.push(currentUser.email.toLowerCase());
+  const myEmail = currentUser.email.toLowerCase();
+  if (!participantEmails.includes(myEmail)) {
+    participantEmails.push(myEmail);
   }
+  const participantRoles = {};
+  participantEmails.forEach((e) => { participantRoles[e] = e === myEmail ? "admin" : "colaborador"; });
   const docRef = await addDoc(collection(db, "trips"), {
     name, destination, startDate, endDate,
     participantEmails,
+    participantRoles,
+    defaultJoinRole: "colaborador",
     createdBy: currentUser.email,
     createdAt: serverTimestamp()
   });
@@ -452,8 +526,10 @@ $("joinCodeBtn").addEventListener("click", async () => {
     }
 
     statusEl.textContent = `Encontrado: "${tripData.name}". Entrando...`;
+    const joinRole = tripData.defaultJoinRole || "colaborador";
     await updateDoc(doc(db, "trips", tripData.id), {
-      participantEmails: arrayUnion(myEmail)
+      participantEmails: arrayUnion(myEmail),
+      [`participantRoles.${myEmail}`]: joinRole
     });
     $("joinCodeInput").value = "";
     openTrip(tripData.id);
@@ -466,6 +542,134 @@ $("joinCodeBtn").addEventListener("click", async () => {
 $("backToTripsBtn").addEventListener("click", goToTripPicker);
 
 // ---------- Abrir viagem ----------
+// ================= PAINEL DE ADMIN =================
+let adminPanelTripId = null;
+let adminPanelTripData = null;
+
+async function openAdminPanel(tripId) {
+  const snap = await getDoc(doc(db, "trips", tripId));
+  if (!snap.exists()) return;
+  adminPanelTripId = tripId;
+  adminPanelTripData = { id: tripId, ...snap.data() };
+  if (!adminPanelTripData.participantRoles) {
+    const legacyRoles = {};
+    (adminPanelTripData.participantEmails || []).forEach((e) => { legacyRoles[e] = "admin"; });
+    adminPanelTripData.participantRoles = legacyRoles;
+    adminPanelTripData.defaultJoinRole = adminPanelTripData.defaultJoinRole || "colaborador";
+    await updateDoc(doc(db, "trips", tripId), { participantRoles: legacyRoles, defaultJoinRole: adminPanelTripData.defaultJoinRole });
+  }
+  await loadParticipantNames(adminPanelTripData.participantEmails);
+  $("adminPanelTripName").textContent = adminPanelTripData.name;
+  $("adminDefaultJoinRole").value = adminPanelTripData.defaultJoinRole || "colaborador";
+  renderAdminParticipants();
+  $("adminPanelModal").classList.remove("hidden");
+}
+
+function renderAdminParticipants() {
+  const listEl = $("adminParticipantsList");
+  const emails = adminPanelTripData.participantEmails || [];
+  const roles = adminPanelTripData.participantRoles || {};
+  listEl.innerHTML = "";
+  emails.forEach((email) => {
+    const isOriginalAdmin = email === adminPanelTripData.createdBy;
+    const role = roles[email] || "colaborador";
+    const row = document.createElement("div");
+    row.className = "list-row";
+    row.style.padding = "8px 0";
+    row.innerHTML = `
+      <span class="card-meta" title="${email}">${nameFor(email)} ${isOriginalAdmin ? "🔒" : ""}</span>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <select data-role-select ${isOriginalAdmin ? "disabled" : ""} style="width:auto; font-size:11px; padding:5px 7px;">
+          <option value="admin" data-i18n="role.admin">Admin</option>
+          <option value="colaborador" data-i18n="role.colaborador">Colaborador</option>
+          <option value="agencia" data-i18n="role.agencia">Agência</option>
+          <option value="convidado" data-i18n="role.convidado">Convidado</option>
+        </select>
+        ${isOriginalAdmin ? "" : `<button class="item-del" data-remove>✕</button>`}
+      </div>
+    `;
+    const select = row.querySelector("[data-role-select]");
+    select.value = role;
+    applyLanguageToElement(select);
+    select.addEventListener("change", () => onAdminRoleChange(email, select.value, select));
+    const removeBtn = row.querySelector("[data-remove]");
+    if (removeBtn) removeBtn.addEventListener("click", () => onAdminRemoveParticipant(email));
+    listEl.appendChild(row);
+  });
+}
+
+function applyLanguageToElement(el) {
+  el.querySelectorAll("[data-i18n]").forEach((opt) => { opt.textContent = t(opt.getAttribute("data-i18n")); });
+}
+
+async function onAdminRoleChange(email, newRole, selectEl) {
+  if (newRole === "admin") {
+    const ok = await new Promise((resolve) => {
+      $("promoteConfirmMessage").textContent = `Tem certeza? Isso dá a ${nameFor(email)} o mesmo poder que você tem, incluindo excluir a viagem e resetar dados.`;
+      $("promoteConfirmModal").classList.remove("hidden");
+      const onYes = () => { cleanup(); resolve(true); };
+      const onNo = () => { cleanup(); resolve(false); };
+      function cleanup() {
+        $("promoteConfirmModal").classList.add("hidden");
+        $("promoteConfirmBtn").removeEventListener("click", onYes);
+        $("promoteCancelBtn").removeEventListener("click", onNo);
+      }
+      $("promoteConfirmBtn").addEventListener("click", onYes);
+      $("promoteCancelBtn").addEventListener("click", onNo);
+    });
+    if (!ok) { selectEl.value = adminPanelTripData.participantRoles[email] || "colaborador"; return; }
+  }
+  adminPanelTripData.participantRoles[email] = newRole;
+  await updateDoc(doc(db, "trips", adminPanelTripId), { [`participantRoles.${email}`]: newRole });
+  logActivity("geral", "papel alterado", `${email} → ${roleLabel(newRole)}`);
+  if (adminPanelTripId === currentTripId) {
+    currentTripData.participantRoles = adminPanelTripData.participantRoles;
+    myRole = computeMyRole();
+    applyRolePermissions();
+  }
+}
+
+async function onAdminRemoveParticipant(email) {
+  const ok = await confirmDialog(`Remover ${email} da viagem?`);
+  if (!ok) return;
+  const updated = adminPanelTripData.participantEmails.filter((e) => e !== email);
+  const updatedRoles = { ...adminPanelTripData.participantRoles };
+  delete updatedRoles[email];
+  await updateDoc(doc(db, "trips", adminPanelTripId), { participantEmails: updated, participantRoles: updatedRoles });
+  adminPanelTripData.participantEmails = updated;
+  adminPanelTripData.participantRoles = updatedRoles;
+  renderAdminParticipants();
+  logActivity("geral", "participante removido", email);
+}
+
+$("adminAddParticipantBtn").addEventListener("click", async () => {
+  const email = $("adminNewEmail").value.trim().toLowerCase();
+  const role = $("adminNewRole").value;
+  if (!email || !email.includes("@")) { alert("Digite um e-mail válido."); return; }
+  if ((adminPanelTripData.participantEmails || []).includes(email)) { alert("Esse participante já está na viagem."); return; }
+  const updated = [...(adminPanelTripData.participantEmails || []), email];
+  const updatedRoles = { ...(adminPanelTripData.participantRoles || {}), [email]: role };
+  await updateDoc(doc(db, "trips", adminPanelTripId), { participantEmails: updated, participantRoles: updatedRoles });
+  adminPanelTripData.participantEmails = updated;
+  adminPanelTripData.participantRoles = updatedRoles;
+  await loadParticipantNames(adminPanelTripData.participantEmails);
+  renderAdminParticipants();
+  logActivity("geral", "participante adicionado", `${email} (${roleLabel(role)})`);
+  $("adminNewEmail").value = "";
+});
+
+$("adminDefaultJoinRole").addEventListener("change", async () => {
+  const role = $("adminDefaultJoinRole").value;
+  await updateDoc(doc(db, "trips", adminPanelTripId), { defaultJoinRole: role });
+  adminPanelTripData.defaultJoinRole = role;
+  if (adminPanelTripId === currentTripId) currentTripData.defaultJoinRole = role;
+});
+
+$("adminPanelCloseBtn").addEventListener("click", () => {
+  $("adminPanelModal").classList.add("hidden");
+  loadTripList();
+});
+
 async function openTrip(tripId) {
   currentTripId = tripId;
   currentTripData = null;
@@ -476,6 +680,19 @@ async function openTrip(tripId) {
     throw new Error("Viagem não encontrada ou sem acesso.");
   }
   appIsOpen = true;
+
+  // Migração: viagens criadas antes do sistema de papéis não têm
+  // participantRoles ainda. Pra não tirar acesso de ninguém que já
+  // tinha controle total, todo mundo vira "admin" nessa migração única.
+  if (!currentTripData.participantRoles) {
+    const legacyRoles = {};
+    (currentTripData.participantEmails || []).forEach((e) => { legacyRoles[e] = "admin"; });
+    const patch = { participantRoles: legacyRoles, defaultJoinRole: currentTripData.defaultJoinRole || "colaborador" };
+    await updateDoc(doc(db, "trips", tripId), patch);
+    currentTripData = { ...currentTripData, ...patch };
+  }
+  myRole = computeMyRole();
+  applyRolePermissions();
 
   localStorage.setItem(LS_TRIP_KEY, tripId);
 
@@ -540,11 +757,11 @@ function updateDateTripInfo(iso) {
   $("dateTripNameLabel").textContent = trip.name;
   $("dateTripDestinoLabel").textContent = trip.destination || "—";
   const isCurrentTrip = trip.id === currentTripId;
-  renderParticipants(trip, isCurrentTrip);
-  $("participantEditRow").classList.toggle("hidden", !isCurrentTrip);
+  renderParticipants(trip, isCurrentTrip && can("removeParticipant"));
+  $("participantEditRow").classList.toggle("hidden", !isCurrentTrip || !canAddParticipant());
   $("inviteCodeBlock").classList.toggle("hidden", !isCurrentTrip);
-  $("editTripBtn").classList.toggle("hidden", !isCurrentTrip);
-  $("deleteTripBlock").classList.toggle("hidden", !isCurrentTrip);
+  $("editTripBtn").classList.toggle("hidden", !isCurrentTrip || !can("editTrip"));
+  $("deleteTripBlock").classList.toggle("hidden", !isCurrentTrip || !can("deleteTrip"));
   $("editTripForm").classList.add("hidden");
   if (isCurrentTrip) $("inviteCodeValue").value = trip.id;
 }
@@ -609,16 +826,20 @@ $("copyInviteCodeBtn").addEventListener("click", async () => {
 function renderParticipants(trip, editable) {
   const listEl = $("participantsList");
   const emails = trip.participantEmails || [];
+  const roles = trip.participantRoles || {};
   listEl.innerHTML = "";
   emails.forEach((email) => {
     const row = document.createElement("div");
     row.className = "list-row";
     const isLast = emails.length === 1;
+    const isOriginalAdmin = email === trip.createdBy;
+    const role = roles[email] || "colaborador";
+    const canRemoveThis = editable && !isLast && !isOriginalAdmin;
     row.innerHTML = `
-      <span class="card-meta" title="${email}">${nameFor(email)}</span>
-      ${editable ? `<button class="item-del" ${isLast ? "disabled title='precisa ter ao menos 1 participante'" : ""}>✕</button>` : ""}
+      <span class="card-meta" title="${email}">${nameFor(email)} ${isOriginalAdmin ? "🔒" : ""}<span class="badge" style="margin-left:6px; font-size:9.5px; background:var(--panel-raised); color:var(--muted);">${roleLabel(role)}</span></span>
+      ${canRemoveThis ? `<button class="item-del">✕</button>` : isOriginalAdmin ? `<span class="card-meta" style="font-size:10px;" title="Admin original — não pode ser removido">🔒</span>` : ""}
     `;
-    if (editable && !isLast) {
+    if (canRemoveThis) {
       row.querySelector("button").addEventListener("click", () => removeParticipant(email));
     }
     listEl.appendChild(row);
@@ -626,11 +847,18 @@ function renderParticipants(trip, editable) {
 }
 
 async function removeParticipant(email) {
+  if (email === currentTripData.createdBy) {
+    await confirmDialog("O Admin original não pode ser removido da viagem. Só excluindo a viagem inteira.", "Entendi");
+    return;
+  }
   const ok = await confirmDialog(`Remover ${email} da viagem?`);
   if (!ok) return;
   const updated = (currentTripData.participantEmails || []).filter((e) => e !== email);
-  await updateDoc(doc(db, "trips", currentTripId), { participantEmails: updated });
+  const updatedRoles = { ...(currentTripData.participantRoles || {}) };
+  delete updatedRoles[email];
+  await updateDoc(doc(db, "trips", currentTripId), { participantEmails: updated, participantRoles: updatedRoles });
   currentTripData.participantEmails = updated;
+  currentTripData.participantRoles = updatedRoles;
   const idx = allUserTrips.findIndex((t) => t.id === currentTripId);
   if (idx >= 0) allUserTrips[idx].participantEmails = updated;
   await loadParticipantNames(currentTripData.participantEmails);
@@ -640,14 +868,18 @@ async function removeParticipant(email) {
 }
 
 $("addParticipantBtn").addEventListener("click", async () => {
+  if (!canAddParticipant()) { alert("Você não tem permissão pra adicionar participantes agora."); return; }
   const input = $("newParticipantEmail");
   const email = input.value.trim().toLowerCase();
   if (!email || !email.includes("@")) { alert("Digite um e-mail válido."); return; }
   const current = currentTripData.participantEmails || [];
   if (current.includes(email)) { alert("Esse participante já está na viagem."); input.value = ""; return; }
   const updated = [...current, email];
-  await updateDoc(doc(db, "trips", currentTripId), { participantEmails: updated });
+  const role = currentTripData.defaultJoinRole || "colaborador";
+  const updatedRoles = { ...(currentTripData.participantRoles || {}), [email]: role };
+  await updateDoc(doc(db, "trips", currentTripId), { participantEmails: updated, participantRoles: updatedRoles });
   currentTripData.participantEmails = updated;
+  currentTripData.participantRoles = updatedRoles;
   const idx = allUserTrips.findIndex((t) => t.id === currentTripId);
   if (idx >= 0) allUserTrips[idx].participantEmails = updated;
   await loadParticipantNames(currentTripData.participantEmails);

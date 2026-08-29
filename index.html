@@ -45,6 +45,49 @@
     </div>
   </div>
 </div>
+<div id="adminPanelModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-title" data-i18n="admin.title">Gerenciar viagem</div>
+    <div class="modal-message" id="adminPanelTripName" style="margin-bottom:14px;"></div>
+
+    <div class="card-title" style="font-size:11px; margin-bottom:6px;" data-i18n="admin.participants">Participantes</div>
+    <div id="adminParticipantsList" style="margin-bottom:14px;"></div>
+
+    <div class="form-row" style="margin-bottom:14px;">
+      <input type="email" id="adminNewEmail" data-i18n-placeholder="participants.emailPh" placeholder="email@gmail.com">
+      <select id="adminNewRole" style="width:auto; min-width:110px; flex:0 0 auto;">
+        <option value="colaborador" data-i18n="role.colaborador">Colaborador</option>
+        <option value="agencia" data-i18n="role.agencia">Agência</option>
+        <option value="convidado" data-i18n="role.convidado">Convidado</option>
+        <option value="admin" data-i18n="role.admin">Admin</option>
+      </select>
+      <button id="adminAddParticipantBtn" class="btn btn-primary btn-small">＋</button>
+    </div>
+
+    <div style="border-top:1px solid var(--line); padding-top:14px; margin-bottom:14px;">
+      <div class="card-title" style="font-size:11px; margin-bottom:6px;" data-i18n="admin.defaultJoinRole">Novos participantes pelo código viram</div>
+      <select id="adminDefaultJoinRole">
+        <option value="colaborador" data-i18n="role.colaborador">Colaborador</option>
+        <option value="agencia" data-i18n="role.agencia">Agência</option>
+        <option value="convidado" data-i18n="role.convidado">Convidado</option>
+      </select>
+    </div>
+
+    <div class="modal-actions">
+      <button id="adminPanelCloseBtn" class="btn btn-outline" data-i18n="modal.cancel">Fechar</button>
+    </div>
+  </div>
+</div>
+<div id="promoteConfirmModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-title" data-i18n="admin.promoteTitle">Promover a Admin?</div>
+    <div class="modal-message" id="promoteConfirmMessage"></div>
+    <div class="modal-actions">
+      <button id="promoteCancelBtn" class="btn btn-outline" data-i18n="modal.cancel">Cancelar</button>
+      <button id="promoteConfirmBtn" class="btn btn-danger" data-i18n="admin.promoteConfirmBtn">Sim, promover</button>
+    </div>
+  </div>
+</div>
 <div id="nameModal" class="modal-overlay hidden">
   <div class="modal-box">
     <div class="modal-title" data-i18n="profile.title">Como podemos te chamar?</div>
