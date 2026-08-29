@@ -238,6 +238,12 @@
       <!-- HOJE -->
       <div class="tab-panel" id="panel-hoje">
         <h2 class="screen-title" data-i18n="hoje.title">Hoje</h2>
+        <div id="roleIntroBanner" class="hidden card" style="margin-bottom:14px; border-left:4px solid var(--teal);">
+          <div class="card-row">
+            <span class="card-meta" id="roleIntroText" style="color:var(--ink); font-size:12.5px;"></span>
+            <button id="roleIntroCloseBtn" class="icon-btn" style="flex:0 0 auto;" title="Entendi">✕</button>
+          </div>
+        </div>
         <p class="screen-sub" id="hojeStatusLine"></p>
         <div id="hojeItineraryList"></div>
         <div id="hojeReminderList"></div>
@@ -393,7 +399,8 @@
             <label data-i18n="documents.attach">Anexar arquivo (imagem ou PDF)</label>
             <input type="file" id="docFile" accept="image/*,application/pdf">
           </div>
-          <div><label data-i18n="documents.link">Ou cole um link — opcional se anexou arquivo</label><input type="text" id="docUrl" placeholder="https://..."></div>
+          <button type="button" id="docLinkToggle" style="background:none; border:none; padding:0; margin:-2px 0 8px; color:var(--muted); font-size:12px; text-decoration:underline; cursor:pointer;" data-i18n="documents.linkToggle">Prefere colar um link em vez de anexar um arquivo?</button>
+          <div id="docUrlWrap" class="hidden"><label data-i18n="documents.link">Link</label><input type="text" id="docUrl" placeholder="https://..."></div>
           <div><label data-i18n="documents.notes">Notas</label><input type="text" id="docNotes" data-i18n-placeholder="documents.notesPh" placeholder="Opcional"></div>
           <div>
             <label data-i18n="documents.expiresLabel">Apagar automaticamente depois de</label>
@@ -428,12 +435,11 @@
         <p class="screen-sub" data-i18n="packing.sub">Compartilhado conta no placar do grupo. Pessoal só aparece pra você.</p>
 
         <div class="card" style="margin-bottom:14px;">
-          <div class="card-row">
-            <div>
-              <div class="card-title" style="font-size:13px;" data-i18n="packing.defaultTitle">Usar lista padrão</div>
-              <div class="card-meta" data-i18n="packing.defaultDesc">Preenche automaticamente as abas 🧵 Compartilhado e 🔒 Pessoal com os itens essenciais mais comuns de viagem</div>
-            </div>
-            <button id="defaultListToggle" class="toggle-pill" style="flex:0 0 auto; padding:7px 14px;" data-i18n="packing.activate">Ativar</button>
+          <div class="card-title" style="font-size:13px;" data-i18n="packing.defaultTitle">Usar lista padrão</div>
+          <div class="card-meta" data-i18n="packing.defaultDescSplit">Preenche uma das abas com os itens essenciais mais comuns de viagem — escolha qual.</div>
+          <div class="form-row" style="margin-top:10px;">
+            <button id="defaultListTogglePersonal" class="toggle-pill" style="flex:1; min-width:130px; padding:9px 12px;" data-i18n="packing.activatePersonal">🔒 Itens pessoais padrão</button>
+            <button id="defaultListToggleShared" class="toggle-pill" style="flex:1; min-width:130px; padding:9px 12px;" data-i18n="packing.activateShared">🧵 Itens compartilhados padrão</button>
           </div>
           <div id="defaultListFeedback" class="hidden" style="font-size:11.5px; color:var(--teal); margin-top:8px;"></div>
         </div>

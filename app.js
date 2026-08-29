@@ -72,7 +72,8 @@ function applyRolePermissions() {
   $("addTaskToggleBtn")?.classList.toggle("hidden", myPerms().editTarefas !== "all");
   $("addItemBtn")?.classList.toggle("hidden", myPerms().editMala === "none");
   $("newItemName")?.classList.toggle("hidden", myPerms().editMala === "none");
-  $("defaultListToggle")?.classList.toggle("hidden", myPerms().editMala === "none");
+  $("defaultListTogglePersonal")?.classList.toggle("hidden", myPerms().editMala === "none");
+  $("defaultListToggleShared")?.classList.toggle("hidden", myPerms().editMala === "none");
 
   // Ações administrativas.
   $("resetAppBtn")?.classList.toggle("hidden", !can("reset"));
@@ -974,8 +975,26 @@ function renderCountdown() {
 // ================= HOJE =================
 // Aba de entrada: sempre que o app é aberto numa viagem, cai aqui — mostra só
 // o que importa pro dia de hoje (itinerário + lembretes), sem precisar navegar.
+function roleIntroDismissKey() {
+  return `kipu_role_intro_${currentTripId}`;
+}
+function maybeShowRoleIntro() {
+  const banner = $("roleIntroBanner");
+  // O Admin original já configurou a viagem inteira, não precisa de explicação.
+  if (!currentTripData || currentUser.email === currentTripData.createdBy) { hide(banner); return; }
+  if (localStorage.getItem(roleIntroDismissKey())) { hide(banner); return; }
+  const key = "hoje.roleIntro." + (myRole || "colaborador");
+  $("roleIntroText").textContent = t(key);
+  show(banner);
+}
+$("roleIntroCloseBtn")?.addEventListener("click", () => {
+  localStorage.setItem(roleIntroDismissKey(), "1");
+  hide($("roleIntroBanner"));
+});
+
 function renderHojeTab() {
   if (!currentTripData) return;
+  maybeShowRoleIntro();
   const todayISO = new Date().toISOString().slice(0, 10);
   const statusEl = $("hojeStatusLine");
   if (todayISO < currentTripData.startDate) {
@@ -1364,6 +1383,10 @@ function openDocForEdit(id, doc_) {
   $("docExpiry").value = "keep";
   $("docIsMinor").checked = !!doc_.subjectIsMinor;
   $("docMinorConsent").classList.toggle("hidden", !doc_.subjectIsMinor);
+  // Se o documento veio de um link (sem storagePath), já abre o campo de link
+  // visível — a pessoa provavelmente vai editar/trocar o link, não anexar arquivo.
+  const cameFromLink = !!doc_.url && !doc_.storagePath;
+  $("docUrlWrap").classList.toggle("hidden", !cameFromLink);
   $("saveDocBtn").textContent = "Salvar alterações";
   $("docForm").classList.remove("hidden");
   $("docForm").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1375,9 +1398,13 @@ function resetDocForm() {
   $("docExpiry").value = "default";
   $("docIsMinor").checked = false;
   $("docMinorConsent").classList.add("hidden");
+  $("docUrlWrap").classList.add("hidden");
   $("saveDocBtn").textContent = "Salvar";
   $("docForm").classList.add("hidden");
 }
+$("docLinkToggle")?.addEventListener("click", () => {
+  $("docUrlWrap").classList.toggle("hidden");
+});
 $("docIsMinor")?.addEventListener("change", () => {
   $("docMinorConsent").classList.toggle("hidden", !$("docIsMinor").checked);
 });
@@ -1583,40 +1610,48 @@ const DEFAULT_PACKING_LIST = [
 ];
 
 function updateDefaultToggleState() {
-  const btn = $("defaultListToggle");
-  const hasDefaults = malaItemsCache.some((i) => i.isDefault);
-  btn.classList.toggle("active", hasDefaults);
-  btn.textContent = hasDefaults ? "Ativado ✓" : "Ativar";
+  const hasPersonalDefaults = malaItemsCache.some((i) => i.isDefault && i.type === "personal");
+  const hasSharedDefaults = malaItemsCache.some((i) => i.isDefault && i.type === "shared");
+  const personalBtn = $("defaultListTogglePersonal");
+  const sharedBtn = $("defaultListToggleShared");
+  personalBtn.classList.toggle("active", hasPersonalDefaults);
+  personalBtn.textContent = hasPersonalDefaults ? "✓ " + t("packing.activatedPersonal") : t("packing.activatePersonal");
+  sharedBtn.classList.toggle("active", hasSharedDefaults);
+  sharedBtn.textContent = hasSharedDefaults ? "✓ " + t("packing.activatedShared") : t("packing.activateShared");
 }
 
-$("defaultListToggle").addEventListener("click", async () => {
-  const btn = $("defaultListToggle");
+async function toggleDefaultList(kind) {
+  // kind: "personal" ou "shared" — cada botão mexe só na própria categoria,
+  // em vez de ativar as duas abas de uma vez (era a fonte de confusão antiga).
   const feedbackEl = $("defaultListFeedback");
-  const hasDefaults = malaItemsCache.some((i) => i.isDefault);
+  const hasDefaults = malaItemsCache.some((i) => i.isDefault && i.type === kind);
 
   if (hasDefaults) {
-    const toRemove = malaItemsCache.filter((i) => i.isDefault);
+    const toRemove = malaItemsCache.filter((i) => i.isDefault && i.type === kind);
     await Promise.all(toRemove.map((i) => deleteDoc(doc(db, "trips", currentTripId, "mala", i.id))));
-    logActivity("mala", "lista padrão removida", `${toRemove.length} item(ns) essenciais removidos`);
+    logActivity("mala", "lista padrão removida", `${toRemove.length} item(ns) ${kind === "personal" ? "pessoais" : "compartilhados"} removidos`);
     feedbackEl.classList.add("hidden");
     return;
   }
 
   const existingNames = new Set(malaItemsCache.map((i) => i.name.trim().toLowerCase()));
-  const toAdd = DEFAULT_PACKING_LIST.filter((item) => !existingNames.has(item.name.trim().toLowerCase()));
-  const sharedCount = toAdd.filter((i) => i.shared).length;
-  const personalCount = toAdd.filter((i) => !i.shared).length;
+  const wantShared = kind === "shared";
+  const toAdd = DEFAULT_PACKING_LIST
+    .filter((item) => item.shared === wantShared)
+    .filter((item) => !existingNames.has(item.name.trim().toLowerCase()));
 
   await Promise.all(toAdd.map((item) =>
     addDoc(collection(db, "trips", currentTripId, "mala"), {
-      name: item.name, type: item.shared ? "shared" : "personal", done: false, ownerEmail: currentUser.email, isDefault: true, qty: 1
+      name: item.name, type: kind, done: false, ownerEmail: currentUser.email, isDefault: true, qty: 1
     })
   ));
-  logActivity("mala", "lista padrão adicionada", `${toAdd.length} item(ns) essenciais inseridos`);
+  logActivity("mala", "lista padrão adicionada", `${toAdd.length} item(ns) ${kind === "personal" ? "pessoais" : "compartilhados"} inseridos`);
 
-  feedbackEl.textContent = `✓ ${t("packing.addedTo")} — 🔒 ${personalCount} ${t("badge.onlyMe")} · 🧵 ${sharedCount} ${t("badge.group")}`;
+  feedbackEl.textContent = `✓ ${t("packing.addedTo")} — ${toAdd.length} ${kind === "personal" ? t("badge.onlyMe") : t("badge.group")}`;
   feedbackEl.classList.remove("hidden");
-});
+}
+$("defaultListTogglePersonal")?.addEventListener("click", () => toggleDefaultList("personal"));
+$("defaultListToggleShared")?.addEventListener("click", () => toggleDefaultList("shared"));
 function ownerColor(email) {
   const emails = currentTripData.participantEmails || [];
   const palette = ["var(--gold)", "var(--teal)", "#D65D5D", "#B08BD6", "#6FB3D2", "#8FD68F"];
