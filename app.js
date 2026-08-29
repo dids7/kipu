@@ -7,7 +7,7 @@ import {
   query, where, orderBy, serverTimestamp, getDocs, getDoc, arrayUnion
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
-  ref, uploadBytes, getDownloadURL
+  ref, uploadBytes, getDownloadURL, deleteObject
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import { translations, SUPPORTED_LANGS, DEFAULT_LANG } from "./translations.js";
 
@@ -907,13 +907,34 @@ let editingDocId = null;
 function subscribeDocumentos() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "documentos"), (snap) => {
     const listEl = $("docsList");
-    if (snap.empty) { listEl.innerHTML = `<div class='empty'>${t("empty.documents")}</div>`; return; }
-    listEl.innerHTML = "";
+    const todayISO = new Date().toISOString().slice(0, 10);
+    const visibleDocs = [];
+
     snap.forEach((d) => {
       const doc_ = d.data();
+      if (doc_.expiresAt && doc_.expiresAt < todayISO) {
+        // Vencido: apaga o arquivo real do Storage (se houver) e o registro.
+        if (doc_.storagePath) {
+          deleteObject(ref(storage, doc_.storagePath)).catch(() => {});
+        }
+        deleteDoc(doc(db, "trips", currentTripId, "documentos", d.id)).catch(() => {});
+        logActivity("documentos", "documento expirado removido", doc_.title);
+        return;
+      }
+      visibleDocs.push({ id: d.id, ...doc_ });
+    });
+
+    if (visibleDocs.length === 0) { listEl.innerHTML = `<div class='empty'>${t("empty.documents")}</div>`; return; }
+    listEl.innerHTML = "";
+    visibleDocs.forEach((doc_) => {
       const card = document.createElement("div");
       card.className = "card";
       const isImage = doc_.fileType && doc_.fileType.startsWith("image/");
+      let expiryLine = "";
+      if (doc_.expiresAt) {
+        const daysLeft = Math.ceil((new Date(doc_.expiresAt) - new Date(todayISO)) / 86400000);
+        expiryLine = `<div class="card-meta" style="color:var(--gold);">⏳ ${t("documents.expiresIn").replace("{d}", daysLeft)}</div>`;
+      }
       card.innerHTML = `
         <div class="card-row">
           <div class="card-title">${doc_.title}</div>
@@ -923,29 +944,36 @@ function subscribeDocumentos() {
           </div>
         </div>
         <div class="card-meta">${doc_.notes || ""}</div>
+        ${expiryLine}
         ${isImage ? `<img src="${doc_.url}" style="max-width:100%; border-radius:8px; margin-top:8px;">` : ""}
         ${doc_.url ? `<a href="${doc_.url}" target="_blank" style="color:var(--gold); font-size:12.5px; display:block; margin-top:6px;">Abrir ${doc_.fileName ? doc_.fileName : "link"} ↗</a>` : ""}
       `;
-      card.querySelector('[data-action="edit"]').addEventListener("click", () => openDocForEdit(d.id, doc_));
-      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("documentos", d.id, doc_.title, "documentos"));
+      card.querySelector('[data-action="edit"]').addEventListener("click", () => openDocForEdit(doc_.id, doc_));
+      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("documentos", doc_.id, doc_.title, "documentos"));
       listEl.appendChild(card);
     });
   });
   unsubscribers.push(unsub);
 }
 
+let editingDocOriginalExpiresAt = null;
+
 function openDocForEdit(id, doc_) {
   editingDocId = id;
+  editingDocOriginalExpiresAt = doc_.expiresAt || null;
   $("docTitle").value = doc_.title || "";
   $("docUrl").value = doc_.url || "";
   $("docNotes").value = doc_.notes || "";
+  $("docExpiry").value = "keep";
   $("saveDocBtn").textContent = "Salvar alterações";
   $("docForm").classList.remove("hidden");
   $("docForm").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 function resetDocForm() {
   editingDocId = null;
+  editingDocOriginalExpiresAt = null;
   $("docTitle").value = ""; $("docUrl").value = ""; $("docNotes").value = ""; $("docFile").value = "";
+  $("docExpiry").value = "0";
   $("saveDocBtn").textContent = "Salvar";
   $("docForm").classList.add("hidden");
 }
@@ -964,17 +992,27 @@ $("saveDocBtn").addEventListener("click", async () => {
   const fileInput = $("docFile");
   const file = fileInput.files[0];
   const statusEl = $("docUploadStatus");
+  const expiryValue = $("docExpiry").value;
+  let expiresAt;
+  if (expiryValue === "keep") {
+    expiresAt = editingDocOriginalExpiresAt;
+  } else {
+    const expiryDays = parseInt(expiryValue, 10) || 0;
+    expiresAt = expiryDays > 0
+      ? new Date(Date.now() + expiryDays * 86400000).toISOString().slice(0, 10)
+      : null;
+  }
 
   if (!title) { alert("Preencha o título."); return; }
   if (!file && !url) { alert("Anexe um arquivo ou cole um link."); return; }
 
-  let fileType = "", fileName = "";
+  let fileType = "", fileName = "", storagePath = "";
   if (file) {
     statusEl.classList.remove("hidden");
     statusEl.textContent = "Enviando arquivo...";
     try {
-      const path = `trips/${currentTripId}/documentos/${Date.now()}_${file.name}`;
-      const fileRef = ref(storage, path);
+      storagePath = `trips/${currentTripId}/documentos/${Date.now()}_${file.name}`;
+      const fileRef = ref(storage, storagePath);
       await uploadBytes(fileRef, file);
       url = await getDownloadURL(fileRef);
       fileType = file.type;
@@ -987,12 +1025,12 @@ $("saveDocBtn").addEventListener("click", async () => {
   }
 
   if (editingDocId) {
-    const payload = { title, url, notes };
-    if (file) { payload.fileType = fileType; payload.fileName = fileName; }
+    const payload = { title, url, notes, expiresAt };
+    if (file) { payload.fileType = fileType; payload.fileName = fileName; payload.storagePath = storagePath; }
     await updateDoc(doc(db, "trips", currentTripId, "documentos", editingDocId), payload);
     logActivity("documentos", "documento editado", title);
   } else {
-    await addDoc(collection(db, "trips", currentTripId, "documentos"), { title, url, notes, fileType, fileName });
+    await addDoc(collection(db, "trips", currentTripId, "documentos"), { title, url, notes, fileType, fileName, storagePath, expiresAt });
     logActivity("documentos", "documento adicionado", title);
   }
   resetDocForm();

@@ -333,6 +333,17 @@
           </div>
           <div><label data-i18n="documents.link">Ou cole um link — opcional se anexou arquivo</label><input type="text" id="docUrl" placeholder="https://..."></div>
           <div><label data-i18n="documents.notes">Notas</label><input type="text" id="docNotes" data-i18n-placeholder="documents.notesPh" placeholder="Opcional"></div>
+          <div>
+            <label data-i18n="documents.expiresLabel">Apagar automaticamente depois de</label>
+            <select id="docExpiry">
+              <option value="keep" class="hidden" data-i18n="documents.expiresKeep">Manter validade atual</option>
+              <option value="0" data-i18n="documents.expiresNever">Nunca</option>
+              <option value="7" data-i18n="documents.expires7">7 dias</option>
+              <option value="15" data-i18n="documents.expires15">15 dias</option>
+              <option value="30" data-i18n="documents.expires30">30 dias</option>
+              <option value="90" data-i18n="documents.expires90">90 dias</option>
+            </select>
+          </div>
           <div id="docUploadStatus" class="screen-sub hidden"></div>
           <div class="form-row">
             <button class="btn btn-primary btn-block" id="saveDocBtn" data-i18n="common.save">Salvar</button>
