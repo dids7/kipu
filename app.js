@@ -564,11 +564,11 @@ async function openAdminPanel(tripId) {
   if (!snap.exists()) return;
   adminPanelTripId = tripId;
   adminPanelTripData = { id: tripId, ...snap.data() };
-  if (!adminPanelTripData.participantRoles) {
-    const legacyRoles = {};
-    (adminPanelTripData.participantEmails || []).forEach((e) => { legacyRoles[e] = "admin"; });
+  if (!adminPanelTripData.participantRoles || !adminPanelTripData.adminEmails) {
+    const legacyRoles = adminPanelTripData.participantRoles || {};
+    (adminPanelTripData.participantEmails || []).forEach((e) => { if (!legacyRoles[e]) legacyRoles[e] = "admin"; });
     adminPanelTripData.participantRoles = legacyRoles;
-    adminPanelTripData.adminEmails = adminPanelTripData.participantEmails || [];
+    adminPanelTripData.adminEmails = adminPanelTripData.adminEmails || adminPanelTripData.participantEmails || [];
     adminPanelTripData.blockedEmails = adminPanelTripData.blockedEmails || [];
     adminPanelTripData.defaultJoinRole = adminPanelTripData.defaultJoinRole || "colaborador";
     await updateDoc(doc(db, "trips", tripId), {
@@ -725,16 +725,16 @@ async function openTrip(tripId) {
   appIsOpen = true;
 
   // Migração: viagens criadas antes do sistema de papéis não têm
-  // participantRoles ainda. Pra não tirar acesso de ninguém que já
-  // tinha controle total, todo mundo vira "admin" nessa migração única
-  // — e entra também no campo travado adminEmails, senão o próprio
-  // sistema de proteção bloquearia esse acesso que já existia.
-  if (!currentTripData.participantRoles) {
-    const legacyRoles = {};
-    (currentTripData.participantEmails || []).forEach((e) => { legacyRoles[e] = "admin"; });
+  // participantRoles ainda. Também cobre o caso de viagens que já tinham
+  // sido migradas ANTES do campo travado adminEmails existir — nesse
+  // caso participantRoles já existe, mas adminEmails ainda não, e sem
+  // ele ninguém consegue mais ações de Admin de verdade.
+  if (!currentTripData.participantRoles || !currentTripData.adminEmails) {
+    const legacyRoles = currentTripData.participantRoles || {};
+    (currentTripData.participantEmails || []).forEach((e) => { if (!legacyRoles[e]) legacyRoles[e] = "admin"; });
     const patch = {
       participantRoles: legacyRoles,
-      adminEmails: currentTripData.participantEmails || [],
+      adminEmails: currentTripData.adminEmails || currentTripData.participantEmails || [],
       blockedEmails: currentTripData.blockedEmails || [],
       defaultJoinRole: currentTripData.defaultJoinRole || "colaborador"
     };
