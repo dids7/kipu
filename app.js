@@ -1031,6 +1031,7 @@ function subscribeItinerario() {
 
       const hasValue = it.value && Number(it.value) > 0;
       const timeRange = it.time ? `· ${it.time}${it.endTime ? "–" + it.endTime : ""}` : "";
+      const canEditIt = can("editCalendar");
       const card = document.createElement("div");
       card.className = "card";
       card.innerHTML = `
@@ -1046,14 +1047,17 @@ function subscribeItinerario() {
             ${mapLink(it.location)} ${calendarLink(it)}
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <button class="item-del" data-action="edit" title="Editar">✎</button>
+            ${canEditIt ? `<button class="item-del" data-action="edit" title="Editar">✎</button>
             <button class="item-del" data-action="delete" title="Excluir">✕</button>
-            <button class="badge badge-${it.status}" data-action="status">${t("status." + it.status)}</button>
+            <button class="badge badge-${it.status}" data-action="status">${t("status." + it.status)}</button>`
+            : `<span class="badge badge-${it.status}">${t("status." + it.status)}</span>`}
           </div>
         </div>`;
-      card.querySelector('[data-action="status"]').addEventListener("click", () => cycleItinerarioStatus(d.id, it.status, it.title));
-      card.querySelector('[data-action="edit"]').addEventListener("click", () => openItinerarioForEdit(d.id, it));
-      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("itinerario", d.id, it.title, "itinerario"));
+      if (canEditIt) {
+        card.querySelector('[data-action="status"]').addEventListener("click", () => cycleItinerarioStatus(d.id, it.status, it.title));
+        card.querySelector('[data-action="edit"]').addEventListener("click", () => openItinerarioForEdit(d.id, it));
+        card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("itinerario", d.id, it.title, "itinerario"));
+      }
       listEl.appendChild(card);
     });
     renderCalendar();
@@ -1136,6 +1140,7 @@ function subscribeEstadia() {
     snap.forEach((d) => {
       const s = d.data();
       estadiaCache.push({ id: d.id, ...s });
+      const canEditEst = can("editCalendar");
       const card = document.createElement("div");
       card.className = "card";
       card.innerHTML = `
@@ -1146,13 +1151,15 @@ function subscribeEstadia() {
             ${mapLink(s.address)}
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <button class="item-del" data-action="edit" title="Editar">✎</button>
-            <button class="item-del" data-action="delete" title="Excluir">✕</button>
+            ${canEditEst ? `<button class="item-del" data-action="edit" title="Editar">✎</button>
+            <button class="item-del" data-action="delete" title="Excluir">✕</button>` : ""}
             <span class="badge badge-${s.status === "pago" ? "confirmado" : "programado"}">${t("status." + s.status)}</span>
           </div>
         </div>`;
-      card.querySelector('[data-action="edit"]').addEventListener("click", () => openEstadiaForEdit(d.id, s));
-      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("estadia", d.id, s.name, "estadia"));
+      if (canEditEst) {
+        card.querySelector('[data-action="edit"]').addEventListener("click", () => openEstadiaForEdit(d.id, s));
+        card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("estadia", d.id, s.name, "estadia"));
+      }
       listEl.appendChild(card);
     });
   });
@@ -1557,6 +1564,8 @@ function subscribeTarefas() {
     listEl.innerHTML = "";
     snap.forEach((d) => {
       const task = d.data();
+      const canEditTask = myPerms().editTarefas === "all";
+      const canToggleTask = myPerms().editTarefas === "all" || myPerms().editTarefas === "toggle";
       const card = document.createElement("div");
       card.className = "card";
       card.innerHTML = `
@@ -1566,18 +1575,24 @@ function subscribeTarefas() {
             <div class="card-meta">resp: ${nameFor(task.responsible)}</div>
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <button class="item-del" data-action="edit" title="Editar">✎</button>
-            <button class="item-del" data-action="delete" title="Excluir">✕</button>
-            <button class="badge badge-${task.status}" data-action="status">${t("status." + task.status)}</button>
+            ${canEditTask ? `<button class="item-del" data-action="edit" title="Editar">✎</button>
+            <button class="item-del" data-action="delete" title="Excluir">✕</button>` : ""}
+            ${canToggleTask
+              ? `<button class="badge badge-${task.status}" data-action="status">${t("status." + task.status)}</button>`
+              : `<span class="badge badge-${task.status}">${t("status." + task.status)}</span>`}
           </div>
         </div>`;
-      card.querySelector('[data-action="status"]').addEventListener("click", async () => {
-        const next = task.status === "pendente" ? "feito" : "pendente";
-        await updateDoc(doc(db, "trips", currentTripId, "tarefas", d.id), { status: next });
-        logActivity("tarefas", "status alterado", `"${task.description}": ${next}`);
-      });
-      card.querySelector('[data-action="edit"]').addEventListener("click", () => openTaskForEdit(d.id, task));
-      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("tarefas", d.id, task.description, "tarefas"));
+      if (canToggleTask) {
+        card.querySelector('[data-action="status"]').addEventListener("click", async () => {
+          const next = task.status === "pendente" ? "feito" : "pendente";
+          await updateDoc(doc(db, "trips", currentTripId, "tarefas", d.id), { status: next });
+          logActivity("tarefas", "status alterado", `"${task.description}": ${next}`);
+        });
+      }
+      if (canEditTask) {
+        card.querySelector('[data-action="edit"]').addEventListener("click", () => openTaskForEdit(d.id, task));
+        card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("tarefas", d.id, task.description, "tarefas"));
+      }
       listEl.appendChild(card);
     });
   });
