@@ -468,6 +468,25 @@
           </div>
         </div>
 
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-title" style="font-size:13px; margin-bottom:8px;" data-i18n="expenses.converter">Conversor rápido</div>
+          <div class="rate-row">
+            <input type="number" id="convValueA" step="0.01" placeholder="0,00" style="width:100px;">
+            <select id="convCurrencyA">
+              <option value="PEN">S/</option>
+              <option value="USD">US$</option>
+              <option value="BRL">R$</option>
+            </select>
+            <span class="card-meta">=</span>
+            <input type="number" id="convValueB" step="0.01" placeholder="0,00" style="width:100px;">
+            <select id="convCurrencyB">
+              <option value="BRL">R$</option>
+              <option value="USD">US$</option>
+              <option value="PEN">S/</option>
+            </select>
+          </div>
+        </div>
+
         <button class="add-toggle" id="addExpenseToggleBtn" data-form="expenseForm" data-i18n="expenses.addBtn">＋ Adicionar gasto</button>
         <div id="expenseForm" class="form-card hidden">
           <div class="segmented">

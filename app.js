@@ -1806,6 +1806,36 @@ $("rateValue").addEventListener("input", () => {
 populateRateToOptions();
 updateRateWidget();
 
+// ================= CONVERSOR RÁPIDO =================
+function convertAmount(value, from, to) {
+  if (isNaN(value)) return "";
+  if (from === to) return value;
+  const brl = toBRL(value, from); // toBRL já trata BRL como identidade
+  if (to === "BRL") return brl;
+  if (to === "USD") return brl / usdRate();
+  if (to === "PEN") return brl / penRate();
+  return value;
+}
+
+let convLastEdited = "A";
+function updateConverter() {
+  const currA = $("convCurrencyA").value;
+  const currB = $("convCurrencyB").value;
+  if (convLastEdited === "A") {
+    const valA = parseFloat($("convValueA").value);
+    const result = convertAmount(valA, currA, currB);
+    $("convValueB").value = result === "" ? "" : result.toFixed(2);
+  } else {
+    const valB = parseFloat($("convValueB").value);
+    const result = convertAmount(valB, currB, currA);
+    $("convValueA").value = result === "" ? "" : result.toFixed(2);
+  }
+}
+$("convValueA").addEventListener("input", () => { convLastEdited = "A"; updateConverter(); });
+$("convValueB").addEventListener("input", () => { convLastEdited = "B"; updateConverter(); });
+$("convCurrencyA").addEventListener("change", updateConverter);
+$("convCurrencyB").addEventListener("change", updateConverter);
+
 document.querySelectorAll("[data-exptype]").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll("[data-exptype]").forEach((b) => b.classList.remove("active"));
