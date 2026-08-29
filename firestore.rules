@@ -18,7 +18,7 @@ service cloud.firestore {
       function isRealAdmin(tripData) {
         return !("participantRoles" in tripData)
           ? true
-          : (request.auth.token.email in tripData.adminEmails);
+          : (request.auth.token.email in tripData.get("adminEmails", []));
       }
       function parentTrip() {
         return get(/databases/$(database)/documents/trips/$(tripId)).data;
@@ -65,6 +65,17 @@ service cloud.firestore {
           !(request.auth.token.email in resource.data.participantEmails) &&
           !(request.auth.token.email in resource.data.get("blockedEmails", [])) &&
           request.resource.data.participantRoles[request.auth.token.email] == resource.data.defaultJoinRole
+        )
+        ||
+        (
+          // Migração única: se a viagem AINDA não tem o campo adminEmails,
+          // qualquer participante pode criar esse campo (e os campos
+          // vizinhos da migração). Assim que adminEmails existir pela
+          // primeira vez, essa brecha se fecha sozinha pra sempre — as
+          // regras acima passam a valer normalmente.
+          !("adminEmails" in resource.data) &&
+          request.auth.token.email in resource.data.participantEmails &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["participantRoles", "adminEmails", "blockedEmails", "defaultJoinRole"])
         )
       );
 

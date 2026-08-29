@@ -571,12 +571,16 @@ async function openAdminPanel(tripId) {
     adminPanelTripData.adminEmails = adminPanelTripData.adminEmails || adminPanelTripData.participantEmails || [];
     adminPanelTripData.blockedEmails = adminPanelTripData.blockedEmails || [];
     adminPanelTripData.defaultJoinRole = adminPanelTripData.defaultJoinRole || "colaborador";
-    await updateDoc(doc(db, "trips", tripId), {
-      participantRoles: legacyRoles,
-      adminEmails: adminPanelTripData.adminEmails,
-      blockedEmails: adminPanelTripData.blockedEmails,
-      defaultJoinRole: adminPanelTripData.defaultJoinRole
-    });
+    try {
+      await updateDoc(doc(db, "trips", tripId), {
+        participantRoles: legacyRoles,
+        adminEmails: adminPanelTripData.adminEmails,
+        blockedEmails: adminPanelTripData.blockedEmails,
+        defaultJoinRole: adminPanelTripData.defaultJoinRole
+      });
+    } catch (err) {
+      console.warn("Não foi possível migrar papéis dessa viagem agora:", err);
+    }
   }
   await loadParticipantNames(adminPanelTripData.participantEmails);
   $("adminPanelTripName").textContent = adminPanelTripData.name;
@@ -738,8 +742,13 @@ async function openTrip(tripId) {
       blockedEmails: currentTripData.blockedEmails || [],
       defaultJoinRole: currentTripData.defaultJoinRole || "colaborador"
     };
-    await updateDoc(doc(db, "trips", tripId), patch);
-    currentTripData = { ...currentTripData, ...patch };
+    try {
+      await updateDoc(doc(db, "trips", tripId), patch);
+      currentTripData = { ...currentTripData, ...patch };
+    } catch (err) {
+      console.warn("Não foi possível migrar papéis dessa viagem agora:", err);
+      currentTripData = { ...currentTripData, ...patch };
+    }
   }
   myRole = computeMyRole();
   applyRolePermissions();
