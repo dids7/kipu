@@ -4,8 +4,7 @@ service cloud.firestore {
 
     match /trips/{tripId} {
 
-      // Funções auxiliares — descobrem o papel do usuário logado dentro
-      // desta viagem, a partir dos dados que já foram lidos pela regra.
+      // Papel "de exibição" (usado pra decidir o que cada aba mostra).
       function roleFrom(tripData) {
         return !("participantRoles" in tripData)
           ? "admin"
@@ -13,53 +12,63 @@ service cloud.firestore {
               ? tripData.participantRoles[request.auth.token.email]
               : "colaborador");
       }
+      // Admin "de verdade" — precisa estar no campo travado adminEmails,
+      // não só o mapa de exibição (que Colaborador também edita). Isso
+      // impede que alguém se autopromova editando só o mapa por fora do app.
+      function isRealAdmin(tripData) {
+        return !("participantRoles" in tripData)
+          ? true
+          : (request.auth.token.email in tripData.adminEmails);
+      }
       function parentTrip() {
         return get(/databases/$(database)/documents/trips/$(tripId)).data;
       }
       function roleIn() {
         return roleFrom(parentTrip());
       }
+      function amRealAdmin() {
+        return isRealAdmin(parentTrip());
+      }
       function isParticipant() {
         return request.auth.token.email in parentTrip().participantEmails;
       }
 
-      // Criar: qualquer usuário autenticado pode criar uma viagem nova
-      // (ele já nasce Admin dela, definido no próprio app).
       allow create: if request.auth != null;
-
-      // "get" (buscar 1 viagem pelo ID/código): qualquer usuário autenticado
-      // pode buscar, mesmo sem ainda ser participante — é assim que o código
-      // de convite funciona (precisa achar a viagem antes de entrar nela).
       allow get: if request.auth != null;
-
-      // "list" (tela "Suas viagens"): só retorna viagens onde o e-mail do
-      // usuário já está na lista de participantes.
       allow list: if request.auth != null
         && request.auth.token.email in resource.data.participantEmails;
 
-      // Excluir a viagem: só Admin.
-      allow delete: if request.auth != null && roleFrom(resource.data) == "admin";
+      // Excluir a viagem: só Admin de verdade (adminEmails).
+      allow delete: if request.auth != null && isRealAdmin(resource.data);
 
-      // Editar dados da viagem (nome/datas/participantes/papéis/etc):
-      // Admin e Colaborador podem editar livremente. Agência e Convidado
-      // não editam o documento da viagem em si. Um NÃO-participante só
-      // pode escrever se for exatamente a auto-entrada por código de
-      // convite (adicionando o próprio e-mail, com o papel padrão
-      // configurado pela viagem).
+      // Editar dados da viagem:
+      // - Admin de verdade: pode tudo, incluindo os campos sensíveis
+      //   (adminEmails, createdBy, defaultJoinRole).
+      // - Colaborador (ou quem o mapa diz ser admin, mas não está em
+      //   adminEmails — ou seja, uma tentativa de autopromoção): pode
+      //   editar tudo MENOS os 3 campos sensíveis. Isso é o que fecha a
+      //   brecha de alguém virar Admin sozinho mexendo direto na API.
+      // - Auto-entrada por código de convite: só os campos de participante,
+      //   e só com o papel padrão configurado pela viagem — e só se o
+      //   e-mail não estiver bloqueado (não foi removido antes).
       allow update: if request.auth != null && (
-        roleFrom(resource.data) == "admin" ||
-        roleFrom(resource.data) == "colaborador" ||
+        isRealAdmin(resource.data)
+        ||
         (
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["participantEmails", "participantRoles"]) &&
+          roleFrom(resource.data) in ["admin", "colaborador"] &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["adminEmails", "createdBy", "defaultJoinRole"])
+        )
+        ||
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["participantEmails", "participantRoles", "blockedEmails"]) &&
           request.auth.token.email in request.resource.data.participantEmails &&
           !(request.auth.token.email in resource.data.participantEmails) &&
+          !(request.auth.token.email in resource.data.get("blockedEmails", [])) &&
           request.resource.data.participantRoles[request.auth.token.email] == resource.data.defaultJoinRole
         )
       );
 
       // ---- Calendário / Itinerário / Estadia ----
-      // Admin, Colaborador e Agência editam. Convidado só lê (o "adicionar
-      // lembrete" dele acontece na subcoleção separada "lembretes").
       match /itinerario/{docId} {
         allow read: if request.auth != null && isParticipant();
         allow write: if request.auth != null && isParticipant() && roleIn() in ["admin", "colaborador", "agencia"];
@@ -74,8 +83,6 @@ service cloud.firestore {
       }
 
       // ---- Mala ----
-      // Admin/Colaborador editam tudo. Convidado só mexe nos PRÓPRIOS itens.
-      // Agência não tem acesso nenhum (nem leitura).
       match /mala/{docId} {
         allow read: if request.auth != null && isParticipant() && roleIn() != "agencia";
         allow create: if request.auth != null && isParticipant() && (
@@ -93,15 +100,12 @@ service cloud.firestore {
       }
 
       // ---- Tarefas ----
-      // Admin/Colaborador/Convidado editam (Convidado marca como feita).
-      // Agência sem acesso.
       match /tarefas/{docId} {
         allow read: if request.auth != null && isParticipant() && roleIn() != "agencia";
         allow write: if request.auth != null && isParticipant() && roleIn() in ["admin", "colaborador", "convidado"];
       }
 
       // ---- Documentos / Gastos / Emergência ----
-      // Admin/Colaborador/Convidado editam. Agência sem acesso nenhum.
       match /documentos/{docId} {
         allow read, write: if request.auth != null && isParticipant() && roleIn() in ["admin", "colaborador", "convidado"];
       }
@@ -113,21 +117,14 @@ service cloud.firestore {
       }
 
       // ---- Histórico ----
-      // Todo mundo que faz alguma ação pode registrar uma entrada nova.
-      // Leitura: todos, menos Agência. Nunca dá pra editar um registro já
-      // existente. Apagar em massa (reset) é exclusivo do Admin.
       match /activityLog/{docId} {
         allow read: if request.auth != null && isParticipant() && roleIn() != "agencia";
         allow create: if request.auth != null && isParticipant();
         allow update: if false;
-        allow delete: if request.auth != null && isParticipant() && roleIn() == "admin";
+        allow delete: if request.auth != null && isParticipant() && amRealAdmin();
       }
     }
 
-    // Perfis de usuário (nome de exibição). O ID do documento é o próprio
-    // e-mail. Qualquer usuário logado pode LER qualquer perfil (precisa
-    // pra mostrar o nome de outros participantes), mas só pode ESCREVER
-    // no próprio perfil.
     match /users/{userEmail} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.token.email == userEmail;
