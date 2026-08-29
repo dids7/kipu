@@ -207,7 +207,6 @@ function updateTabOrderDots() {
   });
   dots.forEach((dot, idx) => dot.classList.toggle("active", idx === closestIdx));
 }
-$("tabOrderList")?.addEventListener("scroll", updateTabOrderDots);
 
 function renderTabOrderEditor() {
   const listEl = $("tabOrderList");
@@ -309,6 +308,10 @@ let allUserTrips = [];       // todas as viagens onde o usuário é participante
 const $ = (id) => document.getElementById(id);
 function show(el) { el.classList.remove("hidden"); }
 function hide(el) { el.classList.add("hidden"); }
+
+// Movido pra cá (depois de $ existir) — precisa rodar após a definição de $
+// na linha acima, senão trava o script inteiro antes mesmo do botão de login.
+$("tabOrderList")?.addEventListener("scroll", updateTabOrderDots);
 
 function confirmDialog(message, okText = "Excluir") {
   return new Promise((resolve) => {
