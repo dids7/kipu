@@ -1264,6 +1264,18 @@ function subscribeDocumentos() {
 
 let editingDocOriginalExpiresAt = null;
 
+// Data padrão de expiração pra dados sensíveis sem validade explícita: N dias
+// depois do fim da viagem (retenção mínima necessária, LGPD Art. 6º III).
+// Nunca fica no passado — se a viagem já acabou há mais de N dias, expira "amanhã".
+function defaultRetentionDate(days = 30) {
+  const base = currentTripData && currentTripData.endDate
+    ? new Date(currentTripData.endDate + "T00:00:00").getTime()
+    : Date.now();
+  const target = new Date(base + days * 86400000);
+  const tomorrow = new Date(Date.now() + 86400000);
+  return (target < tomorrow ? tomorrow : target).toISOString().slice(0, 10);
+}
+
 function openDocForEdit(id, doc_) {
   editingDocId = id;
   editingDocOriginalExpiresAt = doc_.expiresAt || null;
@@ -1271,6 +1283,8 @@ function openDocForEdit(id, doc_) {
   $("docUrl").value = doc_.url || "";
   $("docNotes").value = doc_.notes || "";
   $("docExpiry").value = "keep";
+  $("docIsMinor").checked = !!doc_.subjectIsMinor;
+  $("docMinorConsent").classList.toggle("hidden", !doc_.subjectIsMinor);
   $("saveDocBtn").textContent = "Salvar alterações";
   $("docForm").classList.remove("hidden");
   $("docForm").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1279,10 +1293,15 @@ function resetDocForm() {
   editingDocId = null;
   editingDocOriginalExpiresAt = null;
   $("docTitle").value = ""; $("docUrl").value = ""; $("docNotes").value = ""; $("docFile").value = "";
-  $("docExpiry").value = "0";
+  $("docExpiry").value = "default";
+  $("docIsMinor").checked = false;
+  $("docMinorConsent").classList.add("hidden");
   $("saveDocBtn").textContent = "Salvar";
   $("docForm").classList.add("hidden");
 }
+$("docIsMinor")?.addEventListener("change", () => {
+  $("docMinorConsent").classList.toggle("hidden", !$("docIsMinor").checked);
+});
 $("addDocToggleBtn")?.addEventListener("click", () => {
   if (!$("docForm").classList.contains("hidden") || editingDocId) {
     resetDocForm();
@@ -1299,9 +1318,12 @@ $("saveDocBtn").addEventListener("click", async () => {
   const file = fileInput.files[0];
   const statusEl = $("docUploadStatus");
   const expiryValue = $("docExpiry").value;
+  const subjectIsMinor = $("docIsMinor").checked;
   let expiresAt;
   if (expiryValue === "keep") {
     expiresAt = editingDocOriginalExpiresAt;
+  } else if (expiryValue === "default") {
+    expiresAt = defaultRetentionDate(30);
   } else {
     const expiryDays = parseInt(expiryValue, 10) || 0;
     expiresAt = expiryDays > 0
@@ -1331,17 +1353,20 @@ $("saveDocBtn").addEventListener("click", async () => {
   }
 
   if (editingDocId) {
-    const payload = { title, url, notes, expiresAt };
+    const payload = { title, url, notes, expiresAt, subjectIsMinor };
     if (file) { payload.fileType = fileType; payload.fileName = fileName; payload.storagePath = storagePath; }
     await updateDoc(doc(db, "trips", currentTripId, "documentos", editingDocId), payload);
     logActivity("documentos", "documento editado", title);
   } else {
-    await addDoc(collection(db, "trips", currentTripId, "documentos"), { title, url, notes, fileType, fileName, storagePath, expiresAt });
-    logActivity("documentos", "documento adicionado", title);
+    await addDoc(collection(db, "trips", currentTripId, "documentos"), {
+      title, url, notes, fileType, fileName, storagePath, expiresAt, subjectIsMinor, uploadedBy: currentUser.email
+    });
+    logActivity("documentos", subjectIsMinor ? "documento adicionado (menor de idade — consentimento do responsável confirmado)" : "documento adicionado", title);
   }
   resetDocForm();
   statusEl.classList.add("hidden");
 });
+
 
 // ================= MALA =================
 document.querySelectorAll("[data-seg]").forEach((btn) => {
@@ -1925,10 +1950,24 @@ let editingEmergencyId = null;
 function subscribeEmergencia() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "emergencia"), (snap) => {
     const listEl = $("emergencyList");
-    if (snap.empty) { listEl.innerHTML = `<div class='empty'>${t("empty.emergency")}</div>`; return; }
-    listEl.innerHTML = "";
+    const todayISO = new Date().toISOString().slice(0, 10);
+    const visibleItems = [];
     snap.forEach((d) => {
       const it = d.data();
+      // Retenção automática (LGPD Art. 6º III): dado de emergência sem finalidade
+      // depois que a viagem já acabou há tempo suficiente é apagado sozinho,
+      // do mesmo jeito que Documentos já faz — mesma varredura preguiçosa,
+      // só roda quando alguém abre a aba.
+      if (it.expiresAt && it.expiresAt < todayISO) {
+        deleteDoc(doc(db, "trips", currentTripId, "emergencia", d.id)).catch(() => {});
+        logActivity("emergencia", "informação expirada removida (retenção automática)", it.label);
+        return;
+      }
+      visibleItems.push({ id: d.id, ...it });
+    });
+    if (visibleItems.length === 0) { listEl.innerHTML = `<div class='empty'>${t("empty.emergency")}</div>`; return; }
+    listEl.innerHTML = "";
+    visibleItems.forEach((it) => {
       const card = document.createElement("div");
       card.className = "card card-row";
       card.innerHTML = `
@@ -1938,8 +1977,8 @@ function subscribeEmergencia() {
           <button class="item-del" data-action="delete" title="Excluir">✕</button>
         </div>
       `;
-      card.querySelector('[data-action="edit"]').addEventListener("click", () => openEmergencyForEdit(d.id, it));
-      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("emergencia", d.id, it.label, "emergencia"));
+      card.querySelector('[data-action="edit"]').addEventListener("click", () => openEmergencyForEdit(it.id, it));
+      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("emergencia", it.id, it.label, "emergencia"));
       listEl.appendChild(card);
     });
   });
@@ -1950,6 +1989,8 @@ function openEmergencyForEdit(id, it) {
   editingEmergencyId = id;
   $("emLabel").value = it.label || "";
   $("emValue").value = it.value || "";
+  $("emIsMinor").checked = !!it.subjectIsMinor;
+  $("emMinorConsent").classList.toggle("hidden", !it.subjectIsMinor);
   $("saveEmergencyBtn").textContent = "Salvar alterações";
   $("emergencyForm").classList.remove("hidden");
   $("emergencyForm").scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1957,9 +1998,14 @@ function openEmergencyForEdit(id, it) {
 function resetEmergencyForm() {
   editingEmergencyId = null;
   $("emLabel").value = ""; $("emValue").value = "";
+  $("emIsMinor").checked = false;
+  $("emMinorConsent").classList.add("hidden");
   $("saveEmergencyBtn").textContent = "Salvar";
   $("emergencyForm").classList.add("hidden");
 }
+$("emIsMinor")?.addEventListener("change", () => {
+  $("emMinorConsent").classList.toggle("hidden", !$("emIsMinor").checked);
+});
 $("addEmergencyToggleBtn")?.addEventListener("click", () => {
   if (!$("emergencyForm").classList.contains("hidden") || editingEmergencyId) {
     resetEmergencyForm();
@@ -1970,16 +2016,76 @@ $("closeEmergencyFormBtn")?.addEventListener("click", resetEmergencyForm);
 
 $("saveEmergencyBtn").addEventListener("click", async () => {
   const label = $("emLabel").value.trim(), value = $("emValue").value.trim();
+  const subjectIsMinor = $("emIsMinor").checked;
   if (!label || !value) { alert("Preencha rótulo e valor."); return; }
   if (editingEmergencyId) {
-    await updateDoc(doc(db, "trips", currentTripId, "emergencia", editingEmergencyId), { label, value });
+    // Editar sem mexer na validade não reseta ela — mesmo padrão dos Documentos.
+    await updateDoc(doc(db, "trips", currentTripId, "emergencia", editingEmergencyId), { label, value, subjectIsMinor });
     logActivity("emergencia", "informação editada", label);
   } else {
-    await addDoc(collection(db, "trips", currentTripId, "emergencia"), { label, value });
-    logActivity("emergencia", "informação adicionada", label);
+    await addDoc(collection(db, "trips", currentTripId, "emergencia"), {
+      label, value, subjectIsMinor, createdBy: currentUser.email, expiresAt: defaultRetentionDate(30)
+    });
+    logActivity("emergencia", subjectIsMinor ? "informação adicionada (menor de idade — consentimento do responsável confirmado)" : "informação adicionada", label);
   }
   resetEmergencyForm();
 });
+
+
+// ================= EXCLUSÃO DE DADOS PELO TITULAR (LGPD Art. 18) =================
+// Diferente do "Resetar app" (que é uma ação de Admin, apaga a viagem inteira
+// pra todo mundo), isso é auto-aplicado: qualquer participante pode pedir a
+// remoção só dos próprios dados, sem depender de ninguém.
+async function eraseMyData() {
+  const email = currentUser.email;
+  if (email === currentTripData.createdBy) {
+    await confirmDialog(
+      "Você é o Admin original desta viagem (quem criou), então não dá pra remover só os seus dados por aqui — isso deixaria a viagem sem dono. Pra remover seus dados, exclua a viagem inteira (se você for a única pessoa nela) ou peça pra outro Admin assumir antes.",
+      "Entendi"
+    );
+    return;
+  }
+  const ok = await confirmDialog(
+    "Isso remove você desta viagem e apaga os dados que só dizem respeito a você: seus itens da mala, seus gastos pessoais, os documentos que você enviou e as informações de emergência que você cadastrou. Itens compartilhados que você criou (itinerário, estadia, tarefas, gastos em grupo) continuam, já que outras pessoas dependem deles. Essa ação não pode ser desfeita. Quer continuar?",
+    "Remover meus dados"
+  );
+  if (!ok) return;
+
+  // Log primeiro, enquanto o usuário ainda é participante (senão a regra de
+  // segurança bloqueia a escrita no activityLog depois que ele sair da lista).
+  await logActivity("geral", "solicitação de exclusão de dados pelo titular", email);
+
+  // Apaga, em paralelo, tudo que é claramente dado pessoal do próprio usuário.
+  const deleteWhereOwner = async (subcollection, field) => {
+    const q = query(collection(db, "trips", currentTripId, subcollection), where(field, "==", email));
+    const snap = await getDocs(q);
+    await Promise.all(snap.docs.map(async (d) => {
+      const data = d.data();
+      if (data.storagePath) {
+        await deleteObject(ref(storage, data.storagePath)).catch(() => {});
+      }
+      await deleteDoc(doc(db, "trips", currentTripId, subcollection, d.id));
+    }));
+  };
+  await Promise.all([
+    deleteWhereOwner("mala", "ownerEmail"),
+    deleteWhereOwner("gastos", "ownerEmail"),   // só gastos pessoais têm ownerEmail
+    deleteWhereOwner("documentos", "uploadedBy"),
+    deleteWhereOwner("emergencia", "createdBy")
+  ]);
+
+  // Remove o próprio e-mail da viagem (mesma lógica de removeParticipant, auto-aplicada).
+  const updatedEmails = (currentTripData.participantEmails || []).filter((e) => e !== email);
+  const updatedRoles = { ...(currentTripData.participantRoles || {}) };
+  delete updatedRoles[email];
+  const updatedAdmins = (currentTripData.adminEmails || []).filter((e) => e !== email);
+  await updateDoc(doc(db, "trips", currentTripId), {
+    participantEmails: updatedEmails, participantRoles: updatedRoles, adminEmails: updatedAdmins
+  });
+
+  goToTripPicker();
+}
+$("eraseMyDataBtn")?.addEventListener("click", eraseMyData);
 
 // ================= HISTÓRICO =================
 function subscribeHistorico() {

@@ -380,6 +380,7 @@
             <label data-i18n="documents.expiresLabel">Apagar automaticamente depois de</label>
             <select id="docExpiry">
               <option value="keep" class="hidden" data-i18n="documents.expiresKeep">Manter validade atual</option>
+              <option value="default" data-i18n="documents.expiresDefault">Padrão — 30 dias após o fim da viagem</option>
               <option value="0" data-i18n="documents.expiresNever">Nunca</option>
               <option value="7" data-i18n="documents.expires7">7 dias</option>
               <option value="15" data-i18n="documents.expires15">15 dias</option>
@@ -387,6 +388,12 @@
               <option value="90" data-i18n="documents.expires90">90 dias</option>
             </select>
           </div>
+          <div class="screen-sub" style="margin:2px 0 4px;" data-i18n="documents.consentNotice">Este arquivo pode conter dado pessoal sensível. Ao salvar, você confirma que tem autorização para compartilhá-lo com o grupo desta viagem.</div>
+          <label style="display:flex; align-items:flex-start; gap:8px; font-size:12.5px; color:var(--muted); margin-bottom:4px; cursor:pointer;">
+            <input type="checkbox" id="docIsMinor" style="margin-top:2px;">
+            <span data-i18n="documents.minorCheckbox">Este documento pertence a um menor de idade sob minha responsabilidade</span>
+          </label>
+          <div id="docMinorConsent" class="screen-sub hidden" style="margin:0 0 8px; color:var(--gold);" data-i18n="documents.minorConsentNotice">Ao marcar essa opção, você confirma que é responsável legal por esse menor e consente com o tratamento destes dados em nome dele, conforme a LGPD (Art. 14).</div>
           <div id="docUploadStatus" class="screen-sub hidden"></div>
           <div class="form-row">
             <button class="btn btn-primary btn-block" id="saveDocBtn" data-i18n="common.save">Salvar</button>
@@ -543,6 +550,12 @@
         <div id="emergencyForm" class="form-card hidden">
           <div><label data-i18n="emergency.label">Rótulo</label><input type="text" id="emLabel" placeholder="Ex: Agência (Landy)"></div>
           <div><label data-i18n="emergency.value">Valor</label><input type="text" id="emValue" placeholder="Ex: +51 999 999 999"></div>
+          <div class="screen-sub" style="margin:2px 0 4px;" data-i18n="emergency.consentNotice">Esta informação pode incluir dado sensível (ex: condição de saúde). Ao salvar, você confirma que tem autorização para compartilhá-la com o grupo desta viagem.</div>
+          <label style="display:flex; align-items:flex-start; gap:8px; font-size:12.5px; color:var(--muted); margin-bottom:4px; cursor:pointer;">
+            <input type="checkbox" id="emIsMinor" style="margin-top:2px;">
+            <span data-i18n="emergency.minorCheckbox">Esta informação é de um menor de idade sob minha responsabilidade</span>
+          </label>
+          <div id="emMinorConsent" class="screen-sub hidden" style="margin:0 0 8px; color:var(--gold);" data-i18n="emergency.minorConsentNotice">Ao marcar essa opção, você confirma que é responsável legal por esse menor e consente com o tratamento destes dados em nome dele, conforme a LGPD (Art. 14).</div>
           <div class="form-row">
             <button class="btn btn-primary btn-block" id="saveEmergencyBtn" data-i18n="common.save">Salvar</button>
             <button class="btn btn-outline" id="closeEmergencyFormBtn" style="flex:0 0 auto;">✕</button>
@@ -556,6 +569,7 @@
         <h2 class="screen-title" data-i18n="nav.history">Histórico</h2>
         <p class="screen-sub" data-i18n="history.sub">Registro de tudo que foi alterado nessa viagem.</p>
         <button id="resetAppBtn" class="btn btn-danger btn-small" style="margin-bottom:14px;" data-i18n="reset.button">🔄 Resetar app (apagar tudo)</button>
+        <button id="eraseMyDataBtn" class="btn btn-outline btn-small" style="margin-bottom:14px; margin-left:8px;" data-i18n="erase.button">🗑️ Remover meus dados desta viagem</button>
         <div id="historyList"></div>
       </div>
 
