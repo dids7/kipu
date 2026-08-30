@@ -90,8 +90,8 @@
 </div>
 <div id="nameModal" class="modal-overlay hidden">
   <div class="modal-box">
-    <div class="modal-title" data-i18n="profile.title">Como podemos te chamar?</div>
-    <div class="modal-message" data-i18n="profile.desc">Seu nome aparece pro grupo no lugar do seu e-mail em todo o app — mais fácil de reconhecer quem é quem.</div>
+    <div class="modal-title" id="modalTitleText" data-i18n="profile.title">Como podemos te chamar?</div>
+    <div class="modal-message" id="modalDescText" data-i18n="profile.desc">Seu nome aparece pro grupo no lugar do seu e-mail em todo o app — mais fácil de reconhecer quem é quem.</div>
     <input type="text" id="profileNameInput" data-i18n-placeholder="profile.namePlaceholder" placeholder="Seu nome" style="margin-bottom:16px;">
 
     <div class="card-title" style="font-size:12px; margin-bottom:8px;" data-i18n="profile.themeTitle">Cor do app</div>
@@ -116,7 +116,6 @@
 
     <div class="card-title" style="font-size:12px; margin:18px 0 6px;" data-i18n="profile.tabOrderTitle">Ordem das abas</div>
     <div class="card-meta" style="margin-bottom:8px;" data-i18n="profile.tabOrderDesc">Deixe na frente as que você mais usa. "Hoje" sempre fica primeiro.</div>
-    <div id="tabOrderDots" style="display:flex; gap:5px; justify-content:center; margin-bottom:8px;"></div>
     <div id="tabOrderList" style="max-height:190px; overflow-y:auto; border:1px solid var(--line); border-radius:var(--radius); padding:2px 6px;"></div>
 
     <div class="modal-actions" style="margin-top:16px;">
@@ -576,10 +575,14 @@
       <!-- EMERGÊNCIA -->
       <div class="tab-panel hidden" id="panel-emergencia">
         <h2 class="screen-title" data-i18n="emergency.title">Informações de emergência</h2>
+        <div class="segmented">
+          <button class="seg-btn active" data-emergseg="contato"><span data-i18n="emergency.segContacts">📞 Contatos</span></button>
+          <button class="seg-btn" data-emergseg="saude"><span data-i18n="emergency.segHealth">🏥 Saúde</span></button>
+        </div>
         <button class="add-toggle" id="addEmergencyToggleBtn" data-form="emergencyForm" data-i18n="emergency.addBtn">＋ Adicionar informação</button>
         <div id="emergencyForm" class="form-card hidden">
-          <div><label data-i18n="emergency.label">Rótulo</label><input type="text" id="emLabel" placeholder="Ex: Agência (Landy)"></div>
-          <div><label data-i18n="emergency.value">Valor</label><input type="text" id="emValue" placeholder="Ex: +51 999 999 999"></div>
+          <div><label id="emLabelLabel" data-i18n="emergency.label">Rótulo</label><input type="text" id="emLabel" placeholder="Ex: Agência (Landy)"></div>
+          <div><label id="emValueLabel" data-i18n="emergency.value">Valor</label><input type="text" id="emValue" placeholder="Ex: +51 999 999 999"></div>
           <div class="screen-sub" style="margin:2px 0 4px;" data-i18n="emergency.consentNotice">Esta informação pode incluir dado sensível (ex: condição de saúde). Ao salvar, você confirma que tem autorização para compartilhá-la com o grupo desta viagem.</div>
           <label style="display:flex; align-items:flex-start; gap:8px; font-size:12.5px; color:var(--muted); margin-bottom:4px; cursor:pointer;">
             <input type="checkbox" id="emIsMinor" style="margin-top:2px;">

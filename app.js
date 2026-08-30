@@ -190,32 +190,16 @@ async function saveTabOrder() {
   }
 }
 
-function updateTabOrderDots() {
-  const listEl = $("tabOrderList");
-  const dotsEl = $("tabOrderDots");
-  if (!listEl || !dotsEl) return;
-  const rows = Array.from(listEl.children);
-  const dots = Array.from(dotsEl.children);
-  if (rows.length === 0 || dots.length === 0) return;
-  // Pontinho aceso = a linha mais próxima do topo visível da lista (indicador
-  // de posição de rolagem, como num carrossel) — não é "página", é "onde estou".
-  let closestIdx = 0;
-  let closestDist = Infinity;
-  rows.forEach((row, idx) => {
-    const dist = Math.abs(row.offsetTop - listEl.scrollTop);
-    if (dist < closestDist) { closestDist = dist; closestIdx = idx; }
-  });
-  dots.forEach((dot, idx) => dot.classList.toggle("active", idx === closestIdx));
-}
-
 function renderTabOrderEditor() {
   const listEl = $("tabOrderList");
-  const dotsEl = $("tabOrderDots");
-  if (!listEl || !dotsEl) return;
+  if (!listEl) return;
 
   listEl.innerHTML = myTabOrder.map((id, idx) => `
     <div class="list-row" data-tab-id="${id}" style="padding:8px 4px;">
-      <span class="card-meta" style="color:var(--ink); font-size:13px;">${t(TAB_NAV_KEYS[id])}</span>
+      <span class="card-meta" style="color:var(--ink); font-size:13px; display:flex; align-items:center; gap:9px;">
+        <span class="tab-order-num">${idx + 1}</span>
+        ${t(TAB_NAV_KEYS[id])}
+      </span>
       <div style="display:flex; gap:2px;">
         <button class="icon-btn" data-dir="up" ${idx === 0 ? "disabled" : ""} title="↑">↑</button>
         <button class="icon-btn" data-dir="down" ${idx === myTabOrder.length - 1 ? "disabled" : ""} title="↓">↓</button>
@@ -235,9 +219,6 @@ function renderTabOrderEditor() {
       applyTabOrderToNav();
     });
   });
-
-  dotsEl.innerHTML = myTabOrder.map(() => `<span class="tab-order-dot"></span>`).join("");
-  updateTabOrderDots();
 }
 
 
@@ -308,10 +289,6 @@ let allUserTrips = [];       // todas as viagens onde o usuário é participante
 const $ = (id) => document.getElementById(id);
 function show(el) { el.classList.remove("hidden"); }
 function hide(el) { el.classList.add("hidden"); }
-
-// Movido pra cá (depois de $ existir) — precisa rodar após a definição de $
-// na linha acima, senão trava o script inteiro antes mesmo do botão de login.
-$("tabOrderList")?.addEventListener("scroll", updateTabOrderDots);
 
 function confirmDialog(message, okText = "Excluir") {
   return new Promise((resolve) => {
@@ -445,10 +422,12 @@ async function loadParticipantNames(emails) {
   }));
 }
 
-function showNameModal({ prefill = "", skipText = null } = {}) {
+function showNameModal({ prefill = "", skipText = null, isEdit = false } = {}) {
   return new Promise((resolve) => {
     $("profileNameInput").value = prefill;
     if (skipText) $("profileNameSkipBtn").textContent = skipText;
+    $("modalTitleText").textContent = isEdit ? t("profile.editTitle") : t("profile.title");
+    $("modalDescText").textContent = isEdit ? t("profile.editDesc") : t("profile.desc");
     $("nameModal").classList.remove("hidden");
     $("profileNameInput").focus();
     renderTabOrderEditor();
@@ -501,7 +480,7 @@ function checkAndPromptProfile() {
 }
 
 $("profileBtn")?.addEventListener("click", async () => {
-  await showNameModal({ prefill: myDisplayName || "", skipText: t("common.cancel") });
+  await showNameModal({ prefill: myDisplayName || "", skipText: t("common.cancel"), isEdit: true });
   $("userEmailLabel").textContent = myDisplayName || currentUser.email;
   $("userEmailLabel").title = currentUser.email;
 });
@@ -1156,7 +1135,7 @@ function renderHojeTab() {
   }
 
   if (itItems.length === 0 && remItems.length === 0) {
-    itEl.innerHTML = `<div class="empty">${t("hoje.empty")}</div>`;
+    itEl.innerHTML = `<p class="screen-sub" style="margin-top:2px;">${t("hoje.empty")}</p>`;
   }
 }
 
@@ -2159,11 +2138,56 @@ $("saveExpenseBtn").addEventListener("click", async () => {
 
 // ================= EMERGÊNCIA =================
 let editingEmergencyId = null;
+let emergCategory = "contato"; // segmento selecionado: "contato" ou "saude"
+let emergItemsCache = [];
+
+const EMERG_PLACEHOLDERS = {
+  contato: { label: "Ex: Agência (Landy)", value: "Ex: +51 999 999 999" },
+  saude: { label: "Ex: Alergia", value: "Ex: Penicilina — portar anti-histamínico" }
+};
+
+function applyEmergFormCopy() {
+  const ph = EMERG_PLACEHOLDERS[emergCategory];
+  $("emLabel").placeholder = ph.label;
+  $("emValue").placeholder = ph.value;
+}
+
+document.querySelectorAll("[data-emergseg]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("[data-emergseg]").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    emergCategory = btn.dataset.emergseg;
+    applyEmergFormCopy();
+    renderEmergencyList();
+  });
+});
+
+function renderEmergencyList() {
+  const listEl = $("emergencyList");
+  // Itens antigos não têm campo "category" — tratados como "contato" (comportamento anterior).
+  const visibleItems = emergItemsCache.filter((it) => (it.category || "contato") === emergCategory);
+  if (visibleItems.length === 0) { listEl.innerHTML = `<div class='empty'>${t("empty.emergency")}</div>`; return; }
+  listEl.innerHTML = "";
+  visibleItems.forEach((it) => {
+    const card = document.createElement("div");
+    card.className = "card card-row";
+    card.innerHTML = `
+      <div><span class="card-title">${it.label}</span><br><span class="card-meta">${it.value}</span></div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <button class="item-del" data-action="edit" title="Editar">✎</button>
+        <button class="item-del" data-action="delete" title="Excluir">✕</button>
+      </div>
+    `;
+    card.querySelector('[data-action="edit"]').addEventListener("click", () => openEmergencyForEdit(it.id, it));
+    card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("emergencia", it.id, it.label, "emergencia"));
+    listEl.appendChild(card);
+  });
+}
+
 function subscribeEmergencia() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "emergencia"), (snap) => {
-    const listEl = $("emergencyList");
     const todayISO = new Date().toISOString().slice(0, 10);
-    const visibleItems = [];
+    emergItemsCache = [];
     snap.forEach((d) => {
       const it = d.data();
       // Retenção automática (LGPD Art. 6º III): dado de emergência sem finalidade
@@ -2175,24 +2199,9 @@ function subscribeEmergencia() {
         logActivity("emergencia", "informação expirada removida (retenção automática)", it.label);
         return;
       }
-      visibleItems.push({ id: d.id, ...it });
+      emergItemsCache.push({ id: d.id, ...it });
     });
-    if (visibleItems.length === 0) { listEl.innerHTML = `<div class='empty'>${t("empty.emergency")}</div>`; return; }
-    listEl.innerHTML = "";
-    visibleItems.forEach((it) => {
-      const card = document.createElement("div");
-      card.className = "card card-row";
-      card.innerHTML = `
-        <div><span class="card-title">${it.label}</span><br><span class="card-meta">${it.value}</span></div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <button class="item-del" data-action="edit" title="Editar">✎</button>
-          <button class="item-del" data-action="delete" title="Excluir">✕</button>
-        </div>
-      `;
-      card.querySelector('[data-action="edit"]').addEventListener("click", () => openEmergencyForEdit(it.id, it));
-      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("emergencia", it.id, it.label, "emergencia"));
-      listEl.appendChild(card);
-    });
+    renderEmergencyList();
   });
   unsubscribers.push(unsub);
 }
@@ -2214,6 +2223,7 @@ function resetEmergencyForm() {
   $("emMinorConsent").classList.add("hidden");
   $("saveEmergencyBtn").textContent = "Salvar";
   $("emergencyForm").classList.add("hidden");
+  applyEmergFormCopy();
 }
 $("emIsMinor")?.addEventListener("change", () => {
   $("emMinorConsent").classList.toggle("hidden", !$("emIsMinor").checked);
@@ -2232,11 +2242,12 @@ $("saveEmergencyBtn").addEventListener("click", async () => {
   if (!label || !value) { alert("Preencha rótulo e valor."); return; }
   if (editingEmergencyId) {
     // Editar sem mexer na validade não reseta ela — mesmo padrão dos Documentos.
+    // Categoria não muda na edição (não há seletor no formulário de edição).
     await updateDoc(doc(db, "trips", currentTripId, "emergencia", editingEmergencyId), { label, value, subjectIsMinor });
     logActivity("emergencia", "informação editada", label);
   } else {
     await addDoc(collection(db, "trips", currentTripId, "emergencia"), {
-      label, value, subjectIsMinor, createdBy: currentUser.email, expiresAt: defaultRetentionDate(30)
+      label, value, subjectIsMinor, category: emergCategory, createdBy: currentUser.email, expiresAt: defaultRetentionDate(30)
     });
     logActivity("emergencia", subjectIsMinor ? "informação adicionada (menor de idade — consentimento do responsável confirmado)" : "informação adicionada", label);
   }
