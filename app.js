@@ -15,6 +15,20 @@ import { translations, SUPPORTED_LANGS, DEFAULT_LANG } from "./translations.js";
 // Declarada bem no topo pra nunca dar erro de "usar antes de declarar".
 let appIsOpen = false;
 
+// Formata uma data no fuso LOCAL do navegador como "YYYY-MM-DD" — em vez de
+// Date.toISOString(), que usa UTC. Isso importa de verdade numa viagem em
+// outro fuso (ex: Peru, UTC-5): perto da meia-noite local, toISOString()
+// pode devolver o dia ANTERIOR, fazendo a aba "Hoje" e as expirações
+// calcularem tudo com um dia de atraso. Função declarada (não const) de
+// propósito, pra funcionar mesmo se chamada por código que roda antes dela
+// no arquivo — declarações de função sobem pro topo do escopo sozinhas.
+function localISODate(d = new Date()) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 // ================= PERMISSÕES (papéis) =================
 let myRole = "colaborador";
 
@@ -36,7 +50,7 @@ function canAddParticipant() {
   const val = myPerms().addParticipant;
   if (val === true) return true;
   if (val === "beforeTripStart") {
-    return currentTripData && new Date().toISOString().slice(0, 10) < currentTripData.startDate;
+    return currentTripData && localISODate() < currentTripData.startDate;
   }
   return false;
 }
@@ -1072,7 +1086,7 @@ $("roleIntroCloseBtn")?.addEventListener("click", () => {
 function renderHojeTab() {
   if (!currentTripData) return;
   maybeShowRoleIntro();
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const todayISO = localISODate();
   const statusEl = $("hojeStatusLine");
   if (todayISO < currentTripData.startDate) {
     const diffDays = Math.ceil((new Date(currentTripData.startDate + "T00:00:00") - new Date(todayISO + "T00:00:00")) / 86400000);
@@ -1388,7 +1402,7 @@ let editingDocId = null;
 function subscribeDocumentos() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "documentos"), (snap) => {
     const listEl = $("docsList");
-    const todayISO = new Date().toISOString().slice(0, 10);
+    const todayISO = localISODate();
     const visibleDocs = [];
 
     snap.forEach((d) => {
@@ -1448,7 +1462,7 @@ function defaultRetentionDate(days = 30) {
     : Date.now();
   const target = new Date(base + days * 86400000);
   const tomorrow = new Date(Date.now() + 86400000);
-  return (target < tomorrow ? tomorrow : target).toISOString().slice(0, 10);
+  return localISODate(target < tomorrow ? tomorrow : target);
 }
 
 function openDocForEdit(id, doc_) {
@@ -1510,7 +1524,7 @@ $("saveDocBtn").addEventListener("click", async () => {
   } else {
     const expiryDays = parseInt(expiryValue, 10) || 0;
     expiresAt = expiryDays > 0
-      ? new Date(Date.now() + expiryDays * 86400000).toISOString().slice(0, 10)
+      ? localISODate(new Date(Date.now() + expiryDays * 86400000))
       : null;
   }
 
@@ -1862,7 +1876,7 @@ let penToBrlRate = parseFloat(localStorage.getItem("kipu_pen_brl")) || 1.45;
 
 const LS_RATE_FETCH_DATE = "kipu_rate_fetch_date";
 const LS_RATE_MANUAL_DATE = "kipu_rate_manual_date";
-function todayStr() { return new Date().toISOString().slice(0, 10); }
+function todayStr() { return localISODate(); }
 
 // Busca a cotação do dia automaticamente (uma vez por dia, cacheada).
 // Se o usuário já editou manualmente hoje, não sobrescreve o que ele digitou.
@@ -2186,7 +2200,7 @@ function renderEmergencyList() {
 
 function subscribeEmergencia() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "emergencia"), (snap) => {
-    const todayISO = new Date().toISOString().slice(0, 10);
+    const todayISO = localISODate();
     emergItemsCache = [];
     snap.forEach((d) => {
       const it = d.data();
@@ -2428,7 +2442,7 @@ function renderCalendar() {
     grid.appendChild(empty);
   }
 
-  const todayISO = toISODate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+  const todayISO = localISODate();
 
   for (let day = 1; day <= daysInMonth; day++) {
     const iso = toISODate(y, m, day);
