@@ -79,7 +79,8 @@ function applyRolePermissions() {
 
   // Botões de adicionar item, por aba.
   $("addItinerarioToggleBtn")?.classList.toggle("hidden", !can("editCalendar"));
-  $("bulkImportToggleBtn")?.classList.toggle("hidden", !can("editCalendar"));
+  $("bulkImportSwitch")?.closest(".card")?.classList.toggle("hidden", !can("editCalendar"));
+  if (!can("editCalendar")) $("bulkImportForm")?.classList.add("hidden");
   $("addEstadiaToggleBtn")?.classList.toggle("hidden", !can("editCalendar"));
   $("addDocToggleBtn")?.classList.toggle("hidden", myPerms().editDocs !== 1 && myPerms().editDocs !== true);
   $("addExpenseToggleBtn")?.classList.toggle("hidden", myPerms().editDocs !== 1 && myPerms().editDocs !== true);
@@ -862,6 +863,7 @@ async function openTrip(tripId) {
   renderCountdown();
   renderHojeTab();
   fetchWeatherIfNeeded();
+  initBulkImportToggle();
   populateResponsibleSelects();
 
   subscribeItinerario();
@@ -1447,7 +1449,7 @@ $("saveItinerarioBtn").addEventListener("click", async () => {
 // Cloud Function e custo), a gente pede pro usuário formatar as próprias
 // anotações usando uma IA que ele já tem acesso (Claude), num formato fixo
 // e simples que o app só precisa validar, não interpretar.
-const BULK_IMPORT_PROMPT = `Organize as informações da minha viagem abaixo neste formato exato, uma linha por atividade, sem nenhum texto antes ou depois das linhas (não inclua a linha de cabeçalho, comece direto pela primeira atividade):
+const BULK_IMPORT_PROMPT = `Organize as informações da minha viagem abaixo neste formato exato, uma linha por atividade, sem nenhum texto antes ou depois das linhas (não inclua a linha de cabeçalho, comece direto pela primeira atividade). Traduza tudo para português, mesmo que as informações originais estejam em espanhol, inglês ou qualquer outro idioma:
 
 TITULO|DATA|HORA_INICIO|HORA_FIM|LOCAL|VALOR|STATUS
 
@@ -1468,13 +1470,33 @@ function initBulkImportPromptBox() {
 }
 initBulkImportPromptBox();
 
-$("bulkImportToggleBtn")?.addEventListener("click", () => {
-  $("itinerarioForm").classList.add("hidden");
-  $("bulkImportForm").classList.remove("hidden");
-  $("bulkImportForm").scrollIntoView({ behavior: "smooth", block: "center" });
+// Toggle persistente por viagem: a primeira vez que a aba é aberta, vem
+// LIGADO (mostra a seção de importar). Depois de importar uma lista com
+// sucesso pelo menos uma vez, desliga sozinho — mas continua sendo um
+// toggle manual, a pessoa pode ligar de novo quando quiser importar mais.
+function bulkImportToggleKey() { return `kipu_bulk_import_on_${currentTripId}`; }
+function setBulkImportToggle(isOn) {
+  localStorage.setItem(bulkImportToggleKey(), isOn ? "1" : "0");
+  const switchBtn = $("bulkImportSwitch");
+  if (switchBtn) {
+    switchBtn.classList.toggle("active", isOn);
+    switchBtn.textContent = isOn ? "✓ " + t("common.on") : t("common.off");
+  }
+  $("bulkImportForm")?.classList.toggle("hidden", !isOn);
+}
+function initBulkImportToggle() {
+  if (!currentTripId) return;
+  const stored = localStorage.getItem(bulkImportToggleKey());
+  const isOn = stored === null ? true : stored === "1"; // nunca usado ainda = ligado por padrão
+  setBulkImportToggle(isOn);
+}
+$("bulkImportSwitch")?.addEventListener("click", () => {
+  const isCurrentlyOn = $("bulkImportSwitch").classList.contains("active");
+  setBulkImportToggle(!isCurrentlyOn);
+  if (!isCurrentlyOn) $("bulkImportForm")?.scrollIntoView({ behavior: "smooth", block: "center" });
 });
 $("closeBulkImportBtn")?.addEventListener("click", () => {
-  $("bulkImportForm").classList.add("hidden");
+  setBulkImportToggle(false);
   $("itImportTextarea").value = "";
   $("itImportStatus").classList.add("hidden");
 });
@@ -1555,6 +1577,15 @@ $("importItinerarioBtn")?.addEventListener("click", async () => {
     })
   ));
   logActivity("itinerario", "importação em massa", `${items.length} item(ns) importados`);
+
+  // Desliga o toggle pra próxima vez que a aba for aberta — mas não fecha o
+  // formulário agora, senão a mensagem de sucesso abaixo some junto.
+  localStorage.setItem(bulkImportToggleKey(), "0");
+  const switchBtn = $("bulkImportSwitch");
+  if (switchBtn) {
+    switchBtn.classList.remove("active");
+    switchBtn.textContent = t("common.off");
+  }
 
   let msg = `✓ ${items.length} item(ns) importados com sucesso.`;
   if (errors.length > 0) {

@@ -335,7 +335,12 @@
         <h2 class="screen-title" data-i18n="nav.itinerary">Itinerário</h2>
         <p class="screen-sub" data-i18n="itinerary.legend">🟢 confirmado · 🟡 programado — clique no status pra alternar. Clique no lápis pra editar.</p>
         <button class="add-toggle" id="addItinerarioToggleBtn" data-form="itinerarioForm" data-i18n="itinerary.addBtn">＋ Adicionar item ao itinerário</button>
-        <button class="add-toggle" id="bulkImportToggleBtn" data-i18n="itinerary.bulkImportBtn">📋 Importar de uma vez</button>
+        <div class="card" style="padding:12px 14px; margin-bottom:14px;">
+          <div class="card-row">
+            <span class="card-title" style="font-size:13px;" data-i18n="itinerary.bulkImportBtn">📋 Importar de uma vez</span>
+            <button id="bulkImportSwitch" class="toggle-pill" style="padding:6px 14px;"></button>
+          </div>
+        </div>
         <div id="bulkImportForm" class="form-card hidden">
           <div class="screen-sub" data-i18n="itinerary.bulkImportIntro">Cole suas anotações de viagem numa conversa com o Claude (ou outra IA) junto com o texto abaixo — ele organiza tudo no formato certo pra colar aqui.</div>
           <label data-i18n="itinerary.bulkImportPromptLabel">1. Copie este texto e cole numa conversa com o Claude, junto das suas anotações da viagem:</label>
