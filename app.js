@@ -950,7 +950,7 @@ $("saveTripEditBtn").addEventListener("click", async () => {
   renderCountdown();
   renderHojeTab();
   if (destinationChanged) {
-    localStorage.removeItem(`kipu_weather_${currentTripId}`); // destino mudou, o clima cacheado não vale mais
+    localStorage.removeItem(`kipu_weather_v2_${currentTripId}`); // destino mudou, o clima cacheado não vale mais
     fetchWeatherIfNeeded();
   }
   const allIdx = allUserTrips.findIndex((t) => t.id === currentTripId);
@@ -1089,7 +1089,7 @@ let weatherData = null; // { current: {temp, code, todayMin, todayMax}, daily: [
 async function fetchWeatherIfNeeded() {
   if (!currentTripData || !currentTripData.destination) return;
   const today = localISODate();
-  const cacheKey = `kipu_weather_${currentTripId}`;
+  const cacheKey = `kipu_weather_v2_${currentTripId}`;
   const cached = localStorage.getItem(cacheKey);
   if (cached) {
     try {
@@ -1148,7 +1148,7 @@ async function geocodeDestination(rawDestination) {
   if (simplified && simplified !== rawDestination) attempts.push(simplified);
 
   for (const attempt of attempts) {
-    const geoCacheKey = `kipu_geo_${encodeURIComponent(attempt)}`;
+    const geoCacheKey = `kipu_geo_v2_${encodeURIComponent(attempt)}`;
     const cachedCoords = JSON.parse(localStorage.getItem(geoCacheKey) || "null");
     if (cachedCoords) return cachedCoords;
     try {
