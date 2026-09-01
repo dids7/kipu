@@ -333,59 +333,93 @@
       <!-- ITINERÁRIO -->
       <div class="tab-panel hidden" id="panel-itinerario">
         <h2 class="screen-title" data-i18n="nav.itinerary">Itinerário</h2>
-        <p class="screen-sub" data-i18n="itinerary.legend">🟢 confirmado · 🟡 programado — clique no status pra alternar. Clique no lápis pra editar.</p>
-        <button class="add-toggle" id="addItinerarioToggleBtn" data-form="itinerarioForm" data-i18n="itinerary.addBtn">＋ Adicionar item ao itinerário</button>
-        <div class="card" style="padding:12px 14px; margin-bottom:14px;">
-          <div class="card-row">
-            <span class="card-title" style="font-size:13px;" data-i18n="itinerary.bulkImportBtn">📋 Importar de uma vez</span>
-            <button id="bulkImportSwitch" class="toggle-pill" style="padding:6px 14px;"></button>
-          </div>
+        <div class="segmented">
+          <button class="seg-btn active" data-itinseg="roteiro"><span data-i18n="itinerary.segRoteiro">📅 Roteiro</span></button>
+          <button class="seg-btn" data-itinseg="dicas"><span data-i18n="itinerary.segDicas">💡 Dicas</span></button>
         </div>
-        <div id="bulkImportForm" class="form-card hidden">
-          <div class="screen-sub" data-i18n="itinerary.bulkImportIntro">Cole suas anotações de viagem numa conversa com o Claude (ou outra IA) junto com o texto abaixo — ele organiza tudo no formato certo pra colar aqui.</div>
-          <label data-i18n="itinerary.bulkImportPromptLabel">1. Copie este texto e cole numa conversa com o Claude, junto das suas anotações da viagem:</label>
-          <textarea id="bulkImportPromptBox" readonly rows="7" style="width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; margin-top:4px;"></textarea>
-          <button class="btn btn-outline btn-block" id="copyBulkPromptBtn" style="margin:8px 0 16px;" data-i18n="itinerary.copyPrompt">📋 Copiar texto</button>
-          <label data-i18n="itinerary.bulkImportPasteLabel">2. Cole aqui a resposta que a IA te devolveu:</label>
-          <textarea id="itImportTextarea" rows="8" style="width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; margin-top:4px;" placeholder="Embarque para Lima|2026-09-05|14:00||Aeroporto de Guarulhos|1200|confirmado"></textarea>
-          <div class="form-row" style="margin-top:10px;">
-            <button class="btn btn-primary btn-block" id="importItinerarioBtn" data-i18n="itinerary.importBtn">Importar</button>
-            <button class="btn btn-outline" id="closeBulkImportBtn" style="flex:0 0 auto;">✕</button>
-          </div>
-          <div id="itImportStatus" class="screen-sub hidden" style="margin-top:10px;"></div>
-        </div>
-        <div id="itinerarioForm" class="form-card hidden">
-          <div class="form-row">
-            <div><label data-i18n="common.date">Data</label><input type="date" id="itDate"></div>
-            <div><label data-i18n="common.start">Início</label><input type="time" id="itTime"></div>
-            <div><label data-i18n="common.endOptional">Fim — opcional</label><input type="time" id="itEndTime"></div>
-          </div>
-          <div><label data-i18n="itinerary.activity">Atividade</label><input type="text" id="itTitle" placeholder="Ex: Machu Picchu — Circuito 2"></div>
-          <div><label data-i18n="itinerary.location">Local / endereço — opcional</label><input type="text" id="itLocation" placeholder="Ex: Aguas Calientes, Peru"></div>
-          <div>
-            <label data-i18n="common.status">Status</label>
-            <select id="itStatus">
-              <option value="programado" data-i18n="status.programado">Programado</option>
-              <option value="confirmado" data-i18n="status.confirmado">Confirmado</option>
-            </select>
-          </div>
-          <div class="form-row">
-            <div><label data-i18n="itinerary.value">Valor (R$) — opcional</label><input type="number" id="itValue" step="0.01" placeholder="0,00"></div>
-            <div>
-              <label data-i18n="common.payment">Pagamento</label>
-              <select id="itPaymentStatus">
-                <option value="pendente" data-i18n="status.pendente">Pendente</option>
-                <option value="pago" data-i18n="status.pago">Pago</option>
-              </select>
+
+        <div id="itinRoteiroSection">
+          <p class="screen-sub" data-i18n="itinerary.legend">🟢 confirmado · 🟡 programado — clique no status pra alternar. Clique no lápis pra editar.</p>
+          <button class="add-toggle" id="addItinerarioToggleBtn" data-form="itinerarioForm" data-i18n="itinerary.addBtn">＋ Adicionar item ao itinerário</button>
+          <div class="card" style="padding:12px 14px; margin-bottom:14px;">
+            <div class="card-row">
+              <span class="card-title" style="font-size:13px;" data-i18n="itinerary.bulkImportBtn">📋 Importar de uma vez</span>
+              <button id="bulkImportSwitch" class="toggle-pill" style="padding:6px 14px;"></button>
             </div>
           </div>
-          <div><label data-i18n="itinerary.responsible">Responsável — opcional</label><select id="itResponsible"><option value="">—</option></select></div>
-          <div class="form-row">
-            <button class="btn btn-primary btn-block" id="saveItinerarioBtn" data-i18n="common.save">Salvar</button>
-            <button class="btn btn-outline" id="cancelItinerarioEditBtn" style="flex:0 0 auto;">✕</button>
+          <div id="bulkImportForm" class="form-card hidden">
+            <div class="screen-sub" data-i18n="itinerary.bulkImportIntro">Cole suas anotações de viagem numa conversa com o Claude (ou outra IA) junto com o texto abaixo — ele organiza tudo no formato certo pra colar aqui.</div>
+            <label data-i18n="itinerary.bulkImportPromptLabel">1. Copie este texto e cole numa conversa com o Claude, junto das suas anotações da viagem:</label>
+            <textarea id="bulkImportPromptBox" readonly rows="7" style="width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; margin-top:4px;"></textarea>
+            <button class="btn btn-outline btn-block" id="copyBulkPromptBtn" style="margin:8px 0 16px;" data-i18n="itinerary.copyPrompt">📋 Copiar texto</button>
+            <label data-i18n="itinerary.bulkImportPasteLabel">2. Cole aqui a resposta que a IA te devolveu:</label>
+            <textarea id="itImportTextarea" rows="8" style="width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; margin-top:4px;" placeholder="Embarque para Lima|2026-09-05|14:00||Aeroporto de Guarulhos|1200|confirmado"></textarea>
+            <div class="form-row" style="margin-top:10px;">
+              <button class="btn btn-primary btn-block" id="importItinerarioBtn" data-i18n="itinerary.importBtn">Importar</button>
+              <button class="btn btn-outline" id="closeBulkImportBtn" style="flex:0 0 auto;">✕</button>
+            </div>
+            <div id="itImportStatus" class="screen-sub hidden" style="margin-top:10px;"></div>
           </div>
+          <div id="itinerarioForm" class="form-card hidden">
+            <div class="form-row">
+              <div><label data-i18n="common.date">Data</label><input type="date" id="itDate"></div>
+              <div><label data-i18n="common.start">Início</label><input type="time" id="itTime"></div>
+              <div><label data-i18n="common.endOptional">Fim — opcional</label><input type="time" id="itEndTime"></div>
+            </div>
+            <div><label data-i18n="itinerary.activity">Atividade</label><input type="text" id="itTitle" placeholder="Ex: Machu Picchu — Circuito 2"></div>
+            <div><label data-i18n="itinerary.location">Local / endereço — opcional</label><input type="text" id="itLocation" placeholder="Ex: Aguas Calientes, Peru"></div>
+            <div>
+              <label data-i18n="common.status">Status</label>
+              <select id="itStatus">
+                <option value="programado" data-i18n="status.programado">Programado</option>
+                <option value="confirmado" data-i18n="status.confirmado">Confirmado</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <div><label data-i18n="itinerary.value">Valor (R$) — opcional</label><input type="number" id="itValue" step="0.01" placeholder="0,00"></div>
+              <div>
+                <label data-i18n="common.payment">Pagamento</label>
+                <select id="itPaymentStatus">
+                  <option value="pendente" data-i18n="status.pendente">Pendente</option>
+                  <option value="pago" data-i18n="status.pago">Pago</option>
+                </select>
+              </div>
+            </div>
+            <div><label data-i18n="itinerary.responsible">Responsável — opcional</label><select id="itResponsible"><option value="">—</option></select></div>
+            <div class="form-row">
+              <button class="btn btn-primary btn-block" id="saveItinerarioBtn" data-i18n="common.save">Salvar</button>
+              <button class="btn btn-outline" id="cancelItinerarioEditBtn" style="flex:0 0 auto;">✕</button>
+            </div>
+          </div>
+          <div id="itinerarioList"></div>
         </div>
-        <div id="itinerarioList"></div>
+
+        <div id="itinDicasSection" class="hidden">
+          <p class="screen-sub" data-i18n="itinerary.dicasIntro">Achados úteis do grupo — câmbio, restaurante, transporte, o que valer a pena passar adiante. Sem data marcada, é só pra guardar e consultar.</p>
+          <button class="add-toggle" id="addDicaToggleBtn" data-form="dicaForm" data-i18n="itinerary.addDicaBtn">＋ Adicionar dica</button>
+          <div id="dicaForm" class="form-card hidden">
+            <div><label data-i18n="itinerary.dicaTitulo">Título</label><input type="text" id="dicaTitulo" placeholder="Ex: Câmbio bom perto da praça"></div>
+            <div>
+              <label data-i18n="itinerary.dicaCategoria">Categoria</label>
+              <select id="dicaCategoria">
+                <option value="cambio" data-i18n="itinerary.catCambio">💱 Câmbio</option>
+                <option value="restaurante" data-i18n="itinerary.catRestaurante">🍽️ Restaurante</option>
+                <option value="transporte" data-i18n="itinerary.catTransporte">🚕 Transporte</option>
+                <option value="compras" data-i18n="itinerary.catCompras">🛍️ Compras</option>
+                <option value="outro" data-i18n="itinerary.catOutro">📌 Outro</option>
+              </select>
+            </div>
+            <div><label data-i18n="itinerary.dicaNota">Nota — opcional</label><textarea id="dicaNota" rows="3" placeholder="Ex: taxa melhor que a do hotel, atendem em espanhol e inglês"></textarea></div>
+            <div><label data-i18n="itinerary.dicaLocal">Local — opcional</label><input type="text" id="dicaLocal" placeholder="Ex: Praça de Ollantaytambo"></div>
+            <div><label data-i18n="itinerary.dicaIndicadoPor">Quem indicou — opcional</label><input type="text" id="dicaIndicadoPor" placeholder="Ex: guia local, achamos por conta própria"></div>
+            <div class="form-row">
+              <button class="btn btn-primary btn-block" id="saveDicaBtn" data-i18n="common.save">Salvar</button>
+              <button class="btn btn-outline" id="cancelDicaEditBtn" style="flex:0 0 auto;">✕</button>
+            </div>
+          </div>
+          <div class="checkbox-group" id="dicaFilterGroup" style="margin-bottom:12px;"></div>
+          <div id="dicasList"></div>
+        </div>
       </div>
 
       <!-- ESTADIA -->

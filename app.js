@@ -867,6 +867,7 @@ async function openTrip(tripId) {
   populateResponsibleSelects();
 
   subscribeItinerario();
+  subscribeDicas();
   subscribeEstadia();
   subscribeDocumentos();
   subscribeMala();
@@ -1477,6 +1478,137 @@ $("saveItinerarioBtn").addEventListener("click", async () => {
     logActivity("itinerario", "item adicionado", title);
   }
   resetItinerarioForm();
+});
+
+// ================= SEGMENTO ROTEIRO / DICAS ==================
+// Abrir a aba Itinerário sempre cai em Roteiro (padrão) — Dicas só aparece
+// se a pessoa clicar, pra não competir por atenção com o roteiro de verdade.
+document.querySelectorAll("[data-itinseg]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("[data-itinseg]").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    const seg = btn.dataset.itinseg;
+    $("itinRoteiroSection").classList.toggle("hidden", seg !== "roteiro");
+    $("itinDicasSection").classList.toggle("hidden", seg !== "dicas");
+  });
+});
+
+// ================= DICAS (câmbio, restaurante, transporte... achados do grupo) =================
+// Aberto pros 4 papéis (mesmo padrão de Lembretes) — é conteúdo colaborativo
+// de baixo risco, qualquer participante pode contribuir, inclusive Convidado
+// e Agência (que pode ter indicação local boa pra passar pro grupo).
+const DICA_CATEGORIES = ["cambio", "restaurante", "transporte", "compras", "outro"];
+const DICA_CATEGORY_ICONS = { cambio: "💱", restaurante: "🍽️", transporte: "🚕", compras: "🛍️", outro: "📌" };
+let editingDicaId = null;
+let dicasCache = [];
+let dicaFilter = "todos";
+
+function dicaCategoryLabel(cat) { return t("itinerary.cat" + cat.charAt(0).toUpperCase() + cat.slice(1)); }
+
+function subscribeDicas() {
+  const unsub = onSnapshot(collection(db, "trips", currentTripId, "dicas"), (snap) => {
+    dicasCache = [];
+    snap.forEach((d) => dicasCache.push({ id: d.id, ...d.data() }));
+    renderDicaFilters();
+    renderDicasList();
+  });
+  unsubscribers.push(unsub);
+}
+
+function renderDicaFilters() {
+  const el = $("dicaFilterGroup");
+  if (!el) return;
+  const counts = {};
+  dicasCache.forEach((d) => { counts[d.category] = (counts[d.category] || 0) + 1; });
+  const chips = [{ key: "todos", label: t("itinerary.filterAll") }].concat(
+    DICA_CATEGORIES.map((cat) => ({ key: cat, label: `${DICA_CATEGORY_ICONS[cat]} ${dicaCategoryLabel(cat)}` }))
+  );
+  el.innerHTML = chips.map((c) => `
+    <span class="checkbox-chip${dicaFilter === c.key ? " checked" : ""}" data-filter="${c.key}">
+      ${c.label}${counts[c.key] ? ` (${counts[c.key]})` : ""}
+    </span>`).join("");
+  el.querySelectorAll("[data-filter]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      dicaFilter = chip.dataset.filter;
+      renderDicaFilters();
+      renderDicasList();
+    });
+  });
+}
+
+function renderDicasList() {
+  const listEl = $("dicasList");
+  if (!listEl) return;
+  const visible = dicaFilter === "todos" ? dicasCache : dicasCache.filter((d) => d.category === dicaFilter);
+  if (visible.length === 0) { listEl.innerHTML = `<div class="empty">${t("empty.dicas")}</div>`; return; }
+  listEl.innerHTML = "";
+  visible.forEach((dica) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="card-row">
+        <div>
+          <div class="card-title">${DICA_CATEGORY_ICONS[dica.category] || "📌"} ${dica.titulo}</div>
+          <div class="card-meta">
+            ${dicaCategoryLabel(dica.category)}
+            ${dica.indicadoPor ? ` · ${t("itinerary.dicaByLine")} ${dica.indicadoPor}` : ""}
+          </div>
+          ${dica.nota ? `<div class="card-meta" style="margin-top:4px;">${dica.nota}</div>` : ""}
+          ${dica.local ? `<div class="card-meta">${dica.local}</div>${mapLink(dica.local)}` : ""}
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="item-del" data-action="edit" title="Editar">✎</button>
+          <button class="item-del" data-action="delete" title="Excluir">✕</button>
+        </div>
+      </div>`;
+    card.querySelector('[data-action="edit"]').addEventListener("click", () => openDicaForEdit(dica.id, dica));
+    card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("dicas", dica.id, dica.titulo, "dicas"));
+    listEl.appendChild(card);
+  });
+}
+
+function openDicaForEdit(id, dica) {
+  editingDicaId = id;
+  $("dicaTitulo").value = dica.titulo || "";
+  $("dicaCategoria").value = dica.category || "outro";
+  $("dicaNota").value = dica.nota || "";
+  $("dicaLocal").value = dica.local || "";
+  $("dicaIndicadoPor").value = dica.indicadoPor || "";
+  $("saveDicaBtn").textContent = "Salvar alterações";
+  $("dicaForm").classList.remove("hidden");
+  $("dicaForm").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function resetDicaForm() {
+  editingDicaId = null;
+  $("dicaTitulo").value = ""; $("dicaCategoria").value = "cambio";
+  $("dicaNota").value = ""; $("dicaLocal").value = ""; $("dicaIndicadoPor").value = "";
+  $("saveDicaBtn").textContent = "Salvar";
+  $("dicaForm").classList.add("hidden");
+}
+$("cancelDicaEditBtn")?.addEventListener("click", resetDicaForm);
+$("addDicaToggleBtn")?.addEventListener("click", () => {
+  if (!$("dicaForm").classList.contains("hidden") || editingDicaId) {
+    resetDicaForm();
+    $("dicaForm").classList.remove("hidden");
+  }
+});
+$("saveDicaBtn")?.addEventListener("click", async () => {
+  const titulo = $("dicaTitulo").value.trim();
+  const category = $("dicaCategoria").value;
+  const nota = $("dicaNota").value.trim();
+  const local = $("dicaLocal").value.trim();
+  const indicadoPor = $("dicaIndicadoPor").value.trim();
+  if (!titulo) { alert("Preencha o título."); return; }
+  const payload = { titulo, category, nota, local, indicadoPor };
+
+  if (editingDicaId) {
+    await updateDoc(doc(db, "trips", currentTripId, "dicas", editingDicaId), payload);
+    logActivity("dicas", "dica editada", titulo);
+  } else {
+    await addDoc(collection(db, "trips", currentTripId, "dicas"), { ...payload, createdBy: currentUser.email });
+    logActivity("dicas", "dica adicionada", titulo);
+  }
+  resetDicaForm();
 });
 
 // ================= IMPORTAR ITINERÁRIO EM MASSA (via Claude/IA externa) =================
