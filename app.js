@@ -1103,16 +1103,11 @@ async function fetchWeatherIfNeeded() {
     } catch (err) { /* cache corrompido, ignora e busca de novo */ }
   }
   try {
-    // Geocodifica o texto do destino em coordenadas (também cacheado, já que
-    // o destino de uma viagem não muda — evita bater na API de geocoding toda vez).
-    const geoCacheKey = `kipu_geo_${encodeURIComponent(currentTripData.destination)}`;
-    let coords = JSON.parse(localStorage.getItem(geoCacheKey) || "null");
+    const coords = await geocodeDestination(currentTripData.destination);
     if (!coords) {
-      const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&language=pt&name=${encodeURIComponent(currentTripData.destination)}`);
-      const geoData = await geoRes.json();
-      if (!geoData.results || geoData.results.length === 0) return; // destino não encontrado, desiste em silêncio
-      coords = { lat: geoData.results[0].latitude, lon: geoData.results[0].longitude, name: geoData.results[0].name };
-      localStorage.setItem(geoCacheKey, JSON.stringify(coords));
+      console.warn(`Clima: não encontrei o destino "${currentTripData.destination}" na busca de localização. Tente deixar o campo Destino da viagem só com o nome da cidade (ex: "Cusco, Peru").`);
+      renderWeatherUnavailable();
+      return;
     }
 
     const res = await fetch(
@@ -1121,7 +1116,7 @@ async function fetchWeatherIfNeeded() {
       `&timezone=auto&forecast_days=6`
     );
     const data = await res.json();
-    if (!data.current || !data.daily) return;
+    if (!data.current || !data.daily) { renderWeatherUnavailable(); return; }
 
     weatherData = {
       current: { temp: Math.round(data.current.temperature_2m), code: data.current.weather_code },
@@ -1137,7 +1132,44 @@ async function fetchWeatherIfNeeded() {
     renderCalWeatherStrip();
   } catch (err) {
     console.warn("Não foi possível buscar o clima (offline?):", err);
+    renderWeatherUnavailable();
   }
+}
+
+// Geocodifica um texto de destino em coordenadas (cacheado, já que o destino
+// de uma viagem raramente muda). Tenta o texto inteiro primeiro; se não achar
+// nada (comum quando o campo tem mais de um lugar, tipo "Cusco e Vale Sagrado"),
+// tenta de novo só com o primeiro pedaço, separado por vírgula ou " e ".
+async function geocodeDestination(rawDestination) {
+  const attempts = [rawDestination];
+  const simplified = rawDestination.split(/,| e |\/| - /i)[0].trim();
+  if (simplified && simplified !== rawDestination) attempts.push(simplified);
+
+  for (const attempt of attempts) {
+    const geoCacheKey = `kipu_geo_${encodeURIComponent(attempt)}`;
+    const cachedCoords = JSON.parse(localStorage.getItem(geoCacheKey) || "null");
+    if (cachedCoords) return cachedCoords;
+    try {
+      const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&language=pt&name=${encodeURIComponent(attempt)}`);
+      const geoData = await geoRes.json();
+      if (geoData.results && geoData.results.length > 0) {
+        const coords = { lat: geoData.results[0].latitude, lon: geoData.results[0].longitude, name: geoData.results[0].name };
+        localStorage.setItem(geoCacheKey, JSON.stringify(coords));
+        return coords;
+      }
+    } catch (err) {
+      console.warn(`Clima: falha ao geocodificar "${attempt}":`, err);
+    }
+  }
+  return null;
+}
+
+function renderWeatherUnavailable() {
+  const hojeEl = $("hojeWeatherCard");
+  if (hojeEl) hojeEl.innerHTML = `<p class="screen-sub" style="margin-top:2px;">${t("weather.unavailable").replace("{destino}", currentTripData.destination)}</p>`;
+  const calEl = $("calWeatherStrip");
+  if (calEl) calEl.innerHTML = "";
+}
 }
 
 function renderHojeWeather() {
