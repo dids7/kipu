@@ -1119,6 +1119,8 @@ async function fetchWeatherIfNeeded() {
     if (!data.current || !data.daily) { renderWeatherUnavailable(); return; }
 
     weatherData = {
+      locationName: [coords.name, coords.admin1, coords.country].filter(Boolean).join(", "),
+      lat: coords.lat, lon: coords.lon,
       current: { temp: Math.round(data.current.temperature_2m), code: data.current.weather_code },
       daily: data.daily.time.map((date, i) => ({
         date,
@@ -1153,7 +1155,8 @@ async function geocodeDestination(rawDestination) {
       const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&language=pt&name=${encodeURIComponent(attempt)}`);
       const geoData = await geoRes.json();
       if (geoData.results && geoData.results.length > 0) {
-        const coords = { lat: geoData.results[0].latitude, lon: geoData.results[0].longitude, name: geoData.results[0].name };
+        const r = geoData.results[0];
+        const coords = { lat: r.latitude, lon: r.longitude, name: r.name, admin1: r.admin1 || "", country: r.country || "" };
         localStorage.setItem(geoCacheKey, JSON.stringify(coords));
         return coords;
       }
@@ -1176,12 +1179,13 @@ function renderHojeWeather() {
   if (!el) return;
   if (!weatherData) { el.innerHTML = ""; return; }
   const todayForecast = weatherData.daily[0];
+  const locationLabel = weatherData.locationName || currentTripData.destination;
   el.innerHTML = `
     <div class="weather-card">
       <div class="weather-icon">${weatherIcon(weatherData.current.code)}</div>
       <div>
         <div class="weather-temp">${weatherData.current.temp}°C</div>
-        <div class="weather-desc">${weatherLabel(weatherData.current.code)} · ${currentTripData.destination}</div>
+        <div class="weather-desc" title="${weatherData.lat}, ${weatherData.lon}">${weatherLabel(weatherData.current.code)} · ${locationLabel}</div>
         ${todayForecast ? `<div class="weather-minmax">${t("weather.minMax").replace("{min}", todayForecast.min).replace("{max}", todayForecast.max)}</div>` : ""}
       </div>
     </div>`;
