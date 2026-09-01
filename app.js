@@ -861,6 +861,7 @@ async function openTrip(tripId) {
   $("currentTripTitle").textContent = currentTripData.name;
   renderCountdown();
   renderHojeTab();
+  fetchWeatherIfNeeded();
   populateResponsibleSelects();
 
   subscribeItinerario();
@@ -939,11 +940,17 @@ $("saveTripEditBtn").addEventListener("click", async () => {
   const startDate = $("editTripStart").value;
   const endDate = $("editTripEnd").value;
   if (!name || !startDate || !endDate) { alert("Preencha nome e as duas datas."); return; }
+  const destinationChanged = destination !== currentTripData.destination;
   await updateDoc(doc(db, "trips", currentTripId), { name, destination, startDate, endDate });
   currentTripData = { ...currentTripData, name, destination, startDate, endDate };
   logActivity("geral", "viagem editada", `${name} (${startDate} – ${endDate})`);
   $("currentTripTitle").textContent = name;
   renderCountdown();
+  renderHojeTab();
+  if (destinationChanged) {
+    localStorage.removeItem(`kipu_weather_${currentTripId}`); // destino mudou, o clima cacheado não vale mais
+    fetchWeatherIfNeeded();
+  }
   const allIdx = allUserTrips.findIndex((t) => t.id === currentTripId);
   if (allIdx >= 0) allUserTrips[allIdx] = { ...allUserTrips[allIdx], name, destination, startDate, endDate };
   renderCalendar();
@@ -1053,6 +1060,118 @@ $("addParticipantBtn").addEventListener("click", async () => {
   input.value = "";
 });
 
+// ================= CLIMA (Open-Meteo — grátis, sem chave de API) =================
+// Mesmo padrão já usado pra cotação de câmbio: busca em API pública gratuita,
+// cacheia no navegador (uma vez por dia), falha em silêncio se offline/indisponível
+// — nunca trava o resto do app. Usa o campo "destination" (texto livre) da
+// viagem pra geocodificar; cobre 1 local por viagem (o texto que já existe).
+const WEATHER_CODE_KEYS = {
+  0: "clear", 1: "partlyCloudy", 2: "partlyCloudy", 3: "cloudy",
+  45: "fog", 48: "fog",
+  51: "drizzle", 53: "drizzle", 55: "drizzle", 56: "drizzle", 57: "drizzle",
+  61: "rain", 63: "rain", 65: "rain", 66: "rain", 67: "rain",
+  71: "snow", 73: "snow", 75: "snow", 77: "snow",
+  80: "showers", 81: "showers", 82: "showers",
+  85: "snowShowers", 86: "snowShowers",
+  95: "thunderstorm", 96: "thunderstorm", 99: "thunderstorm"
+};
+const WEATHER_CODE_ICONS = {
+  clear: "☀️", partlyCloudy: "⛅", cloudy: "☁️", fog: "🌫️", drizzle: "🌦️",
+  rain: "🌧️", snow: "🌨️", showers: "🌦️", snowShowers: "🌨️", thunderstorm: "⛈️"
+};
+function weatherIcon(code) { return WEATHER_CODE_ICONS[WEATHER_CODE_KEYS[code]] || "🌡️"; }
+function weatherLabel(code) { return t("weather." + (WEATHER_CODE_KEYS[code] || "clear")); }
+
+let weatherData = null; // { current: {temp, code, todayMin, todayMax}, daily: [{date, min, max, code}, ...] }
+
+async function fetchWeatherIfNeeded() {
+  if (!currentTripData || !currentTripData.destination) return;
+  const today = localISODate();
+  const cacheKey = `kipu_weather_${currentTripId}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      if (parsed.fetchedOn === today) {
+        weatherData = parsed.data;
+        renderHojeWeather();
+        renderCalWeatherStrip();
+        return;
+      }
+    } catch (err) { /* cache corrompido, ignora e busca de novo */ }
+  }
+  try {
+    // Geocodifica o texto do destino em coordenadas (também cacheado, já que
+    // o destino de uma viagem não muda — evita bater na API de geocoding toda vez).
+    const geoCacheKey = `kipu_geo_${encodeURIComponent(currentTripData.destination)}`;
+    let coords = JSON.parse(localStorage.getItem(geoCacheKey) || "null");
+    if (!coords) {
+      const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&language=pt&name=${encodeURIComponent(currentTripData.destination)}`);
+      const geoData = await geoRes.json();
+      if (!geoData.results || geoData.results.length === 0) return; // destino não encontrado, desiste em silêncio
+      coords = { lat: geoData.results[0].latitude, lon: geoData.results[0].longitude, name: geoData.results[0].name };
+      localStorage.setItem(geoCacheKey, JSON.stringify(coords));
+    }
+
+    const res = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}` +
+      `&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,weather_code` +
+      `&timezone=auto&forecast_days=6`
+    );
+    const data = await res.json();
+    if (!data.current || !data.daily) return;
+
+    weatherData = {
+      current: { temp: Math.round(data.current.temperature_2m), code: data.current.weather_code },
+      daily: data.daily.time.map((date, i) => ({
+        date,
+        min: Math.round(data.daily.temperature_2m_min[i]),
+        max: Math.round(data.daily.temperature_2m_max[i]),
+        code: data.daily.weather_code[i]
+      }))
+    };
+    localStorage.setItem(cacheKey, JSON.stringify({ fetchedOn: today, data: weatherData }));
+    renderHojeWeather();
+    renderCalWeatherStrip();
+  } catch (err) {
+    console.warn("Não foi possível buscar o clima (offline?):", err);
+  }
+}
+
+function renderHojeWeather() {
+  const el = $("hojeWeatherCard");
+  if (!el) return;
+  if (!weatherData) { el.innerHTML = ""; return; }
+  const todayForecast = weatherData.daily[0];
+  el.innerHTML = `
+    <div class="weather-card">
+      <div class="weather-icon">${weatherIcon(weatherData.current.code)}</div>
+      <div>
+        <div class="weather-temp">${weatherData.current.temp}°C</div>
+        <div class="weather-desc">${weatherLabel(weatherData.current.code)} · ${currentTripData.destination}</div>
+        ${todayForecast ? `<div class="weather-minmax">${t("weather.minMax").replace("{min}", todayForecast.min).replace("{max}", todayForecast.max)}</div>` : ""}
+      </div>
+    </div>`;
+}
+
+function renderCalWeatherStrip() {
+  const el = $("calWeatherStrip");
+  if (!el) return;
+  if (!weatherData || !weatherData.daily.length) { el.innerHTML = ""; return; }
+  const days = weatherData.daily.slice(1, 6); // próximos 5 dias, sem repetir o de hoje (já mostrado na aba Hoje)
+  if (days.length === 0) { el.innerHTML = ""; return; }
+  el.innerHTML = `
+    <div class="card-title" style="font-size:12.5px; color:var(--muted); margin-bottom:8px;">${t("weather.forecastTitle")}</div>
+    <div class="forecast-strip">
+      ${days.map((d) => `
+        <div class="forecast-day">
+          <div class="fd-date">${fmtDate(d.date)}</div>
+          <div class="fd-icon">${weatherIcon(d.code)}</div>
+          <div class="fd-temps">${d.max}° <span class="fd-min">${d.min}°</span></div>
+        </div>`).join("")}
+    </div>`;
+}
+
 function renderCountdown() {
   const start = new Date(currentTripData.startDate + "T00:00:00");
   const today = new Date();
@@ -1092,9 +1211,14 @@ function renderHojeTab() {
   if (todayISO < currentTripData.startDate) {
     const diffDays = Math.ceil((new Date(currentTripData.startDate + "T00:00:00") - new Date(todayISO + "T00:00:00")) / 86400000);
     statusEl.textContent = t("hoje.beforeTrip").replace("{d}", diffDays);
+    const isSoon = diffDays <= 7;
+    statusEl.classList.toggle("countdown-hype", isSoon);
+    if (isSoon) statusEl.textContent += " ✈️";
   } else if (todayISO > currentTripData.endDate) {
+    statusEl.classList.remove("countdown-hype");
     statusEl.textContent = t("hoje.afterTrip");
   } else {
+    statusEl.classList.remove("countdown-hype");
     const totalDays = Math.round((new Date(currentTripData.endDate + "T00:00:00") - new Date(currentTripData.startDate + "T00:00:00")) / 86400000) + 1;
     const dayNum = Math.round((new Date(todayISO + "T00:00:00") - new Date(currentTripData.startDate + "T00:00:00")) / 86400000) + 1;
     statusEl.textContent = t("hoje.duringTrip").replace("{day}", dayNum).replace("{total}", totalDays);

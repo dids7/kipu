@@ -365,6 +365,41 @@ main{
 .card-title{ font-weight:600; font-size:14.5px; }
 .card-meta{ font-size:12px; color:var(--muted); margin-top:3px; overflow-wrap:anywhere; }
 
+/* ---------- Contagem regressiva em destaque (≤7 dias pra viagem) ---------- */
+.countdown-hype{
+  font-size:15.5px !important;
+  font-weight:700 !important;
+  color:var(--gold) !important;
+  background:var(--gold-dim);
+  border:1px solid var(--gold);
+  border-radius:var(--radius);
+  padding:10px 14px;
+  margin-bottom:16px !important;
+  line-height:1.4 !important;
+}
+
+/* ---------- Clima ---------- */
+.weather-card{
+  display:flex; align-items:center; gap:14px;
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+  padding:14px; margin-bottom:14px;
+}
+.weather-card .weather-icon{ font-size:34px; line-height:1; flex:0 0 auto; }
+.weather-card .weather-temp{ font-family:'JetBrains Mono', monospace; font-size:22px; font-weight:700; color:var(--ink); }
+.weather-card .weather-desc{ font-size:12.5px; color:var(--muted); margin-top:2px; }
+.weather-card .weather-minmax{ font-family:'JetBrains Mono', monospace; font-size:11.5px; color:var(--muted); margin-top:3px; }
+
+.forecast-strip{ display:flex; gap:8px; overflow-x:auto; margin-bottom:16px; padding-bottom:2px; }
+.forecast-day{
+  flex:0 0 auto; min-width:64px; text-align:center;
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+  padding:10px 8px;
+}
+.forecast-day .fd-date{ font-family:'JetBrains Mono', monospace; font-size:10.5px; color:var(--muted); }
+.forecast-day .fd-icon{ font-size:20px; margin:4px 0; }
+.forecast-day .fd-temps{ font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--ink); }
+.forecast-day .fd-temps .fd-min{ color:var(--muted); }
+
 .badge{
   font-family:'JetBrains Mono', monospace;
   font-size:10px;
