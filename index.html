@@ -333,6 +333,20 @@
         <h2 class="screen-title" data-i18n="nav.itinerary">Itinerário</h2>
         <p class="screen-sub" data-i18n="itinerary.legend">🟢 confirmado · 🟡 programado — clique no status pra alternar. Clique no lápis pra editar.</p>
         <button class="add-toggle" id="addItinerarioToggleBtn" data-form="itinerarioForm" data-i18n="itinerary.addBtn">＋ Adicionar item ao itinerário</button>
+        <button class="add-toggle" id="bulkImportToggleBtn" data-i18n="itinerary.bulkImportBtn">📋 Importar de uma vez</button>
+        <div id="bulkImportForm" class="form-card hidden">
+          <div class="screen-sub" data-i18n="itinerary.bulkImportIntro">Cole suas anotações de viagem numa conversa com o Claude (ou outra IA) junto com o texto abaixo — ele organiza tudo no formato certo pra colar aqui.</div>
+          <label data-i18n="itinerary.bulkImportPromptLabel">1. Copie este texto e cole numa conversa com o Claude, junto das suas anotações da viagem:</label>
+          <textarea id="bulkImportPromptBox" readonly rows="7" style="width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; margin-top:4px;"></textarea>
+          <button class="btn btn-outline btn-block" id="copyBulkPromptBtn" style="margin:8px 0 16px;" data-i18n="itinerary.copyPrompt">📋 Copiar texto</button>
+          <label data-i18n="itinerary.bulkImportPasteLabel">2. Cole aqui a resposta que a IA te devolveu:</label>
+          <textarea id="itImportTextarea" rows="8" style="width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; margin-top:4px;" placeholder="Embarque para Lima|2026-09-05|14:00||Aeroporto de Guarulhos|1200|confirmado"></textarea>
+          <div class="form-row" style="margin-top:10px;">
+            <button class="btn btn-primary btn-block" id="importItinerarioBtn" data-i18n="itinerary.importBtn">Importar</button>
+            <button class="btn btn-outline" id="closeBulkImportBtn" style="flex:0 0 auto;">✕</button>
+          </div>
+          <div id="itImportStatus" class="screen-sub hidden" style="margin-top:10px;"></div>
+        </div>
         <div id="itinerarioForm" class="form-card hidden">
           <div class="form-row">
             <div><label data-i18n="common.date">Data</label><input type="date" id="itDate"></div>

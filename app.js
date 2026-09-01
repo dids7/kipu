@@ -79,6 +79,7 @@ function applyRolePermissions() {
 
   // Botões de adicionar item, por aba.
   $("addItinerarioToggleBtn")?.classList.toggle("hidden", !can("editCalendar"));
+  $("bulkImportToggleBtn")?.classList.toggle("hidden", !can("editCalendar"));
   $("addEstadiaToggleBtn")?.classList.toggle("hidden", !can("editCalendar"));
   $("addDocToggleBtn")?.classList.toggle("hidden", myPerms().editDocs !== 1 && myPerms().editDocs !== true);
   $("addExpenseToggleBtn")?.classList.toggle("hidden", myPerms().editDocs !== 1 && myPerms().editDocs !== true);
@@ -1289,6 +1290,7 @@ function resetItinerarioForm() {
 
 $("cancelItinerarioEditBtn").addEventListener("click", resetItinerarioForm);
 $("addItinerarioToggleBtn").addEventListener("click", () => {
+  $("bulkImportForm").classList.add("hidden");
   if (!$("itinerarioForm").classList.contains("hidden") || editingItinerarioId) {
     resetItinerarioForm();
     $("itinerarioForm").classList.remove("hidden");
@@ -1314,6 +1316,128 @@ $("saveItinerarioBtn").addEventListener("click", async () => {
     logActivity("itinerario", "item adicionado", title);
   }
   resetItinerarioForm();
+});
+
+// ================= IMPORTAR ITINERÁRIO EM MASSA (via Claude/IA externa) =================
+// Em vez do app tentar "entender" texto livre (o que exigiria IA embutida,
+// Cloud Function e custo), a gente pede pro usuário formatar as próprias
+// anotações usando uma IA que ele já tem acesso (Claude), num formato fixo
+// e simples que o app só precisa validar, não interpretar.
+const BULK_IMPORT_PROMPT = `Organize as informações da minha viagem abaixo neste formato exato, uma linha por atividade, sem nenhum texto antes ou depois das linhas (não inclua a linha de cabeçalho, comece direto pela primeira atividade):
+
+TITULO|DATA|HORA_INICIO|HORA_FIM|LOCAL|VALOR|STATUS
+
+- DATA no formato AAAA-MM-DD
+- HORA_INICIO e HORA_FIM no formato HH:MM (deixe vazio entre as barras se não souber)
+- LOCAL e VALOR são opcionais (deixe vazio entre as barras se não tiver)
+- STATUS só pode ser "programado" ou "confirmado"
+
+Exemplo de uma linha:
+Embarque para Lima|2026-09-05|14:00||Aeroporto de Guarulhos|1200|confirmado
+
+Minhas anotações da viagem:
+[cole aqui suas anotações bagunçadas]`;
+
+function initBulkImportPromptBox() {
+  const box = $("bulkImportPromptBox");
+  if (box) box.value = BULK_IMPORT_PROMPT;
+}
+initBulkImportPromptBox();
+
+$("bulkImportToggleBtn")?.addEventListener("click", () => {
+  $("itinerarioForm").classList.add("hidden");
+  $("bulkImportForm").classList.remove("hidden");
+  $("bulkImportForm").scrollIntoView({ behavior: "smooth", block: "center" });
+});
+$("closeBulkImportBtn")?.addEventListener("click", () => {
+  $("bulkImportForm").classList.add("hidden");
+  $("itImportTextarea").value = "";
+  $("itImportStatus").classList.add("hidden");
+});
+$("copyBulkPromptBtn")?.addEventListener("click", async () => {
+  const btn = $("copyBulkPromptBtn");
+  try {
+    await navigator.clipboard.writeText(BULK_IMPORT_PROMPT);
+    const original = btn.textContent;
+    btn.textContent = "✓ Copiado!";
+    setTimeout(() => { btn.textContent = original; }, 2000);
+  } catch (err) {
+    // Navegadores/contextos sem permissão de clipboard: seleciona o texto pra
+    // a pessoa copiar manualmente (Ctrl+C / segurar e copiar no celular).
+    const box = $("bulkImportPromptBox");
+    box.focus();
+    box.select();
+  }
+});
+
+// Parseia o texto colado no formato TITULO|DATA|HORA_INICIO|HORA_FIM|LOCAL|VALOR|STATUS.
+// Tolerante a: linha de cabeçalho acidental, linhas em branco, espaços extras.
+// Nunca lança erro — linhas inválidas viram mensagem de erro específica, sem travar as demais.
+function parseItineraryBulkText(raw) {
+  const lines = raw.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+  const items = [];
+  const errors = [];
+  lines.forEach((line, idx) => {
+    if (/^TITULO\s*\|/i.test(line)) return; // ignora cabeçalho, se vier
+    const parts = line.split("|").map((p) => p.trim());
+    if (parts.length !== 7) {
+      errors.push(`Linha ${idx + 1}: esperado 7 campos separados por "|", encontrado ${parts.length}.`);
+      return;
+    }
+    const [title, date, timeStart, timeEnd, location, value, status] = parts;
+    if (!title) { errors.push(`Linha ${idx + 1}: título vazio.`); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { errors.push(`Linha ${idx + 1}: data "${date}" inválida (use AAAA-MM-DD).`); return; }
+    const statusNorm = status.toLowerCase();
+    if (statusNorm !== "programado" && statusNorm !== "confirmado") {
+      errors.push(`Linha ${idx + 1}: status "${status}" inválido (use "programado" ou "confirmado").`);
+      return;
+    }
+    if (timeStart && !/^\d{2}:\d{2}$/.test(timeStart)) { errors.push(`Linha ${idx + 1}: horário de início "${timeStart}" inválido (use HH:MM).`); return; }
+    if (timeEnd && !/^\d{2}:\d{2}$/.test(timeEnd)) { errors.push(`Linha ${idx + 1}: horário de fim "${timeEnd}" inválido (use HH:MM).`); return; }
+    let numValue = 0;
+    if (value) {
+      numValue = parseFloat(value.replace(",", "."));
+      if (isNaN(numValue)) { errors.push(`Linha ${idx + 1}: valor "${value}" inválido.`); return; }
+    }
+    items.push({
+      title, date, time: timeStart || "", endTime: timeEnd || "",
+      location: location || "", value: numValue, status: statusNorm
+    });
+  });
+  return { items, errors };
+}
+
+$("importItinerarioBtn")?.addEventListener("click", async () => {
+  const raw = $("itImportTextarea").value;
+  const statusEl = $("itImportStatus");
+  const { items, errors } = parseItineraryBulkText(raw);
+
+  if (items.length === 0) {
+    statusEl.textContent = errors.length > 0
+      ? `Nenhum item válido encontrado. ${errors[0]}`
+      : "Cole o texto formatado na caixa acima antes de importar.";
+    statusEl.classList.remove("hidden");
+    return;
+  }
+
+  statusEl.textContent = `Importando ${items.length} item(ns)...`;
+  statusEl.classList.remove("hidden");
+
+  await Promise.all(items.map((it) =>
+    addDoc(collection(db, "trips", currentTripId, "itinerario"), {
+      title: it.title, date: it.date, time: it.time, endTime: it.endTime,
+      location: it.location, value: it.value, paymentStatus: "pendente",
+      status: it.status, responsible: ""
+    })
+  ));
+  logActivity("itinerario", "importação em massa", `${items.length} item(ns) importados`);
+
+  let msg = `✓ ${items.length} item(ns) importados com sucesso.`;
+  if (errors.length > 0) {
+    msg += ` ${errors.length} linha(s) ignorada(s) — ${errors.slice(0, 3).join(" ")}${errors.length > 3 ? " ..." : ""}`;
+  }
+  statusEl.textContent = msg;
+  $("itImportTextarea").value = "";
 });
 
 // ================= ESTADIA =================
