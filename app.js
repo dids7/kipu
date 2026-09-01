@@ -1170,7 +1170,6 @@ function renderWeatherUnavailable() {
   const calEl = $("calWeatherStrip");
   if (calEl) calEl.innerHTML = "";
 }
-}
 
 function renderHojeWeather() {
   const el = $("hojeWeatherCard");
