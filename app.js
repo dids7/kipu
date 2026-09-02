@@ -328,9 +328,12 @@ function confirmDialog(message, okText = "Excluir") {
   });
 }
 
-async function deleteItem(subcollection, id, label, area) {
+async function deleteItem(subcollection, id, label, area, storagePath) {
   const ok = await confirmDialog(`Excluir "${label}"? Essa ação não pode ser desfeita.`);
   if (!ok) return;
+  if (storagePath) {
+    await deleteObject(ref(storage, storagePath)).catch(() => {});
+  }
   await deleteDoc(doc(db, "trips", currentTripId, subcollection, id));
   logActivity(area, "item excluído", label);
 }
@@ -973,7 +976,13 @@ $("deleteTripBtn").addEventListener("click", async () => {
   const subcollections = ["itinerario", "estadia", "documentos", "mala", "tarefas", "gastos", "emergencia", "activityLog", "lembretes"];
   for (const sub of subcollections) {
     const snap = await getDocs(collection(db, "trips", tripId, sub));
-    await Promise.all(snap.docs.map((d) => deleteDoc(doc(db, "trips", tripId, sub, d.id))));
+    await Promise.all(snap.docs.map(async (d) => {
+      if (sub === "documentos") {
+        const storagePath = d.data().storagePath;
+        if (storagePath) await deleteObject(ref(storage, storagePath)).catch(() => {});
+      }
+      await deleteDoc(doc(db, "trips", tripId, sub, d.id));
+    }));
   }
   await deleteDoc(doc(db, "trips", tripId));
   goToTripPicker();
@@ -1981,7 +1990,7 @@ function subscribeDocumentos() {
         ${doc_.url ? `<a href="${doc_.url}" target="_blank" style="color:var(--gold); font-size:12.5px; display:block; margin-top:6px;">Abrir ${doc_.fileName ? doc_.fileName : "link"} ↗</a>` : ""}
       `;
       card.querySelector('[data-action="edit"]').addEventListener("click", () => openDocForEdit(doc_.id, doc_));
-      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("documentos", doc_.id, doc_.title, "documentos"));
+      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("documentos", doc_.id, doc_.title, "documentos", doc_.storagePath));
       listEl.appendChild(card);
     });
   });
@@ -2914,7 +2923,13 @@ $("resetModalConfirmBtn")?.addEventListener("click", async () => {
   let totalDeleted = 0;
   for (const sub of subcollections) {
     const snap = await getDocs(collection(db, "trips", currentTripId, sub));
-    await Promise.all(snap.docs.map((d) => deleteDoc(doc(db, "trips", currentTripId, sub, d.id))));
+    await Promise.all(snap.docs.map(async (d) => {
+      if (sub === "documentos") {
+        const storagePath = d.data().storagePath;
+        if (storagePath) await deleteObject(ref(storage, storagePath)).catch(() => {});
+      }
+      await deleteDoc(doc(db, "trips", currentTripId, sub, d.id));
+    }));
     totalDeleted += snap.size;
   }
 
