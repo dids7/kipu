@@ -706,7 +706,7 @@ function renderAdminParticipants() {
           <option value="agencia" data-i18n="role.agencia">Agência</option>
           <option value="convidado" data-i18n="role.convidado">Convidado</option>
         </select>
-        ${isOriginalAdmin ? "" : `<button class="item-del" data-remove>✕</button>`}
+        ${isOriginalAdmin ? `<button class="item-del" data-transfer title="Transferir titularidade">🔁</button>` : `<button class="item-del" data-remove>✕</button>`}
       </div>
     `;
     const select = row.querySelector("[data-role-select]");
@@ -715,6 +715,8 @@ function renderAdminParticipants() {
     select.addEventListener("change", () => onAdminRoleChange(email, select.value, select));
     const removeBtn = row.querySelector("[data-remove]");
     if (removeBtn) removeBtn.addEventListener("click", () => onAdminRemoveParticipant(email));
+    const transferBtn = row.querySelector("[data-transfer]");
+    if (transferBtn) transferBtn.addEventListener("click", () => onAdminTransferOwnership(email));
     listEl.appendChild(row);
   });
 }
@@ -777,6 +779,66 @@ async function onAdminRemoveParticipant(email) {
   adminPanelTripData.blockedEmails = updatedBlocked;
   renderAdminParticipants();
   logActivity("geral", "participante removido", email);
+}
+
+// Transferir a titularidade (createdBy) da viagem pra outro participante.
+// O dono original nunca pode ser removido da viagem (proteção intencional,
+// ver seção 4.1 da documentação) — isso trava quem ajudou a criar uma
+// viagem que não é dela (ex: Admin criou pra um amigo entrar depois). Essa
+// função move a proteção pra outra pessoa: o novo dono vira Admin (se ainda
+// não for) e ganha o 🔒; quem tinha o 🔒 antes passa a poder ser removido
+// normalmente, como qualquer outro participante.
+function openTransferOwnerModal(currentOwnerEmail) {
+  const others = (adminPanelTripData.participantEmails || []).filter((e) => e !== currentOwnerEmail);
+  if (others.length === 0) {
+    alert("Adicione outra pessoa na viagem antes de transferir a titularidade.");
+    return Promise.resolve(null);
+  }
+  const select = $("transferOwnerSelect");
+  select.innerHTML = others.map((e) => `<option value="${e}">${nameFor(e)}</option>`).join("");
+  $("transferOwnerMessage").textContent =
+    `Escolha quem vai virar o novo dono principal da viagem, no lugar de ${nameFor(currentOwnerEmail)}. ` +
+    `Essa pessoa passa a ser Admin (se ainda não for) e ganha a proteção de nunca poder ser removida — ` +
+    `${nameFor(currentOwnerEmail)} perde essa proteção e passa a poder ser removido(a) da viagem como qualquer outro participante.`;
+  $("transferOwnerModal").classList.remove("hidden");
+
+  return new Promise((resolve) => {
+    const onYes = () => { cleanup(); resolve(select.value); };
+    const onNo = () => { cleanup(); resolve(null); };
+    function cleanup() {
+      $("transferOwnerModal").classList.add("hidden");
+      $("transferOwnerConfirmBtn").removeEventListener("click", onYes);
+      $("transferOwnerCancelBtn").removeEventListener("click", onNo);
+    }
+    $("transferOwnerConfirmBtn").addEventListener("click", onYes);
+    $("transferOwnerCancelBtn").addEventListener("click", onNo);
+  });
+}
+
+async function onAdminTransferOwnership(currentOwnerEmail) {
+  const newOwnerEmail = await openTransferOwnerModal(currentOwnerEmail);
+  if (!newOwnerEmail) return;
+
+  const patch = { createdBy: newOwnerEmail, [`participantRoles.${newOwnerEmail}`]: "admin" };
+  const currentAdmins = adminPanelTripData.adminEmails || [];
+  const alreadyAdmin = currentAdmins.includes(newOwnerEmail);
+  if (!alreadyAdmin) patch.adminEmails = arrayUnion(newOwnerEmail);
+
+  await updateDoc(doc(db, "trips", adminPanelTripId), patch);
+
+  adminPanelTripData.createdBy = newOwnerEmail;
+  adminPanelTripData.participantRoles[newOwnerEmail] = "admin";
+  if (!alreadyAdmin) adminPanelTripData.adminEmails = [...currentAdmins, newOwnerEmail];
+  renderAdminParticipants();
+  logActivity("geral", "titularidade da viagem transferida", `${currentOwnerEmail} → ${newOwnerEmail}`);
+
+  if (adminPanelTripId === currentTripId) {
+    currentTripData.createdBy = adminPanelTripData.createdBy;
+    currentTripData.participantRoles = adminPanelTripData.participantRoles;
+    currentTripData.adminEmails = adminPanelTripData.adminEmails;
+    myRole = computeMyRole();
+    applyRolePermissions();
+  }
 }
 
 $("adminAddParticipantBtn").addEventListener("click", async () => {
