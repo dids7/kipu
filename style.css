@@ -97,6 +97,12 @@ body{
   justify-content:center;
   padding:20px;
 }
+/* O diálogo genérico de confirmar/excluir (confirmDialog()) pode ser aberto
+   de DENTRO de outro modal já visível (ex: confirmar remoção de participante
+   dentro do painel "Gerenciar viagem") — como todos os .modal-overlay
+   dividem o mesmo z-index, sem essa regra ele ficava atrás do modal que o
+   chamou, na ordem em que aparecem no HTML, em vez de na frente. */
+#confirmModal{ z-index:300; }
 .modal-box{
   background:var(--panel-raised);
   border:1px solid var(--line);
