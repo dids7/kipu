@@ -1227,6 +1227,96 @@ function renderCountdown() {
 function roleIntroDismissKey() {
   return `kipu_role_intro_${currentTripId}`;
 }
+// ================= FEEDBACK PÓS-VIAGEM =================
+// Aparece no PENÚLTIMO dia da viagem (não no último — aí a pessoa ainda tem
+// motivo de reabrir o app), em duas janelas de horário: meio-dia e 20h.
+// Respondeu uma vez → nunca mais aparece. Só fechou sem responder → pode
+// reaparecer na próxima janela (mas não fica repetindo dentro da mesma).
+function dayBefore(dateISO) {
+  const d = new Date(dateISO + "T00:00:00");
+  d.setDate(d.getDate() - 1);
+  return localISODate(d);
+}
+function feedbackDoneKey() { return `kipu_feedback_done_${currentTripId}`; }
+function feedbackDismissedKey() { return `kipu_feedback_dismissed_${currentTripId}`; }
+
+function maybeShowFeedbackPopup() {
+  if (!currentTripData || !currentTripData.endDate || !currentTripId) return;
+  if (!$("feedbackModal").classList.contains("hidden")) return; // já aberto, não reabre por cima
+  const penultimateDay = dayBefore(currentTripData.endDate);
+  if (localISODate() !== penultimateDay) return;
+  const hour = new Date().getHours(); // hora local de quem está usando
+  if (hour < 12) return; // antes da primeira janela, nem checa o resto
+  const windowName = hour >= 20 ? "evening" : "noon";
+  if (localStorage.getItem(feedbackDoneKey())) return;
+  if (localStorage.getItem(feedbackDismissedKey()) === windowName) return;
+  showFeedbackModal(windowName);
+}
+
+let feedbackRatingValue = 0;
+let feedbackAppRatingValue = 0;
+function renderStarWidget(containerId, currentValue, onPick) {
+  const el = $(containerId);
+  if (!el) return;
+  el.innerHTML = [1, 2, 3, 4, 5].map((n) => {
+    const active = n <= currentValue;
+    return `<button data-star="${n}" style="width:38px; height:38px; border-radius:50%; border:1px solid ${active ? "var(--gold)" : "var(--line)"}; background:${active ? "var(--gold)" : "var(--panel-raised)"}; color:${active ? "#1B2430" : "var(--muted)"}; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:14px; cursor:pointer;">${n}</button>`;
+  }).join("");
+  el.querySelectorAll("[data-star]").forEach((btn) => {
+    btn.addEventListener("click", () => onPick(parseInt(btn.dataset.star, 10)));
+  });
+}
+function renderFeedbackStars() {
+  renderStarWidget("feedbackRating", feedbackRatingValue, (n) => { feedbackRatingValue = n; renderFeedbackStars(); });
+  if (myRole === "admin") {
+    renderStarWidget("feedbackAppRating", feedbackAppRatingValue, (n) => { feedbackAppRatingValue = n; renderFeedbackStars(); });
+  }
+}
+function showFeedbackModal(windowName) {
+  feedbackRatingValue = 0;
+  feedbackAppRatingValue = 0;
+  $("feedbackLiked").value = "";
+  $("feedbackImprove").value = "";
+  $("feedbackGroupComplaints").value = "";
+  $("feedbackMissingFeatures").value = "";
+  // Quem organiza (Admin/dono) vê perguntas extras — já ouviu reclamação
+  // direto do grupo, consegue dar um retorno mais completo pro Kipu.
+  const isAdmin = myRole === "admin";
+  $("feedbackAdminExtra").classList.toggle("hidden", !isAdmin);
+  renderFeedbackStars();
+  $("feedbackModal").dataset.window = windowName;
+  $("feedbackModal").classList.remove("hidden");
+}
+$("feedbackSkipBtn")?.addEventListener("click", () => {
+  localStorage.setItem(feedbackDismissedKey(), $("feedbackModal").dataset.window || "noon");
+  $("feedbackModal").classList.add("hidden");
+});
+$("feedbackSubmitBtn")?.addEventListener("click", async () => {
+  if (feedbackRatingValue === 0) { alert("Escolhe uma nota de 1 a 5 antes de enviar."); return; }
+  const isAdmin = myRole === "admin";
+  if (isAdmin && feedbackAppRatingValue === 0) { alert("Escolhe também uma nota pro Kipu antes de enviar."); return; }
+  try {
+    const payload = {
+      tripId: currentTripId,
+      authorEmail: currentUser.email,
+      nota: feedbackRatingValue,
+      gostou: $("feedbackLiked").value.trim(),
+      mudaria: $("feedbackImprove").value.trim(),
+      createdAt: serverTimestamp()
+    };
+    if (isAdmin) {
+      payload.notaApp = feedbackAppRatingValue;
+      payload.reclamacoesDoGrupo = $("feedbackGroupComplaints").value.trim();
+      payload.faltouNoApp = $("feedbackMissingFeatures").value.trim();
+    }
+    await addDoc(collection(db, "feedback"), payload);
+    localStorage.setItem(feedbackDoneKey(), "1");
+  } catch (err) {
+    console.warn("Não foi possível enviar o feedback:", err);
+  }
+  $("feedbackModal").classList.add("hidden");
+});
+
 function maybeShowRoleIntro() {
   const banner = $("roleIntroBanner");
   // O Admin original já configurou a viagem inteira, não precisa de explicação.
@@ -1244,6 +1334,7 @@ $("roleIntroCloseBtn")?.addEventListener("click", () => {
 function renderHojeTab() {
   if (!currentTripData) return;
   maybeShowRoleIntro();
+  maybeShowFeedbackPopup();
   const todayISO = localISODate();
   const statusEl = $("hojeStatusLine");
   if (todayISO < currentTripData.startDate) {

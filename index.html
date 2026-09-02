@@ -45,6 +45,26 @@
     </div>
   </div>
 </div>
+<div id="feedbackModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-title" data-i18n="feedback.title">Como está sendo a viagem?</div>
+    <div class="modal-message" data-i18n="feedback.desc">Leva menos de 1 minuto e ajuda a gente a melhorar o Kipu pras próximas viagens.</div>
+    <div id="feedbackRating" style="display:flex; gap:8px; justify-content:center; margin:16px 0;"></div>
+    <div><label data-i18n="feedback.liked">O que você mais gostou? — opcional</label><textarea id="feedbackLiked" rows="2" style="width:100%;" data-i18n-placeholder="feedback.likedPlaceholder" placeholder="Ex: o passeio ao Vale Sagrado, a comida, a hospedagem..."></textarea></div>
+    <div style="margin-top:10px;"><label data-i18n="feedback.improve">O que a gente podia melhorar? — opcional</label><textarea id="feedbackImprove" rows="2" style="width:100%;" data-i18n-placeholder="feedback.improvePlaceholder" placeholder="Ex: mais tempo livre, itinerário menos corrido..."></textarea></div>
+    <div id="feedbackAdminExtra" class="hidden">
+      <div class="screen-sub" style="margin:14px 0 6px; color:var(--gold);" data-i18n="feedback.adminExtraTitle">Só pra quem organiza — perguntas extras:</div>
+      <div><label data-i18n="feedback.appRating">Nota pro Kipu em si (organizar a viagem)</label></div>
+      <div id="feedbackAppRating" style="display:flex; gap:8px; justify-content:center; margin:10px 0;"></div>
+      <div><label data-i18n="feedback.groupComplaints">Reclamações que o grupo te trouxe — opcional</label><textarea id="feedbackGroupComplaints" rows="2" style="width:100%;" data-i18n-placeholder="feedback.groupComplaintsPlaceholder" placeholder="Ex: alguém achou o quarto pequeno, reclamaram do horário do traslado..."></textarea></div>
+      <div style="margin-top:10px;"><label data-i18n="feedback.missingFeatures">O que faltou no Kipu pra ajudar mais? — opcional</label><textarea id="feedbackMissingFeatures" rows="2" style="width:100%;" data-i18n-placeholder="feedback.missingFeaturesPlaceholder" placeholder="Ex: senti falta de..., seria bom ter..."></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button id="feedbackSkipBtn" class="btn btn-outline" data-i18n="feedback.skip">Agora não</button>
+      <button id="feedbackSubmitBtn" class="btn btn-primary" data-i18n="feedback.submit">Enviar</button>
+    </div>
+  </div>
+</div>
 <div id="adminPanelModal" class="modal-overlay hidden">
   <div class="modal-box" style="max-width:420px;">
     <div class="modal-title" data-i18n="admin.title">Gerenciar viagem</div>
