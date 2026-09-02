@@ -817,6 +817,7 @@ $("adminPanelCloseBtn").addEventListener("click", () => {
 async function openTrip(tripId) {
   currentTripId = tripId;
   currentTripData = null;
+  bulkImportDefaultResolved = false;
   const snap = await getDocs(query(collection(db, "trips"), where("__name__", "==", tripId)));
   snap.forEach((d) => { currentTripData = d.data(); });
 
@@ -1463,6 +1464,7 @@ function subscribeItinerario() {
   const unsub = onSnapshot(q, (snap) => {
     itinerarioByDate = {};
     const listEl = $("itinerarioList");
+    updateBulkImportDefaultVisibility(snap.empty);
     if (snap.empty) {
       listEl.innerHTML = `<div class='empty'>${t("empty.itinerary")}</div>`;
       renderCalendar();
@@ -1737,13 +1739,16 @@ function initBulkImportPromptBox() {
 }
 initBulkImportPromptBox();
 
-// Toggle persistente por viagem: a primeira vez que a aba é aberta, vem
-// LIGADO (mostra a seção de importar). Depois de importar uma lista com
-// sucesso pelo menos uma vez, desliga sozinho — mas continua sendo um
-// toggle manual, a pessoa pode ligar de novo quando quiser importar mais.
-function bulkImportToggleKey() { return `kipu_bulk_import_on_${currentTripId}`; }
-function setBulkImportToggle(isOn) {
-  localStorage.setItem(bulkImportToggleKey(), isOn ? "1" : "0");
+// Visibilidade da seção de importar: decidida pelo que JÁ EXISTE na viagem
+// (não mais um flag salvo no navegador de cada pessoa — bug real: a mãe do
+// Diego via a seção de importar mesmo com o itinerário dele já preenchido,
+// porque isso ficava só no localStorage do celular DELE, não era
+// compartilhado entre os participantes). Continua sendo um toggle manual: se
+// a pessoa mexer nele nessa sessão, a escolha dela é respeitada até recarregar
+// a página.
+let bulkImportUserOverride = null;
+function setBulkImportToggle(isOn, opts = {}) {
+  if (!opts.fromAuto) bulkImportUserOverride = isOn;
   const switchBtn = $("bulkImportSwitch");
   if (switchBtn) {
     switchBtn.classList.toggle("active", isOn);
@@ -1751,11 +1756,16 @@ function setBulkImportToggle(isOn) {
   }
   $("bulkImportForm")?.classList.toggle("hidden", !isOn);
 }
+// Chamado pela subscrição do Itinerário sempre que os dados mudam de verdade.
+function updateBulkImportDefaultVisibility(isEmpty) {
+  if (bulkImportUserOverride !== null) return; // pessoa já mexeu manualmente nessa sessão — respeita a escolha dela
+  setBulkImportToggle(isEmpty, { fromAuto: true });
+}
 function initBulkImportToggle() {
   if (!currentTripId) return;
-  const stored = localStorage.getItem(bulkImportToggleKey());
-  const isOn = stored === null ? true : stored === "1"; // nunca usado ainda = ligado por padrão
-  setBulkImportToggle(isOn);
+  bulkImportUserOverride = null;
+  // Estado neutro (fechado) até a primeira leitura real do Firestore decidir — evita "piscar" aberto antes de saber se já tem itens.
+  setBulkImportToggle(false, { fromAuto: true });
 }
 $("bulkImportSwitch")?.addEventListener("click", () => {
   const isCurrentlyOn = $("bulkImportSwitch").classList.contains("active");
@@ -1845,9 +1855,9 @@ $("importItinerarioBtn")?.addEventListener("click", async () => {
   ));
   logActivity("itinerario", "importação em massa", `${items.length} item(ns) importados`);
 
-  // Desliga o toggle pra próxima vez que a aba for aberta — mas não fecha o
-  // formulário agora, senão a mensagem de sucesso abaixo some junto.
-  localStorage.setItem(bulkImportToggleKey(), "0");
+  // Marca como desligado (manual) sem esconder o formulário, pra mensagem de
+  // sucesso abaixo (que está dentro dele) continuar visível.
+  bulkImportUserOverride = false;
   const switchBtn = $("bulkImportSwitch");
   if (switchBtn) {
     switchBtn.classList.remove("active");
