@@ -817,7 +817,6 @@ $("adminPanelCloseBtn").addEventListener("click", () => {
 async function openTrip(tripId) {
   currentTripId = tripId;
   currentTripData = null;
-  bulkImportDefaultResolved = false;
   const snap = await getDocs(query(collection(db, "trips"), where("__name__", "==", tripId)));
   snap.forEach((d) => { currentTripData = d.data(); });
 
