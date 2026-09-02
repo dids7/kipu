@@ -475,6 +475,20 @@
         <div id="docForm" class="form-card hidden">
           <div><label data-i18n="documents.docTitle">Título</label><input type="text" id="docTitle" placeholder="Ex: Voucher hotel Casa Tiyay"></div>
           <div>
+            <label data-i18n="documents.type">Categoria</label>
+            <select id="docType">
+              <option value="passaporte" data-i18n="documents.typePassaporte">Passaporte</option>
+              <option value="rg" data-i18n="documents.typeRg">RG</option>
+              <option value="cpf" data-i18n="documents.typeCpf">CPF</option>
+              <option value="passagem" data-i18n="documents.typePassagem">Passagem aérea</option>
+              <option value="ingresso" data-i18n="documents.typeIngresso">Ingresso/Reserva</option>
+              <option value="voucher" data-i18n="documents.typeVoucher">Voucher hotel</option>
+              <option value="seguro" data-i18n="documents.typeSeguro">Seguro viagem</option>
+              <option value="vacina" data-i18n="documents.typeVacina">Cartão de vacina</option>
+              <option value="outro" data-i18n="documents.typeOutro" selected>Outro</option>
+            </select>
+          </div>
+          <div>
             <label data-i18n="documents.attach">Anexar arquivo (imagem ou PDF)</label>
             <input type="file" id="docFile" accept="image/*,application/pdf">
           </div>
@@ -503,6 +517,27 @@
           <div class="form-row">
             <button class="btn btn-primary btn-block" id="saveDocBtn" data-i18n="common.save">Salvar</button>
             <button class="btn btn-outline" id="closeDocFormBtn" style="flex:0 0 auto;">✕</button>
+          </div>
+        </div>
+        <div class="form-row" id="docFilters" style="margin-bottom:10px;">
+          <div>
+            <select id="docFilterType">
+              <option value="" data-i18n="documents.filterAllTypes">Todas as categorias</option>
+              <option value="passaporte" data-i18n="documents.typePassaporte">Passaporte</option>
+              <option value="rg" data-i18n="documents.typeRg">RG</option>
+              <option value="cpf" data-i18n="documents.typeCpf">CPF</option>
+              <option value="passagem" data-i18n="documents.typePassagem">Passagem aérea</option>
+              <option value="ingresso" data-i18n="documents.typeIngresso">Ingresso/Reserva</option>
+              <option value="voucher" data-i18n="documents.typeVoucher">Voucher hotel</option>
+              <option value="seguro" data-i18n="documents.typeSeguro">Seguro viagem</option>
+              <option value="vacina" data-i18n="documents.typeVacina">Cartão de vacina</option>
+              <option value="outro" data-i18n="documents.typeOutro">Outro</option>
+            </select>
+          </div>
+          <div>
+            <select id="docFilterPerson">
+              <option value="" data-i18n="documents.filterAllPeople">Todas as pessoas</option>
+            </select>
           </div>
         </div>
         <div id="docsList"></div>

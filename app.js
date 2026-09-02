@@ -1944,10 +1944,106 @@ $("saveEstadiaBtn").addEventListener("click", async () => {
 
 // ================= DOCUMENTOS =================
 let editingDocId = null;
+let docsCache = [];
+
+// Ordem fixa de exibição das categorias — a mesma em toda a aba.
+const DOC_TYPE_ORDER = ["passaporte", "rg", "cpf", "passagem", "ingresso", "voucher", "seguro", "vacina", "outro"];
+const DOC_TYPE_KEYS = {
+  passaporte: "documents.typePassaporte", rg: "documents.typeRg", cpf: "documents.typeCpf",
+  passagem: "documents.typePassagem", ingresso: "documents.typeIngresso", voucher: "documents.typeVoucher",
+  seguro: "documents.typeSeguro", vacina: "documents.typeVacina", outro: "documents.typeOutro"
+};
+function docTypeLabel(type) { return t(DOC_TYPE_KEYS[type] || DOC_TYPE_KEYS.outro); }
+
+// Preenche o filtro de pessoa com os participantes da viagem atual (nome, não e-mail cru).
+function populateDocFilterPerson() {
+  const sel = $("docFilterPerson");
+  if (!sel) return;
+  const emails = (currentTripData && currentTripData.participantEmails) || [];
+  const keepValue = sel.value;
+  sel.innerHTML = `<option value="">${t("documents.filterAllPeople")}</option>`;
+  emails.slice().sort((a, b) => nameFor(a).localeCompare(nameFor(b), "pt-BR")).forEach((email) => {
+    const opt = document.createElement("option");
+    opt.value = email;
+    opt.textContent = nameFor(email);
+    sel.appendChild(opt);
+  });
+  if (emails.includes(keepValue)) sel.value = keepValue;
+}
+
+// Aplica os filtros ativos, agrupa por categoria (ordem fixa) e, dentro de
+// cada grupo, mostra os documentos do próprio usuário primeiro, depois o
+// resto em ordem alfabética pelo título.
+function renderDocsList() {
+  const listEl = $("docsList");
+  const typeFilter = $("docFilterType") ? $("docFilterType").value : "";
+  const personFilter = $("docFilterPerson") ? $("docFilterPerson").value : "";
+  const todayISO = localISODate();
+
+  const filtered = docsCache.filter((doc_) => {
+    const docType = doc_.docType || "outro";
+    if (typeFilter && docType !== typeFilter) return false;
+    if (personFilter && doc_.uploadedBy !== personFilter) return false;
+    return true;
+  });
+
+  if (filtered.length === 0) { listEl.innerHTML = `<div class='empty'>${t("empty.documents")}</div>`; return; }
+
+  const groups = {};
+  filtered.forEach((doc_) => {
+    const type = doc_.docType || "outro";
+    (groups[type] = groups[type] || []).push(doc_);
+  });
+
+  listEl.innerHTML = "";
+  DOC_TYPE_ORDER.forEach((type) => {
+    const docsOfType = groups[type];
+    if (!docsOfType || docsOfType.length === 0) return;
+
+    const mine = docsOfType.filter((d) => d.uploadedBy === currentUser.email)
+      .sort((a, b) => a.title.localeCompare(b.title, "pt-BR"));
+    const others = docsOfType.filter((d) => d.uploadedBy !== currentUser.email)
+      .sort((a, b) => a.title.localeCompare(b.title, "pt-BR"));
+
+    const header = document.createElement("div");
+    header.className = "doc-group-title";
+    header.textContent = docTypeLabel(type);
+    listEl.appendChild(header);
+
+    [...mine, ...others].forEach((doc_) => {
+      const card = document.createElement("div");
+      card.className = "card";
+      const isImage = doc_.fileType && doc_.fileType.startsWith("image/");
+      let expiryLine = "";
+      if (doc_.expiresAt) {
+        const daysLeft = Math.ceil((new Date(doc_.expiresAt) - new Date(todayISO)) / 86400000);
+        expiryLine = `<div class="card-meta" style="color:var(--gold);">⏳ ${t("documents.expiresIn").replace("{d}", daysLeft)}</div>`;
+      }
+      const ownerLine = `<div class="card-meta">${t("documents.uploadedBy").replace("{name}", nameFor(doc_.uploadedBy))}</div>`;
+      card.innerHTML = `
+        <div class="card-row">
+          <div class="card-title">${doc_.title}</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="item-del" data-action="edit" title="Editar">✎</button>
+            <button class="item-del" data-action="delete" title="Excluir">✕</button>
+          </div>
+        </div>
+        ${ownerLine}
+        <div class="card-meta">${doc_.notes || ""}</div>
+        ${expiryLine}
+        ${isImage ? `<img src="${doc_.url}" style="max-width:100%; border-radius:8px; margin-top:8px;">` : ""}
+        ${doc_.url ? `<a href="${doc_.url}" target="_blank" style="color:var(--gold); font-size:12.5px; display:block; margin-top:6px;">Abrir ${doc_.fileName ? doc_.fileName : "link"} ↗</a>` : ""}
+      `;
+      card.querySelector('[data-action="edit"]').addEventListener("click", () => openDocForEdit(doc_.id, doc_));
+      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("documentos", doc_.id, doc_.title, "documentos", doc_.storagePath));
+      listEl.appendChild(card);
+    });
+  });
+}
 
 function subscribeDocumentos() {
+  populateDocFilterPerson();
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "documentos"), (snap) => {
-    const listEl = $("docsList");
     const todayISO = localISODate();
     const visibleDocs = [];
 
@@ -1965,37 +2061,13 @@ function subscribeDocumentos() {
       visibleDocs.push({ id: d.id, ...doc_ });
     });
 
-    if (visibleDocs.length === 0) { listEl.innerHTML = `<div class='empty'>${t("empty.documents")}</div>`; return; }
-    listEl.innerHTML = "";
-    visibleDocs.forEach((doc_) => {
-      const card = document.createElement("div");
-      card.className = "card";
-      const isImage = doc_.fileType && doc_.fileType.startsWith("image/");
-      let expiryLine = "";
-      if (doc_.expiresAt) {
-        const daysLeft = Math.ceil((new Date(doc_.expiresAt) - new Date(todayISO)) / 86400000);
-        expiryLine = `<div class="card-meta" style="color:var(--gold);">⏳ ${t("documents.expiresIn").replace("{d}", daysLeft)}</div>`;
-      }
-      card.innerHTML = `
-        <div class="card-row">
-          <div class="card-title">${doc_.title}</div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <button class="item-del" data-action="edit" title="Editar">✎</button>
-            <button class="item-del" data-action="delete" title="Excluir">✕</button>
-          </div>
-        </div>
-        <div class="card-meta">${doc_.notes || ""}</div>
-        ${expiryLine}
-        ${isImage ? `<img src="${doc_.url}" style="max-width:100%; border-radius:8px; margin-top:8px;">` : ""}
-        ${doc_.url ? `<a href="${doc_.url}" target="_blank" style="color:var(--gold); font-size:12.5px; display:block; margin-top:6px;">Abrir ${doc_.fileName ? doc_.fileName : "link"} ↗</a>` : ""}
-      `;
-      card.querySelector('[data-action="edit"]').addEventListener("click", () => openDocForEdit(doc_.id, doc_));
-      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("documentos", doc_.id, doc_.title, "documentos", doc_.storagePath));
-      listEl.appendChild(card);
-    });
+    docsCache = visibleDocs;
+    renderDocsList();
   });
   unsubscribers.push(unsub);
 }
+$("docFilterType")?.addEventListener("change", renderDocsList);
+$("docFilterPerson")?.addEventListener("change", renderDocsList);
 
 let editingDocOriginalExpiresAt = null;
 
@@ -2015,6 +2087,7 @@ function openDocForEdit(id, doc_) {
   editingDocId = id;
   editingDocOriginalExpiresAt = doc_.expiresAt || null;
   $("docTitle").value = doc_.title || "";
+  $("docType").value = doc_.docType || "outro";
   $("docUrl").value = doc_.url || "";
   $("docNotes").value = doc_.notes || "";
   $("docExpiry").value = "keep";
@@ -2032,6 +2105,7 @@ function resetDocForm() {
   editingDocId = null;
   editingDocOriginalExpiresAt = null;
   $("docTitle").value = ""; $("docUrl").value = ""; $("docNotes").value = ""; $("docFile").value = "";
+  $("docType").value = "outro";
   $("docExpiry").value = "default";
   $("docIsMinor").checked = false;
   $("docMinorConsent").classList.add("hidden");
@@ -2055,6 +2129,7 @@ $("closeDocFormBtn")?.addEventListener("click", resetDocForm);
 
 $("saveDocBtn").addEventListener("click", async () => {
   const title = $("docTitle").value.trim();
+  const docType = $("docType").value || "outro";
   const notes = $("docNotes").value.trim();
   let url = $("docUrl").value.trim();
   const fileInput = $("docFile");
@@ -2096,13 +2171,13 @@ $("saveDocBtn").addEventListener("click", async () => {
   }
 
   if (editingDocId) {
-    const payload = { title, url, notes, expiresAt, subjectIsMinor };
+    const payload = { title, docType, url, notes, expiresAt, subjectIsMinor };
     if (file) { payload.fileType = fileType; payload.fileName = fileName; payload.storagePath = storagePath; }
     await updateDoc(doc(db, "trips", currentTripId, "documentos", editingDocId), payload);
     logActivity("documentos", "documento editado", title);
   } else {
     await addDoc(collection(db, "trips", currentTripId, "documentos"), {
-      title, url, notes, fileType, fileName, storagePath, expiresAt, subjectIsMinor, uploadedBy: currentUser.email
+      title, docType, url, notes, fileType, fileName, storagePath, expiresAt, subjectIsMinor, uploadedBy: currentUser.email
     });
     logActivity("documentos", subjectIsMinor ? "documento adicionado (menor de idade — consentimento do responsável confirmado)" : "documento adicionado", title);
   }
