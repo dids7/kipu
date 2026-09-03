@@ -504,6 +504,11 @@ $("profileBtn")?.addEventListener("click", async () => {
   $("userEmailLabel").title = currentUser.email;
 });
 
+// Se o link tiver ?code=XXXX (vem do e-mail de convite), pula direto pra
+// tela de entrar na viagem com o código já preenchido, em vez de abrir a
+// última viagem salva no navegador.
+const inviteCodeFromUrl = new URLSearchParams(window.location.search).get("code");
+
 onAuthStateChanged(auth, (user) => {
   currentUser = user;
   if (user) {
@@ -511,6 +516,12 @@ onAuthStateChanged(auth, (user) => {
     checkAndPromptProfile().then(() => {
       $("userEmailLabel").textContent = myDisplayName || user.email;
       $("userEmailLabel").title = user.email;
+      if (inviteCodeFromUrl) {
+        goToTripPicker();
+        $("joinCodeInput").value = inviteCodeFromUrl;
+        history.replaceState({}, "", window.location.pathname);
+        return;
+      }
       const savedTripId = localStorage.getItem(LS_TRIP_KEY);
       if (savedTripId) {
         openTrip(savedTripId).catch(() => {
@@ -585,6 +596,30 @@ $("showNewTripFormBtn").addEventListener("click", () => {
 // Pra trocar, é só mudar esse valor e subir o app.js de novo.
 const CREATE_TRIP_CODE = "kipu2026";
 
+// Convite por e-mail — grava um documento na coleção "mail", que a extensão
+// "Trigger Email" do Firebase observa e envia sozinha pelo provedor SMTP
+// configurado no Console (Gmail por enquanto, Resend depois de ter domínio
+// próprio — troca é só na configuração da extensão, não aqui). Se a
+// extensão ainda não estiver instalada, esse addDoc só fica parado na
+// coleção sem nenhum efeito — nunca trava o resto do fluxo.
+function sendInviteEmail(toEmail, tripName, tripId, inviterName) {
+  const joinLink = `https://dids7.github.io/kipu/?code=${tripId}`;
+  const html = `
+    <div style="font-family:'Public Sans',Arial,sans-serif; max-width:480px; margin:0 auto; background:#0f1927; padding:32px 24px; border-radius:16px; color:#f4ede1;">
+      <div style="font-size:13px; letter-spacing:0.08em; text-transform:uppercase; color:#d4a750; margin-bottom:6px;">Kipu</div>
+      <h1 style="font-size:22px; margin:0 0 16px; color:#f4ede1;">Você foi convidado(a) pra uma viagem! 🎒</h1>
+      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;"><strong>${inviterName}</strong> te chamou pra <strong>"${tripName}"</strong> no Kipu — o app onde a gente organiza tudo junto: itinerário, hospedagem, documentos, mala, gastos e mais, sem precisar ficar mandando mensagem separada pra cada coisa.</p>
+      <a href="${joinLink}" style="display:inline-block; background:#d4a750; color:#0f1927; font-weight:700; text-decoration:none; padding:12px 24px; border-radius:8px; margin:8px 0 20px;">Entrar na viagem →</a>
+      <p style="font-size:13px; line-height:1.6; color:#a9b4c0; margin:0 0 20px;">Se o botão não funcionar, copie e cole este link no navegador:<br>${joinLink}</p>
+      <p style="font-size:12px; color:#6b7684; margin:0;">Você recebeu este e-mail porque foi adicionado(a) como participante desta viagem no Kipu.</p>
+    </div>
+  `;
+  return addDoc(collection(db, "mail"), {
+    to: toEmail,
+    message: { subject: `${inviterName} te convidou pra "${tripName}" 🎒`, html }
+  }).catch(() => {});
+}
+
 $("createTripBtn").addEventListener("click", async () => {
   const name = $("tripName").value.trim();
   const destination = $("tripDestination").value.trim();
@@ -622,6 +657,10 @@ $("createTripBtn").addEventListener("click", async () => {
   addDoc(collection(db, "tripCreationLog"), {
     tripId: docRef.id, tripName: name, createdBy: currentUser.email, createdAt: serverTimestamp()
   }).catch(() => {});
+  // Convite por e-mail pros demais participantes (não pra mim mesmo).
+  participantEmails.filter((e) => e !== myEmail).forEach((e) => {
+    sendInviteEmail(e, name, docRef.id, myDisplayName || currentUser.email);
+  });
   $("newTripForm").classList.add("hidden");
   $("tripName").value = ""; $("tripDestination").value = "";
   $("tripStart").value = ""; $("tripEnd").value = ""; $("tripParticipants").value = ""; $("tripCreationCode").value = "";
@@ -1141,6 +1180,7 @@ $("addParticipantBtn").addEventListener("click", async () => {
   currentTripData.participantEmails = updated;
   currentTripData.participantRoles = updatedRoles;
   currentTripData.blockedEmails = updatedBlocked;
+  sendInviteEmail(email, currentTripData.name, currentTripId, myDisplayName || currentUser.email);
   const idx = allUserTrips.findIndex((t) => t.id === currentTripId);
   if (idx >= 0) allUserTrips[idx].participantEmails = updated;
   await loadParticipantNames(currentTripData.participantEmails);
@@ -2214,6 +2254,27 @@ $("addDocToggleBtn")?.addEventListener("click", () => {
 });
 $("closeDocFormBtn")?.addEventListener("click", resetDocForm);
 
+// Fotos .heic (padrão de câmera do iPhone) não aparecem em preview na
+// maioria dos navegadores — só o Safari/iOS entende nativamente. Converte
+// pra .jpeg no próprio navegador antes do upload (usa a biblioteca heic2any,
+// carregada no index.html). Se a conversão falhar por qualquer motivo (sem
+// internet pra carregar a lib, arquivo corrompido, etc.), sobe o arquivo
+// original mesmo assim — melhor um documento sem preview bonito do que um
+// upload que não funciona.
+async function maybeConvertHeic(file) {
+  const looksHeic = /\.(heic|heif)$/i.test(file.name) || /^image\/(heic|heif)/i.test(file.type || "");
+  if (!looksHeic || typeof window.heic2any !== "function") return file;
+  try {
+    const converted = await window.heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 });
+    const jpegBlob = Array.isArray(converted) ? converted[0] : converted;
+    const newName = file.name.replace(/\.(heic|heif)$/i, ".jpg");
+    return new File([jpegBlob], newName, { type: "image/jpeg" });
+  } catch (err) {
+    console.error("Falha ao converter HEIC, subindo o arquivo original:", err);
+    return file;
+  }
+}
+
 $("saveDocBtn").addEventListener("click", async () => {
   const title = $("docTitle").value.trim();
   const docType = $("docType").value || "outro";
@@ -2242,14 +2303,16 @@ $("saveDocBtn").addEventListener("click", async () => {
   let fileType = "", fileName = "", storagePath = "";
   if (file) {
     statusEl.classList.remove("hidden");
+    statusEl.textContent = "Preparando arquivo...";
+    const uploadFile = await maybeConvertHeic(file);
     statusEl.textContent = "Enviando arquivo...";
     try {
-      storagePath = `trips/${currentTripId}/documentos/${Date.now()}_${file.name}`;
+      storagePath = `trips/${currentTripId}/documentos/${Date.now()}_${uploadFile.name}`;
       const fileRef = ref(storage, storagePath);
-      await uploadBytes(fileRef, file);
+      await uploadBytes(fileRef, uploadFile);
       url = await getDownloadURL(fileRef);
-      fileType = file.type;
-      fileName = file.name;
+      fileType = uploadFile.type;
+      fileName = uploadFile.name;
       statusEl.textContent = "Upload concluído.";
     } catch (err) {
       statusEl.textContent = "Erro no upload: " + err.message;
