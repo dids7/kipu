@@ -579,12 +579,24 @@ $("showNewTripFormBtn").addEventListener("click", () => {
   $("newTripForm").classList.toggle("hidden");
 });
 
+// Código pra CRIAR viagem — não é segurança de verdade (fica visível pra
+// quem abrir o código-fonte, igual a senha do reset), é só uma barreira
+// contra alguém achar o link do app e sair criando/usando sem o Diego saber.
+// Pra trocar, é só mudar esse valor e subir o app.js de novo.
+const CREATE_TRIP_CODE = "kipu2026";
+
 $("createTripBtn").addEventListener("click", async () => {
   const name = $("tripName").value.trim();
   const destination = $("tripDestination").value.trim();
   const startDate = $("tripStart").value;
   const endDate = $("tripEnd").value;
   const emailsRaw = $("tripParticipants").value.trim();
+  const code = $("tripCreationCode").value.trim();
+  $("tripCreationCodeError").classList.add("hidden");
+  if (code !== CREATE_TRIP_CODE) {
+    $("tripCreationCodeError").classList.remove("hidden");
+    return;
+  }
   if (!name || !startDate || !endDate || !emailsRaw) {
     alert("Preencha nome, datas e ao menos um participante.");
     return;
@@ -606,9 +618,13 @@ $("createTripBtn").addEventListener("click", async () => {
     createdBy: currentUser.email,
     createdAt: serverTimestamp()
   });
+  // Log simples de quem criou o quê — não trava a criação da viagem se falhar.
+  addDoc(collection(db, "tripCreationLog"), {
+    tripId: docRef.id, tripName: name, createdBy: currentUser.email, createdAt: serverTimestamp()
+  }).catch(() => {});
   $("newTripForm").classList.add("hidden");
   $("tripName").value = ""; $("tripDestination").value = "";
-  $("tripStart").value = ""; $("tripEnd").value = ""; $("tripParticipants").value = "";
+  $("tripStart").value = ""; $("tripEnd").value = ""; $("tripParticipants").value = ""; $("tripCreationCode").value = "";
   openTrip(docRef.id);
 });
 

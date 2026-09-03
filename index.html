@@ -228,6 +228,11 @@
           <label data-i18n="picker.participantsLabel">E-mails dos participantes (separados por vírgula, inclua o seu)</label>
           <input type="text" id="tripParticipants" placeholder="voce@gmail.com, noiva@gmail.com">
         </div>
+        <div>
+          <label data-i18n="picker.creationCodeLabel">Código de criação</label>
+          <input type="password" id="tripCreationCode" data-i18n-placeholder="picker.creationCodePlaceholder" placeholder="Peça pro Diego">
+          <div id="tripCreationCodeError" class="hidden" style="color:var(--red); font-size:12px; margin-top:4px;" data-i18n="picker.creationCodeWrong">Código incorreto.</div>
+        </div>
         <button id="createTripBtn" class="btn btn-primary btn-block" data-i18n="picker.create">Criar viagem</button>
       </div>
 
