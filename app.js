@@ -2105,7 +2105,6 @@ function renderDocsList() {
   const listEl = $("docsList");
   const typeFilter = $("docFilterType") ? $("docFilterType").value : "";
   const personFilter = $("docFilterPerson") ? $("docFilterPerson").value : "";
-  const todayISO = localISODate();
 
   const filtered = docsCache.filter((doc_) => {
     const docType = doc_.docType || "outro";
@@ -2137,36 +2136,69 @@ function renderDocsList() {
     header.textContent = docTypeLabel(type);
     listEl.appendChild(header);
 
+    const grid = document.createElement("div");
+    grid.className = "doc-grid";
+
     [...mine, ...others].forEach((doc_) => {
-      const card = document.createElement("div");
-      card.className = "card";
       const isImage = doc_.fileType && doc_.fileType.startsWith("image/");
-      let expiryLine = "";
-      if (doc_.expiresAt) {
-        const daysLeft = Math.ceil((new Date(doc_.expiresAt) - new Date(todayISO)) / 86400000);
-        expiryLine = `<div class="card-meta" style="color:var(--gold);">⏳ ${t("documents.expiresIn").replace("{d}", daysLeft)}</div>`;
-      }
-      const ownerLine = `<div class="card-meta">${t("documents.uploadedBy").replace("{name}", nameFor(doc_.uploadedBy))}</div>`;
-      card.innerHTML = `
-        <div class="card-row">
-          <div class="card-title">${doc_.title}</div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <button class="item-del" data-action="edit" title="Editar">✎</button>
-            <button class="item-del" data-action="delete" title="Excluir">✕</button>
-          </div>
+      const thumb = document.createElement("div");
+      thumb.className = "doc-thumb";
+      thumb.innerHTML = `
+        ${isImage ? `<img src="${doc_.url}" loading="lazy">` : `<span class="doc-thumb-icon">${doc_.url ? "🔗" : "📄"}</span>`}
+        <div class="doc-thumb-title">${doc_.title}</div>
+        <div class="doc-thumb-actions">
+          <button data-action="edit" title="Editar">✎</button>
+          <button data-action="delete" title="Excluir">✕</button>
         </div>
-        ${ownerLine}
-        <div class="card-meta">${doc_.notes || ""}</div>
-        ${expiryLine}
-        ${isImage ? `<img src="${doc_.url}" style="max-width:100%; border-radius:8px; margin-top:8px;">` : ""}
-        ${doc_.url ? `<a href="${doc_.url}" target="_blank" style="color:var(--gold); font-size:12.5px; display:block; margin-top:6px;">Abrir ${doc_.fileName ? doc_.fileName : "link"} ↗</a>` : ""}
       `;
-      card.querySelector('[data-action="edit"]').addEventListener("click", () => openDocForEdit(doc_.id, doc_));
-      card.querySelector('[data-action="delete"]').addEventListener("click", () => deleteItem("documentos", doc_.id, doc_.title, "documentos", doc_.storagePath));
-      listEl.appendChild(card);
+      thumb.addEventListener("click", (e) => {
+        if (e.target.closest("[data-action]")) return;
+        openDocDetailModal(doc_);
+      });
+      thumb.querySelector('[data-action="edit"]').addEventListener("click", (e) => {
+        e.stopPropagation();
+        openDocForEdit(doc_.id, doc_);
+      });
+      thumb.querySelector('[data-action="delete"]').addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteItem("documentos", doc_.id, doc_.title, "documentos", doc_.storagePath);
+      });
+      grid.appendChild(thumb);
     });
+    listEl.appendChild(grid);
   });
 }
+
+// Abre a caixa grande com o documento em destaque — imagem maior (ou ícone
+// de link/arquivo), categoria, quem enviou, notas, validade, e os botões de
+// editar/excluir "de verdade" (o card pequeno da grade já tem os mesmos,
+// mas bem discretos).
+function openDocDetailModal(doc_) {
+  const isImage = doc_.fileType && doc_.fileType.startsWith("image/");
+  const todayISO = localISODate();
+  $("docDetailTitle").textContent = doc_.title;
+  $("docDetailImageWrap").innerHTML = isImage
+    ? `<img src="${doc_.url}" style="max-width:100%; max-height:55vh; border-radius:10px;">`
+    : `<div style="font-size:56px;">${doc_.url ? "🔗" : "📄"}</div>`;
+  $("docDetailType").textContent = docTypeLabel(doc_.docType || "outro");
+  $("docDetailOwner").textContent = t("documents.uploadedBy").replace("{name}", nameFor(doc_.uploadedBy));
+  $("docDetailNotes").textContent = doc_.notes || "";
+  $("docDetailNotes").classList.toggle("hidden", !doc_.notes);
+  if (doc_.expiresAt) {
+    const daysLeft = Math.ceil((new Date(doc_.expiresAt) - new Date(todayISO)) / 86400000);
+    $("docDetailExpiry").textContent = "⏳ " + t("documents.expiresIn").replace("{d}", daysLeft);
+    $("docDetailExpiry").classList.remove("hidden");
+  } else {
+    $("docDetailExpiry").classList.add("hidden");
+  }
+  $("docDetailLinkWrap").innerHTML = doc_.url
+    ? `<a href="${doc_.url}" target="_blank" style="color:var(--gold); font-size:12.5px;">Abrir ${doc_.fileName ? doc_.fileName : "link"} ↗</a>`
+    : "";
+  $("docDetailEditBtn").onclick = () => { $("docDetailModal").classList.add("hidden"); openDocForEdit(doc_.id, doc_); };
+  $("docDetailDeleteBtn").onclick = () => { $("docDetailModal").classList.add("hidden"); deleteItem("documentos", doc_.id, doc_.title, "documentos", doc_.storagePath); };
+  $("docDetailModal").classList.remove("hidden");
+}
+$("docDetailCloseBtn")?.addEventListener("click", () => $("docDetailModal").classList.add("hidden"));
 
 function subscribeDocumentos() {
   populateDocFilterPerson();

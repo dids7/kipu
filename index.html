@@ -125,6 +125,24 @@
     </div>
   </div>
 </div>
+<div id="docDetailModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:420px;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:10px;">
+      <div class="modal-title" id="docDetailTitle" style="margin:0;"></div>
+      <button id="docDetailCloseBtn" class="btn btn-outline" style="flex:0 0 auto; padding:4px 10px;">✕</button>
+    </div>
+    <div id="docDetailImageWrap" style="text-align:center; margin-bottom:12px;"></div>
+    <div class="card-meta" id="docDetailType" style="margin-bottom:2px;"></div>
+    <div class="card-meta" id="docDetailOwner" style="margin-bottom:2px;"></div>
+    <div class="card-meta" id="docDetailNotes" style="margin-bottom:2px;"></div>
+    <div class="card-meta" id="docDetailExpiry" style="color:var(--gold); margin-bottom:2px;"></div>
+    <div id="docDetailLinkWrap" style="margin-top:8px;"></div>
+    <div class="form-row" style="margin-top:16px;">
+      <button id="docDetailEditBtn" class="btn btn-outline" data-i18n="common.edit">Editar</button>
+      <button id="docDetailDeleteBtn" class="btn btn-danger" data-i18n="modal.delete">Excluir</button>
+    </div>
+  </div>
+</div>
 <div id="nameModal" class="modal-overlay hidden">
   <div class="modal-box">
     <div class="modal-title" id="modalTitleText" data-i18n="profile.title">Como podemos te chamar?</div>
