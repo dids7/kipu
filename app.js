@@ -2073,14 +2073,54 @@ $("saveEstadiaBtn").addEventListener("click", async () => {
 let editingDocId = null;
 let docsCache = [];
 
-// Ordem fixa de exibição das categorias — a mesma em toda a aba.
-const DOC_TYPE_ORDER = ["passaporte", "rg", "cpf", "passagem", "ingresso", "voucher", "seguro", "vacina", "outro"];
+// Ordem fixa das categorias base — "outro" sempre por último. Categorias
+// criadas na hora (customDocTypes, salvas na própria viagem) entram entre
+// as fixas e "outro" — ver getDocTypeOrder().
+const DOC_TYPE_FIXED_ORDER = ["passaporte", "rg", "cpf", "cnh", "passagem", "ingresso", "voucher", "seguro", "vacina"];
 const DOC_TYPE_KEYS = {
-  passaporte: "documents.typePassaporte", rg: "documents.typeRg", cpf: "documents.typeCpf",
+  passaporte: "documents.typePassaporte", rg: "documents.typeRg", cpf: "documents.typeCpf", cnh: "documents.typeCnh",
   passagem: "documents.typePassagem", ingresso: "documents.typeIngresso", voucher: "documents.typeVoucher",
   seguro: "documents.typeSeguro", vacina: "documents.typeVacina", outro: "documents.typeOutro"
 };
-function docTypeLabel(type) { return t(DOC_TYPE_KEYS[type] || DOC_TYPE_KEYS.outro); }
+// Categoria fixa: usa a tradução. Categoria criada na hora: não tem
+// tradução, o texto é exatamente o que a pessoa digitou (mostra igual pra
+// todo mundo, em qualquer idioma).
+function docTypeLabel(type) { return DOC_TYPE_KEYS[type] ? t(DOC_TYPE_KEYS[type]) : type; }
+function getDocTypeOrder() {
+  const custom = (currentTripData && currentTripData.customDocTypes) || [];
+  return [...DOC_TYPE_FIXED_ORDER, ...custom, "outro"];
+}
+
+// Sincroniza os selects de categoria (do formulário e do filtro) com as
+// categorias criadas na hora pra essa viagem — guardadas em
+// trips/{tripId}.customDocTypes, compartilhado com todo mundo (não é
+// localStorage). Marca cada option criada dinamicamente com
+// data-custom-type pra dar pra limpar e recriar sem duplicar.
+function populateDocTypeOptions() {
+  const custom = (currentTripData && currentTripData.customDocTypes) || [];
+  const formSel = $("docType");
+  const filterSel = $("docFilterType");
+  if (formSel) {
+    formSel.querySelectorAll("[data-custom-type]").forEach((o) => o.remove());
+    const newOption = formSel.querySelector('option[value="__custom__"]');
+    custom.forEach((label) => {
+      const opt = document.createElement("option");
+      opt.value = label; opt.textContent = label; opt.dataset.customType = "1";
+      formSel.insertBefore(opt, newOption);
+    });
+  }
+  if (filterSel) {
+    const keepValue = filterSel.value;
+    filterSel.querySelectorAll("[data-custom-type]").forEach((o) => o.remove());
+    const outroOption = filterSel.querySelector('option[value="outro"]');
+    custom.forEach((label) => {
+      const opt = document.createElement("option");
+      opt.value = label; opt.textContent = label; opt.dataset.customType = "1";
+      filterSel.insertBefore(opt, outroOption);
+    });
+    if ([...filterSel.options].some((o) => o.value === keepValue)) filterSel.value = keepValue;
+  }
+}
 
 // Preenche o filtro de pessoa com os participantes da viagem atual (nome, não e-mail cru).
 function populateDocFilterPerson() {
@@ -2097,6 +2137,30 @@ function populateDocFilterPerson() {
   });
   if (emails.includes(keepValue)) sel.value = keepValue;
 }
+
+// Cria uma categoria nova pra essa viagem (compartilhada com todo mundo) a
+// partir do que a pessoa digitou no campo inline do formulário.
+async function confirmNewDocType() {
+  const input = $("docNewTypeInput");
+  const label = input.value.trim();
+  if (!label) return;
+  const existing = (currentTripData.customDocTypes || []);
+  if (!existing.some((c) => c.toLowerCase() === label.toLowerCase())) {
+    await updateDoc(doc(db, "trips", currentTripId), { customDocTypes: arrayUnion(label) });
+    currentTripData.customDocTypes = [...existing, label];
+  }
+  populateDocTypeOptions();
+  $("docType").value = label;
+  $("docNewTypeWrap").classList.add("hidden");
+  input.value = "";
+}
+$("docType")?.addEventListener("change", () => {
+  const isCustom = $("docType").value === "__custom__";
+  $("docNewTypeWrap").classList.toggle("hidden", !isCustom);
+  if (isCustom) $("docNewTypeInput").focus();
+});
+$("docNewTypeAddBtn")?.addEventListener("click", confirmNewDocType);
+$("docNewTypeInput")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); confirmNewDocType(); } });
 
 // Aplica os filtros ativos, agrupa por categoria (ordem fixa) e, dentro de
 // cada grupo, mostra os documentos do próprio usuário primeiro, depois o
@@ -2122,7 +2186,7 @@ function renderDocsList() {
   });
 
   listEl.innerHTML = "";
-  DOC_TYPE_ORDER.forEach((type) => {
+  getDocTypeOrder().forEach((type) => {
     const docsOfType = groups[type];
     if (!docsOfType || docsOfType.length === 0) return;
 
@@ -2202,6 +2266,7 @@ $("docDetailCloseBtn")?.addEventListener("click", () => $("docDetailModal").clas
 
 function subscribeDocumentos() {
   populateDocFilterPerson();
+  populateDocTypeOptions();
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "documentos"), (snap) => {
     const todayISO = localISODate();
     const visibleDocs = [];
@@ -2310,6 +2375,10 @@ async function maybeConvertHeic(file) {
 $("saveDocBtn").addEventListener("click", async () => {
   const title = $("docTitle").value.trim();
   const docType = $("docType").value || "outro";
+  if (docType === "__custom__") {
+    alert("Digite o nome da categoria nova e clique em Adicionar antes de salvar.");
+    return;
+  }
   const notes = $("docNotes").value.trim();
   let url = $("docUrl").value.trim();
   const fileInput = $("docFile");
