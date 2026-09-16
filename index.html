@@ -12,6 +12,14 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Kipu">
+<!-- Sentry: captura automática de erros de JavaScript não tratados, mesmo em
+     uso de terceiros que nunca avisam sobre o problema. Só monitoramento
+     técnico (erro, navegador) — sem Session Replay nem dado pessoal por
+     padrão. Carregado primeiro pra pegar erro de qualquer script depois dele. -->
+<script
+  src="https://js.sentry-cdn.com/baddab85d7e7b5af0172cc7a881a8719.min.js"
+  crossorigin="anonymous"
+></script>
 <!-- Converte fotos .heic (padrão do iPhone) pra .jpeg no navegador, antes do
      upload — sem isso, a maioria dos navegadores (Chrome, Android, Windows)
      não consegue exibir o preview da foto, só o Safari/iOS entende nativamente. -->
