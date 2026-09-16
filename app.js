@@ -246,48 +246,79 @@ if ("serviceWorker" in navigator) {
 }
 
 (function setupInstallBanner() {
-  const LS_DISMISS_KEY = "kipu_install_dismissed";
-  const banner = document.getElementById("installBanner");
-  const textEl = document.getElementById("installBannerText");
-  const actionBtn = document.getElementById("installBannerActionBtn");
-  const closeBtn = document.getElementById("installBannerCloseBtn");
+  // Tudo isso é só pra celular — instalar como app não faz muito sentido no
+  // desktop pro caso de uso do Kipu (viagem, uso no bolso).
+  const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (!isMobile) return;
 
   const isStandalone =
     window.matchMedia("(display-mode: standalone)").matches ||
     window.navigator.standalone === true;
-  if (isStandalone) return;
+  if (isStandalone) return; // já instalado — nem banner nem botão fazem sentido
 
-  if (localStorage.getItem(LS_DISMISS_KEY)) return;
+  const LS_DISMISS_KEY = "kipu_install_dismissed_date";
+  const banner = document.getElementById("installBanner");
+  const textEl = document.getElementById("installBannerText");
+  const actionBtn = document.getElementById("installBannerActionBtn");
+  const closeBtn = document.getElementById("installBannerCloseBtn");
+  const profileSection = document.getElementById("profileInstallSection");
+  const profileBtn = document.getElementById("profileInstallBtn");
 
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
   let deferredPrompt = null;
 
-  function showBanner() { banner.classList.remove("hidden"); }
+  // Botão do perfil: sempre visível (enquanto não instalado), é o caminho
+  // permanente pra quem fechou o banner e mudou de ideia depois.
+  profileSection.classList.remove("hidden");
+
+  function hideInstallUI() {
+    banner.classList.add("hidden");
+    profileSection.classList.add("hidden");
+  }
+  // Se a pessoa instalar por qualquer caminho (nosso botão, o menu do
+  // navegador, etc.), some com tudo na hora, sem precisar recarregar.
+  window.addEventListener("appinstalled", hideInstallUI);
+
+  function wasDismissedToday() {
+    return localStorage.getItem(LS_DISMISS_KEY) === localISODate();
+  }
+  function showBanner() { if (!wasDismissedToday()) banner.classList.remove("hidden"); }
+  // Fechar só esconde por hoje — volta a aparecer no dia seguinte, enquanto
+  // não for instalado de verdade. O botão do perfil continua disponível o
+  // tempo todo, sem esperar o dia seguinte.
   function dismissBanner() {
     banner.classList.add("hidden");
-    localStorage.setItem(LS_DISMISS_KEY, "1");
+    localStorage.setItem(LS_DISMISS_KEY, localISODate());
   }
 
   closeBtn.addEventListener("click", dismissBanner);
 
   if (isIOS) {
-    textEl.textContent = "📲 Instale o Kipu: toque em Compartilhar e depois em \"Adicionar à Tela de Início\".";
+    const iosMessage = "📲 Instale o Kipu: toque em Compartilhar e depois em \"Adicionar à Tela de Início\".";
+    textEl.textContent = iosMessage;
     actionBtn.textContent = "Entendi";
     actionBtn.addEventListener("click", dismissBanner);
     showBanner();
+    profileBtn.addEventListener("click", () => alert(iosMessage));
   } else {
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
       deferredPrompt = e;
       showBanner();
     });
-    actionBtn.addEventListener("click", async () => {
-      if (!deferredPrompt) { dismissBanner(); return; }
+    async function triggerInstall() {
+      if (!deferredPrompt) {
+        alert("Pra instalar: abra o menu (⋮) do navegador e procure \"Instalar app\" ou \"Adicionar à tela inicial\".");
+        return;
+      }
       deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
+      const choice = await deferredPrompt.userChoice;
       deferredPrompt = null;
-      dismissBanner();
-    });
+      if (choice.outcome === "accepted") hideInstallUI();
+      else dismissBanner();
+    }
+    actionBtn.addEventListener("click", triggerInstall);
+    profileBtn.addEventListener("click", triggerInstall);
   }
 })();
 
