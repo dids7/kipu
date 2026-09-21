@@ -716,8 +716,8 @@ input[type="number"]::placeholder, input[type="search"]::placeholder, input[type
   cursor:pointer;
 }
 .trip-card:hover{ border-color:var(--gold-dim); }
-.trip-card-title{ font-family:'Big Shoulders Display', sans-serif; font-weight:800; font-size:20px; }
-.trip-card-meta{ font-size:12px; color:var(--muted); margin-top:4px; }
+.trip-card-title{ font-family:'Big Shoulders Display', sans-serif; font-weight:800; font-size:20px; overflow-wrap:anywhere; }
+.trip-card-meta{ font-size:12px; color:var(--muted); margin-top:4px; overflow-wrap:anywhere; }
 
 /* ---------- Empty state ---------- */
 .empty{ text-align:center; color:var(--muted); font-size:13px; padding:24px 10px; }
@@ -886,6 +886,7 @@ input[type="number"]::placeholder, input[type="search"]::placeholder, input[type
   }
   .agency-stats{ justify-content:flex-start; }
   .agency-stat-box{ flex:0 0 150px; }
+  #agencyPanel > .card:first-child{ max-width:420px; }
   #agencyNewTripForm{ max-width:480px; }
 
   /* App principal: header no topo, nav lateral + conteúdo lado a lado */
