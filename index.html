@@ -230,48 +230,89 @@
       <h1 class="trip-title" data-i18n="picker.title">Suas viagens</h1>
     </header>
     <main>
-      <div class="card" style="margin-bottom:14px;">
-        <div class="card-title" style="font-size:13px; margin-bottom:8px;" data-i18n="picker.inviteQuestion">Foi convidado para uma viagem?</div>
-        <div class="form-row">
-          <input type="text" id="joinCodeInput" data-i18n-placeholder="picker.invitePlaceholder" placeholder="Cole o código da viagem aqui">
-          <button id="joinCodeBtn" class="btn btn-primary btn-small" data-i18n="picker.enter">Entrar</button>
+      <div id="normalTripPickerContent">
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-title" style="font-size:13px; margin-bottom:8px;" data-i18n="picker.inviteQuestion">Foi convidado para uma viagem?</div>
+          <div class="form-row">
+            <input type="text" id="joinCodeInput" data-i18n-placeholder="picker.invitePlaceholder" placeholder="Cole o código da viagem aqui">
+            <button id="joinCodeBtn" class="btn btn-primary btn-small" data-i18n="picker.enter">Entrar</button>
+          </div>
+          <div id="joinCodeStatus" class="screen-sub hidden" style="margin:8px 0 0;"></div>
         </div>
-        <div id="joinCodeStatus" class="screen-sub hidden" style="margin:8px 0 0;"></div>
-      </div>
 
-      <button id="showNewTripFormBtn" class="add-toggle" data-i18n="picker.newTrip">＋ Criar nova viagem</button>
-      <div id="newTripForm" class="form-card hidden">
-        <div>
-          <label data-i18n="picker.tripName">Nome da viagem</label>
-          <input type="text" id="tripName" placeholder="Ex: Peru 2026">
-        </div>
-        <div>
-          <label data-i18n="picker.destination">Destino</label>
-          <input type="text" id="tripDestination" placeholder="Ex: Cusco, Peru">
-        </div>
-        <div class="form-row">
+        <button id="showNewTripFormBtn" class="add-toggle" data-i18n="picker.newTrip">＋ Criar nova viagem</button>
+        <div id="newTripForm" class="form-card hidden">
           <div>
-            <label data-i18n="picker.startDate">Data de início</label>
-            <input type="date" id="tripStart">
+            <label data-i18n="picker.tripName">Nome da viagem</label>
+            <input type="text" id="tripName" placeholder="Ex: Peru 2026">
           </div>
           <div>
-            <label data-i18n="picker.endDate">Data de fim</label>
-            <input type="date" id="tripEnd">
+            <label data-i18n="picker.destination">Destino</label>
+            <input type="text" id="tripDestination" placeholder="Ex: Cusco, Peru">
           </div>
+          <div class="form-row">
+            <div>
+              <label data-i18n="picker.startDate">Data de início</label>
+              <input type="date" id="tripStart">
+            </div>
+            <div>
+              <label data-i18n="picker.endDate">Data de fim</label>
+              <input type="date" id="tripEnd">
+            </div>
+          </div>
+          <div>
+            <label data-i18n="picker.participantsLabel">E-mails dos participantes (separados por vírgula, inclua o seu)</label>
+            <input type="text" id="tripParticipants" placeholder="voce@gmail.com, noiva@gmail.com">
+          </div>
+          <div>
+            <label data-i18n="picker.creationCodeLabel">Código de criação</label>
+            <input type="password" id="tripCreationCode" data-i18n-placeholder="picker.creationCodePlaceholder" placeholder="Peça pro Diego">
+            <div id="tripCreationCodeError" class="hidden" style="color:var(--red); font-size:12px; margin-top:4px;" data-i18n="picker.creationCodeWrong">Código incorreto.</div>
+          </div>
+          <button id="createTripBtn" class="btn btn-primary btn-block" data-i18n="picker.create">Criar viagem</button>
         </div>
-        <div>
-          <label data-i18n="picker.participantsLabel">E-mails dos participantes (separados por vírgula, inclua o seu)</label>
-          <input type="text" id="tripParticipants" placeholder="voce@gmail.com, noiva@gmail.com">
-        </div>
-        <div>
-          <label data-i18n="picker.creationCodeLabel">Código de criação</label>
-          <input type="password" id="tripCreationCode" data-i18n-placeholder="picker.creationCodePlaceholder" placeholder="Peça pro Diego">
-          <div id="tripCreationCodeError" class="hidden" style="color:var(--red); font-size:12px; margin-top:4px;" data-i18n="picker.creationCodeWrong">Código incorreto.</div>
-        </div>
-        <button id="createTripBtn" class="btn btn-primary btn-block" data-i18n="picker.create">Criar viagem</button>
+
+        <div id="tripList"></div>
       </div>
 
-      <div id="tripList"></div>
+      <!-- PAINEL DA AGÊNCIA (Fase 2, 18/set/2026) -->
+      <div id="agencyPanel" class="hidden">
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-title" id="agencyPanelName" style="font-size:16px; margin-bottom:6px;">—</div>
+          <div class="screen-sub" id="agencyPanelPlanLine" style="margin:0 0 10px;">—</div>
+          <div class="screen-sub" id="agencyPanelLimitWarning" style="margin:0; color:var(--gold); display:none;"></div>
+        </div>
+
+        <button id="showAgencyNewTripFormBtn" class="add-toggle">＋ Criar nova viagem</button>
+        <div id="agencyNewTripForm" class="form-card hidden">
+          <div>
+            <label>Nome da viagem</label>
+            <input type="text" id="agencyTripName" placeholder="Ex: Peru 2026">
+          </div>
+          <div>
+            <label>Destino</label>
+            <input type="text" id="agencyTripDestination" placeholder="Ex: Cusco, Peru">
+          </div>
+          <div class="form-row">
+            <div>
+              <label>Data de início</label>
+              <input type="date" id="agencyTripStart">
+            </div>
+            <div>
+              <label>Data de fim</label>
+              <input type="date" id="agencyTripEnd">
+            </div>
+          </div>
+          <div>
+            <label>E-mail do cliente final (dono da viagem)</label>
+            <input type="text" id="agencyTripClientEmail" placeholder="cliente@gmail.com">
+          </div>
+          <div id="agencyTripFormStatus" class="screen-sub hidden" style="margin:8px 0 0;"></div>
+          <button id="agencyCreateTripBtn" class="btn btn-primary btn-block">Criar viagem</button>
+        </div>
+
+        <div id="agencyTripList"></div>
+      </div>
     </main>
   </section>
 
@@ -298,6 +339,7 @@
     </header>
 
     <nav class="tabs" id="tabNav">
+
       <button class="tab active" data-tab="hoje" data-i18n="nav.today">Hoje</button>
       <button class="tab" data-tab="geral" data-i18n="nav.calendar">Calendário</button>
       <button class="tab" data-tab="itinerario" data-i18n="nav.itinerary">Itinerário</button>

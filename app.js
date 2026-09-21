@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot,
-  query, where, orderBy, serverTimestamp, getDocs, getDoc, arrayUnion
+  query, where, orderBy, serverTimestamp, getDocs, getDoc, arrayUnion, increment
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   ref, uploadBytes, getDownloadURL, deleteObject
@@ -326,6 +326,9 @@ if ("serviceWorker" in navigator) {
 let currentUser = null;
 let currentTripId = null;
 let currentTripData = null;
+// Se o e-mail logado for membro de alguma agência, guarda o doc dela aqui
+// (id + dados). null = usuário comum, cai na tela normal "Suas Viagens".
+let currentAgency = null;
 let malaSeg = "shared";
 let unsubscribers = [];
 let calendarViewDate = null; // Date — mês sendo exibido
@@ -540,13 +543,31 @@ $("profileBtn")?.addEventListener("click", async () => {
 // última viagem salva no navegador.
 const inviteCodeFromUrl = new URLSearchParams(window.location.search).get("code");
 
+// Consulta se o e-mail logado é membro de alguma agência (Fase 2,
+// 18/set/2026). Roda uma vez por login só; se der erro (ex: doc de
+// agência ainda não existe pra ninguém), trata como usuário comum —
+// nunca trava o login por causa disso.
+async function detectAgencyMembership(email) {
+  try {
+    const snap = await getDocs(query(collection(db, "agencies"), where("memberEmails", "array-contains", email)));
+    if (!snap.empty) {
+      const d = snap.docs[0];
+      return { id: d.id, ...d.data() };
+    }
+  } catch (err) {
+    console.warn("Não foi possível checar vínculo de agência:", err);
+  }
+  return null;
+}
+
 onAuthStateChanged(auth, (user) => {
   currentUser = user;
   if (user) {
     hide($("loginScreen"));
-    checkAndPromptProfile().then(() => {
+    checkAndPromptProfile().then(async () => {
       $("userEmailLabel").textContent = myDisplayName || user.email;
       $("userEmailLabel").title = user.email;
+      currentAgency = await detectAgencyMembership(user.email);
       if (inviteCodeFromUrl) {
         goToTripPicker();
         $("joinCodeInput").value = inviteCodeFromUrl;
@@ -567,6 +588,7 @@ onAuthStateChanged(auth, (user) => {
     show($("loginScreen"));
     hide($("tripPickerScreen"));
     hide($("appScreen"));
+    currentAgency = null;
   }
 });
 
@@ -578,7 +600,15 @@ function goToTripPicker() {
   localStorage.removeItem(LS_TRIP_KEY);
   hide($("appScreen"));
   show($("tripPickerScreen"));
-  loadTripList();
+  if (currentAgency) {
+    hide($("normalTripPickerContent"));
+    show($("agencyPanel"));
+    loadAgencyPanel();
+  } else {
+    hide($("agencyPanel"));
+    show($("normalTripPickerContent"));
+    loadTripList();
+  }
 }
 
 async function loadTripList() {
@@ -717,6 +747,201 @@ $("createTripBtn").addEventListener("click", async () => {
   $("tripName").value = ""; $("tripDestination").value = "";
   $("tripStart").value = ""; $("tripEnd").value = ""; $("tripParticipants").value = ""; $("tripCreationCode").value = "";
   openTrip(docRef.id);
+});
+
+// Igual a logActivity(), mas pra registrar em uma viagem que não é
+// necessariamente a que está aberta agora (usado pelo Painel da Agência,
+// que mexe em viagens sem "entrar" nelas). Melhor esforço — nunca trava
+// a ação principal se o registro falhar.
+function logActivityFor(tripId, area, action, description) {
+  return addDoc(collection(db, "trips", tripId, "activityLog"), {
+    authorEmail: currentUser.email,
+    area, action, description,
+    timestamp: serverTimestamp()
+  }).catch((err) => console.warn("Não foi possível registrar no histórico:", err));
+}
+
+// ================= PAINEL DA AGÊNCIA (Fase 2, 18/set/2026) =================
+
+$("showAgencyNewTripFormBtn")?.addEventListener("click", () => {
+  $("agencyNewTripForm").classList.toggle("hidden");
+});
+
+// Confere se uma viagem da agência já passou da data de fim e, se ainda
+// estava contando no limite, desliga sozinha (sem travar acesso — é só o
+// fim natural da viagem, diferente de "Cancelar"). Roda toda vez que o
+// Painel da Agência abre.
+async function autoOffExpiredAgencyTrips(agencyId, trips) {
+  const today = localISODate();
+  for (const trip of trips) {
+    if (trip.countsTowardLimit && trip.endDate && trip.endDate < today) {
+      try {
+        await updateDoc(doc(db, "trips", trip.id), { countsTowardLimit: false });
+        await updateDoc(doc(db, "agencies", agencyId), { activeTripsCount: increment(-1) });
+        logActivityFor(trip.id, "agencia", "auto-off", "Contador desligado automaticamente (viagem encerrada).");
+        trip.countsTowardLimit = false;
+      } catch (err) {
+        console.warn("Não foi possível desligar contador da viagem encerrada:", err);
+      }
+    }
+  }
+}
+
+async function loadAgencyPanel() {
+  const agencyId = currentAgency.id;
+  // Recarrega o doc da agência (contadores podem ter mudado desde o login).
+  try {
+    const freshSnap = await getDoc(doc(db, "agencies", agencyId));
+    if (freshSnap.exists()) currentAgency = { id: agencyId, ...freshSnap.data() };
+  } catch (err) {
+    console.warn("Não foi possível atualizar dados da agência:", err);
+  }
+  const plan = AGENCY_PLANS[currentAgency.planId] || AGENCY_PLANS.chaski;
+  const memberCount = (currentAgency.memberEmails || []).length;
+  const activeCount = currentAgency.activeTripsCount || 0;
+
+  $("agencyPanelName").textContent = currentAgency.name || "Agência";
+  const maxUsersLabel = plan.maxUsers === Infinity ? "∞" : plan.maxUsers;
+  const maxTripsLabel = plan.maxActiveTrips === Infinity ? "∞" : plan.maxActiveTrips;
+  $("agencyPanelPlanLine").textContent = `Plano ${plan.label} · ${memberCount} de ${maxUsersLabel} usuários · ${activeCount} de ${maxTripsLabel} viagens ativas`;
+
+  const atLimit = plan.maxActiveTrips !== Infinity && activeCount >= plan.maxActiveTrips;
+  const warnEl = $("agencyPanelLimitWarning");
+  if (atLimit) {
+    warnEl.style.display = "block";
+    warnEl.textContent = "Limite de viagens ativas do plano atingido — desligue ou encerre alguma viagem antes de criar outra.";
+  } else {
+    warnEl.style.display = "none";
+  }
+  $("agencyCreateTripBtn").disabled = atLimit;
+
+  const listEl = $("agencyTripList");
+  listEl.innerHTML = "<div class='empty'>Carregando...</div>";
+  const snap = await getDocs(query(collection(db, "trips"), where("agencyId", "==", agencyId)));
+  const trips = [];
+  snap.forEach((d) => trips.push({ id: d.id, ...d.data() }));
+
+  await autoOffExpiredAgencyTrips(agencyId, trips);
+
+  if (trips.length === 0) {
+    listEl.innerHTML = "<div class='empty'>Nenhuma viagem criada ainda.</div>";
+    return;
+  }
+  listEl.innerHTML = "";
+  const today = localISODate();
+  trips.sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
+  trips.forEach((trip) => {
+    const started = trip.startDate && today >= trip.startDate;
+    const card = document.createElement("div");
+    card.className = "trip-card";
+    let statusLabel = "";
+    if (trip.agencyCancelled) statusLabel = "❌ Cancelada";
+    else if (!trip.countsTowardLimit) statusLabel = "⚪ Não conta no limite";
+    card.innerHTML = `
+      <div class="card-row">
+        <div>
+          <div class="trip-card-title">${trip.name}${statusLabel ? ` · ${statusLabel}` : ""}</div>
+          <div class="trip-card-meta">${trip.destination || ""} · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}</div>
+        </div>
+      </div>
+      <div class="card-row" style="margin-top:8px; align-items:center; gap:10px;">
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:${started ? "default" : "pointer"};">
+          <input type="checkbox" data-counts-toggle ${trip.countsTowardLimit ? "checked" : ""} ${started ? "disabled" : ""}>
+          Conta no limite
+        </label>
+        ${!trip.agencyCancelled && !started ? `<button class="btn btn-outline btn-small" data-cancel-trip type="button">Cancelar viagem</button>` : ""}
+      </div>
+    `;
+    card.querySelector(".card-row").addEventListener("click", (e) => {
+      if (e.target.closest("[data-counts-toggle], [data-cancel-trip]")) return;
+      openTrip(trip.id);
+    });
+    const toggleEl = card.querySelector("[data-counts-toggle]");
+    if (toggleEl && !started) {
+      toggleEl.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const turningOn = e.target.checked;
+        try {
+          await updateDoc(doc(db, "trips", trip.id), { countsTowardLimit: turningOn });
+          await updateDoc(doc(db, "agencies", agencyId), { activeTripsCount: increment(turningOn ? 1 : -1) });
+          logActivityFor(trip.id, "agencia", "toggle", `Contador ${turningOn ? "ligado" : "desligado"} manualmente pela agência.`);
+        } catch (err) {
+          e.target.checked = !turningOn;
+          alert("Não foi possível atualizar o contador: " + err.message);
+        }
+      });
+    }
+    const cancelBtn = card.querySelector("[data-cancel-trip]");
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Cancelar "${trip.name}"? Ninguém fora da agência vai continuar tendo acesso a essa viagem.`)) return;
+        try {
+          const patch = { agencyCancelled: true };
+          if (trip.countsTowardLimit) patch.countsTowardLimit = false;
+          await updateDoc(doc(db, "trips", trip.id), patch);
+          if (trip.countsTowardLimit) {
+            await updateDoc(doc(db, "agencies", agencyId), { activeTripsCount: increment(-1) });
+          }
+          logActivityFor(trip.id, "agencia", "cancel", "Viagem cancelada pela agência — acesso bloqueado pra quem não é da agência.");
+          loadAgencyPanel();
+        } catch (err) {
+          alert("Não foi possível cancelar a viagem: " + err.message);
+        }
+      });
+    }
+    listEl.appendChild(card);
+  });
+}
+
+$("agencyCreateTripBtn")?.addEventListener("click", async () => {
+  const statusEl = $("agencyTripFormStatus");
+  statusEl.classList.add("hidden");
+  const name = $("agencyTripName").value.trim();
+  const destination = $("agencyTripDestination").value.trim();
+  const startDate = $("agencyTripStart").value;
+  const endDate = $("agencyTripEnd").value;
+  const clientEmail = $("agencyTripClientEmail").value.trim().toLowerCase();
+  if (!name || !startDate || !endDate || !clientEmail) {
+    statusEl.textContent = "Preencha nome, datas e o e-mail do cliente.";
+    statusEl.classList.remove("hidden");
+    return;
+  }
+  const agencyId = currentAgency.id;
+  const myEmail = currentUser.email.toLowerCase();
+  const participantEmails = [clientEmail, myEmail];
+  const participantRoles = { [clientEmail]: "admin", [myEmail]: "agencia" };
+  try {
+    const docRef = await addDoc(collection(db, "trips"), {
+      name, destination, startDate, endDate,
+      participantEmails,
+      participantRoles,
+      adminEmails: [clientEmail],
+      blockedEmails: [],
+      defaultJoinRole: "colaborador",
+      createdBy: clientEmail,
+      createdAt: serverTimestamp(),
+      agencyId,
+      countsTowardLimit: true,
+      agencyCancelled: false
+    });
+    await updateDoc(doc(db, "agencies", agencyId), {
+      activeTripsCount: increment(1),
+      totalTripsCreated: increment(1)
+    });
+    // Total histórico geral (Painel Master, Fase 5) — melhor esforço, não
+    // trava a criação da viagem se o doc stats/global ainda não existir.
+    updateDoc(doc(db, "stats", "global"), { totalTripsAllTime: increment(1) }).catch(() => {});
+    logActivityFor(docRef.id, "agencia", "create", `Viagem criada pela agência "${currentAgency.name || agencyId}".`);
+    sendInviteEmail(clientEmail, name, docRef.id, currentAgency.name || myDisplayName || currentUser.email);
+    $("agencyNewTripForm").classList.add("hidden");
+    $("agencyTripName").value = ""; $("agencyTripDestination").value = "";
+    $("agencyTripStart").value = ""; $("agencyTripEnd").value = ""; $("agencyTripClientEmail").value = "";
+    loadAgencyPanel();
+  } catch (err) {
+    statusEl.textContent = "Erro ao criar viagem: " + err.message;
+    statusEl.classList.remove("hidden");
+  }
 });
 
 $("joinCodeBtn").addEventListener("click", async () => {
