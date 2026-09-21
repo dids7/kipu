@@ -429,6 +429,29 @@ function fmtDate(d) {
   return `${day}/${m}`;
 }
 
+// Soma dias a uma data "YYYY-MM-DD" sem cair em bug de fuso — cria a data
+// como meia-noite LOCAL (não UTC), igual ao princípio do localISODate().
+function addDaysISO(iso, days) {
+  const d = new Date(iso + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return localISODate(d);
+}
+
+// Bug reportado 18/set/2026: dava pra escolher data de fim ANTES (ou igual)
+// da data de início nos dois formulários de criação de viagem. Trava o
+// próprio calendário (min) e corrige o valor se já tiver algo inválido
+// selecionado — funciona pra quem usa o seletor visual.
+function wireDateRange(startInput, endInput) {
+  startInput.addEventListener("change", () => {
+    if (!startInput.value) { endInput.removeAttribute("min"); return; }
+    const minEnd = addDaysISO(startInput.value, 1);
+    endInput.min = minEnd;
+    if (endInput.value && endInput.value <= startInput.value) {
+      endInput.value = minEnd;
+    }
+  });
+}
+
 // ---------- Log de atividades ----------
 async function logActivity(area, action, description) {
   if (!currentTripId || !currentUser) return;
@@ -652,6 +675,7 @@ async function loadTripList() {
 $("showNewTripFormBtn").addEventListener("click", () => {
   $("newTripForm").classList.toggle("hidden");
 });
+wireDateRange($("tripStart"), $("tripEnd"));
 
 // Código pra CRIAR viagem — não é segurança de verdade (fica visível pra
 // quem abrir o código-fonte, igual a senha do reset), é só uma barreira
@@ -720,6 +744,10 @@ $("createTripBtn").addEventListener("click", async () => {
     alert("Preencha nome, datas e ao menos um participante.");
     return;
   }
+  if (endDate <= startDate) {
+    alert("A data de fim precisa ser depois da data de início.");
+    return;
+  }
   const participantEmails = emailsRaw.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
   const myEmail = currentUser.email.toLowerCase();
   if (!participantEmails.includes(myEmail)) {
@@ -768,6 +796,7 @@ function logActivityFor(tripId, area, action, description) {
 $("showAgencyNewTripFormBtn")?.addEventListener("click", () => {
   $("agencyNewTripForm").classList.toggle("hidden");
 });
+wireDateRange($("agencyTripStart"), $("agencyTripEnd"));
 
 // Confere se uma viagem da agência já passou da data de fim e, se ainda
 // estava contando no limite, desliga sozinha (sem travar acesso — é só o
@@ -906,6 +935,11 @@ $("agencyCreateTripBtn")?.addEventListener("click", async () => {
   const clientEmail = $("agencyTripClientEmail").value.trim().toLowerCase();
   if (!name || !startDate || !endDate || !clientEmail) {
     statusEl.textContent = "Preencha nome, datas e o e-mail do cliente.";
+    statusEl.classList.remove("hidden");
+    return;
+  }
+  if (endDate <= startDate) {
+    statusEl.textContent = "A data de fim precisa ser depois da data de início.";
     statusEl.classList.remove("hidden");
     return;
   }
