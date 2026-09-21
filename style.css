@@ -875,6 +875,19 @@ input[type="number"]::placeholder, input[type="search"]::placeholder, input[type
   }
   #newTripForm{ max-width:480px; }
 
+  /* Painel da Agência em tela larga (18/set/2026): cards de viagem em
+     grade (várias por linha) em vez de um por linha; contadores de
+     usuário/viagem deixam de esticar pra ocupar a largura toda. */
+  #agencyTripList, #agencyHistoryList{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap:12px;
+    align-items:start;
+  }
+  .agency-stats{ justify-content:flex-start; }
+  .agency-stat-box{ flex:0 0 150px; }
+  #agencyNewTripForm{ max-width:480px; }
+
   /* App principal: header no topo, nav lateral + conteúdo lado a lado */
   #appScreen{
     display:grid;
