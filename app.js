@@ -855,44 +855,55 @@ async function loadAgencyPanel() {
   $("agencyCreateTripBtn").disabled = atLimit;
 
   const listEl = $("agencyTripList");
+  const historyListEl = $("agencyHistoryList");
   listEl.innerHTML = "<div class='empty'>Carregando...</div>";
   const snap = await getDocs(query(collection(db, "trips"), where("agencyId", "==", agencyId)));
-  const trips = [];
-  snap.forEach((d) => trips.push({ id: d.id, ...d.data() }));
+  const allTrips = [];
+  snap.forEach((d) => allTrips.push({ id: d.id, ...d.data() }));
 
-  await autoOffExpiredAgencyTrips(agencyId, trips);
+  await autoOffExpiredAgencyTrips(agencyId, allTrips);
 
-  if (trips.length === 0) {
-    listEl.innerHTML = "<div class='empty'>Nenhuma viagem criada ainda.</div>";
-    return;
-  }
-  listEl.innerHTML = "";
   const today = localISODate();
-  trips.sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
-  trips.forEach((trip) => {
+  const activeTrips = allTrips.filter((tr) => !tr.agencyCancelled).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
+  const cancelledTrips = allTrips.filter((tr) => tr.agencyCancelled).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
+
+  $("showAgencyHistoryBtn").textContent = `📜 Ver histórico (${cancelledTrips.length})`;
+
+  // Card compacto: título/meta à esquerda, controles empilhados à direita
+  // — uma linha só, em vez de duas (reduz o espaço vazio reportado em
+  // 18/set/2026).
+  function buildTripCardRight(trip, started) {
+    if (trip.agencyCancelled) {
+      return `<button class="btn btn-outline btn-small" data-reactivate-trip type="button">Reativar</button>`;
+    }
+    return `
+      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+        <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:${started ? "default" : "pointer"};">
+          <input type="checkbox" data-counts-toggle ${trip.countsTowardLimit ? "checked" : ""} ${started ? "disabled" : ""}>
+          Conta no limite
+        </label>
+        ${!started ? `<button class="btn btn-outline btn-small" data-cancel-trip type="button">Cancelar</button>` : ""}
+      </div>
+    `;
+  }
+
+  function renderTripCard(trip, container) {
     const started = trip.startDate && today >= trip.startDate;
     const card = document.createElement("div");
     card.className = "trip-card";
     let statusLabel = "";
-    if (trip.agencyCancelled) statusLabel = "❌ Cancelada";
-    else if (!trip.countsTowardLimit) statusLabel = "⚪ Não conta no limite";
+    if (!trip.agencyCancelled && !trip.countsTowardLimit) statusLabel = " · ⚪ não conta no limite";
     card.innerHTML = `
-      <div class="card-row">
+      <div class="card-row" style="align-items:center;">
         <div>
-          <div class="trip-card-title">${trip.name}${statusLabel ? ` · ${statusLabel}` : ""}</div>
+          <div class="trip-card-title">${trip.name}${statusLabel}</div>
           <div class="trip-card-meta">${trip.destination || ""} · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}</div>
         </div>
-      </div>
-      <div class="card-row" style="margin-top:8px; align-items:center; gap:10px;">
-        <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:${started ? "default" : "pointer"};">
-          <input type="checkbox" data-counts-toggle ${trip.countsTowardLimit ? "checked" : ""} ${started ? "disabled" : ""}>
-          Conta no limite
-        </label>
-        ${!trip.agencyCancelled && !started ? `<button class="btn btn-outline btn-small" data-cancel-trip type="button">Cancelar viagem</button>` : ""}
+        ${buildTripCardRight(trip, started)}
       </div>
     `;
-    card.querySelector(".card-row").addEventListener("click", (e) => {
-      if (e.target.closest("[data-counts-toggle], [data-cancel-trip]")) return;
+    card.addEventListener("click", (e) => {
+      if (e.target.closest("[data-counts-toggle], [data-cancel-trip], [data-reactivate-trip]")) return;
       openTrip(trip.id);
     });
     const toggleEl = card.querySelector("[data-counts-toggle]");
@@ -915,7 +926,7 @@ async function loadAgencyPanel() {
     if (cancelBtn) {
       cancelBtn.addEventListener("click", async (e) => {
         e.stopPropagation();
-        const ok = await confirmDialog(`Cancelar "${trip.name}"? Ninguém fora da agência vai continuar tendo acesso a essa viagem.`, "Cancelar viagem");
+        const ok = await confirmDialog(`Cancelar "${trip.name}"? Ela sai da lista principal (vai pro Histórico) e ninguém fora da agência continua tendo acesso.`, "Cancelar viagem");
         if (!ok) return;
         try {
           const patch = { agencyCancelled: true };
@@ -931,9 +942,37 @@ async function loadAgencyPanel() {
         }
       });
     }
-    listEl.appendChild(card);
-  });
+    const reactivateBtn = card.querySelector("[data-reactivate-trip]");
+    if (reactivateBtn) {
+      reactivateBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const ok = await confirmDialog(`Reativar "${trip.name}"? Ela volta pra lista principal e todo mundo recupera o acesso.`, "Reativar");
+        if (!ok) return;
+        try {
+          await updateDoc(doc(db, "trips", trip.id), { agencyCancelled: false });
+          logActivityFor(trip.id, "agencia", "reactivate", "Viagem reativada pela agência — cancelamento desfeito.");
+          loadAgencyPanel();
+        } catch (err) {
+          alert("Não foi possível reativar a viagem: " + err.message);
+        }
+      });
+    }
+    container.appendChild(card);
+  }
+
+  listEl.innerHTML = activeTrips.length === 0 ? "<div class='empty'>Nenhuma viagem criada ainda.</div>" : "";
+  activeTrips.forEach((trip) => renderTripCard(trip, listEl));
+
+  if (!historyListEl.classList.contains("hidden")) {
+    historyListEl.innerHTML = cancelledTrips.length === 0 ? "<div class='empty'>Nenhuma viagem cancelada.</div>" : "";
+    cancelledTrips.forEach((trip) => renderTripCard(trip, historyListEl));
+  }
 }
+
+$("showAgencyHistoryBtn")?.addEventListener("click", () => {
+  $("agencyHistoryList").classList.toggle("hidden");
+  loadAgencyPanel();
+});
 
 $("agencyCreateTripBtn")?.addEventListener("click", async () => {
   const statusEl = $("agencyTripFormStatus");
