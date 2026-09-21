@@ -603,10 +603,12 @@ function goToTripPicker() {
   if (currentAgency) {
     hide($("normalTripPickerContent"));
     show($("agencyPanel"));
+    $("tripPickerTitle").textContent = currentAgency.name || "Painel da Agência";
     loadAgencyPanel();
   } else {
     hide($("agencyPanel"));
     show($("normalTripPickerContent"));
+    $("tripPickerTitle").textContent = t("picker.title");
     loadTripList();
   }
 }
