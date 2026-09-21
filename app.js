@@ -843,12 +843,13 @@ function renderAgencyTripCard(trip, container) {
   const started = trip.startDate && today >= trip.startDate;
   const card = document.createElement("div");
   card.className = "trip-card";
-  let statusLabel = "";
-  if (!trip.agencyCancelled && !trip.countsTowardLimit) statusLabel = " · ⚪ não conta no limite";
+  let statusBadge = "";
+  if (!trip.agencyCancelled && !trip.countsTowardLimit) statusBadge = "⚪ não conta no limite";
   card.innerHTML = `
     <div class="card-row">
       <div>
-        <div class="trip-card-title">${trip.name}${statusLabel}</div>
+        <div class="trip-card-title">${trip.name}</div>
+        <div class="trip-card-status" style="visibility:${statusBadge ? "visible" : "hidden"};">${statusBadge || "&nbsp;"}</div>
         <div class="trip-card-meta">${trip.destination || ""} · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}</div>
       </div>
       ${buildTripCardRight(trip, started)}
@@ -867,7 +868,10 @@ function renderAgencyTripCard(trip, container) {
         await updateDoc(doc(db, "trips", trip.id), { countsTowardLimit: turningOn });
         await updateDoc(doc(db, "agencies", agencyId), { activeTripsCount: increment(turningOn ? 1 : -1) });
         logActivityFor(trip.id, "agencia", "toggle", `Contador ${turningOn ? "ligado" : "desligado"} manualmente pela agência.`);
-        loadAgencyPanel();
+        trip.countsTowardLimit = turningOn;
+        currentAgency.activeTripsCount = (currentAgency.activeTripsCount || 0) + (turningOn ? 1 : -1);
+        renderAgencyStatsUI();
+        renderAgencyLists();
       } catch (err) {
         e.target.checked = !turningOn;
         alert("Não foi possível atualizar o contador: " + err.message);
@@ -886,9 +890,13 @@ function renderAgencyTripCard(trip, container) {
         await updateDoc(doc(db, "trips", trip.id), patch);
         if (trip.countsTowardLimit) {
           await updateDoc(doc(db, "agencies", agencyId), { activeTripsCount: increment(-1) });
+          currentAgency.activeTripsCount = (currentAgency.activeTripsCount || 0) - 1;
         }
         logActivityFor(trip.id, "agencia", "cancel", "Viagem cancelada pela agência — acesso bloqueado pra quem não é da agência.");
-        loadAgencyPanel();
+        trip.agencyCancelled = true;
+        trip.countsTowardLimit = false;
+        renderAgencyStatsUI();
+        renderAgencyLists();
       } catch (err) {
         alert("Não foi possível cancelar a viagem: " + err.message);
       }
@@ -903,7 +911,8 @@ function renderAgencyTripCard(trip, container) {
       try {
         await updateDoc(doc(db, "trips", trip.id), { agencyCancelled: false });
         logActivityFor(trip.id, "agencia", "reactivate", "Viagem reativada pela agência — cancelamento desfeito.");
-        loadAgencyPanel();
+        trip.agencyCancelled = false;
+        renderAgencyLists();
       } catch (err) {
         alert("Não foi possível reativar a viagem: " + err.message);
       }
@@ -932,15 +941,9 @@ function renderAgencyLists() {
   }
 }
 
-async function loadAgencyPanel() {
-  const agencyId = currentAgency.id;
-  // Recarrega o doc da agência (contadores podem ter mudado desde o login).
-  try {
-    const freshSnap = await getDoc(doc(db, "agencies", agencyId));
-    if (freshSnap.exists()) currentAgency = { id: agencyId, ...freshSnap.data() };
-  } catch (err) {
-    console.warn("Não foi possível atualizar dados da agência:", err);
-  }
+// Atualiza só os cards de contador (usuários/viagens ativas) a partir do
+// que já está em currentAgency — sem buscar nada no Firestore.
+function renderAgencyStatsUI() {
   const plan = AGENCY_PLANS[currentAgency.planId] || AGENCY_PLANS.chaski;
   const memberCount = (currentAgency.memberEmails || []).length;
   const activeCount = currentAgency.activeTripsCount || 0;
@@ -967,6 +970,18 @@ async function loadAgencyPanel() {
     warnEl.style.display = "none";
   }
   $("agencyCreateTripBtn").disabled = atLimit;
+}
+
+async function loadAgencyPanel() {
+  const agencyId = currentAgency.id;
+  // Recarrega o doc da agência (contadores podem ter mudado desde o login).
+  try {
+    const freshSnap = await getDoc(doc(db, "agencies", agencyId));
+    if (freshSnap.exists()) currentAgency = { id: agencyId, ...freshSnap.data() };
+  } catch (err) {
+    console.warn("Não foi possível atualizar dados da agência:", err);
+  }
+  renderAgencyStatsUI();
 
   $("agencyTripList").innerHTML = "<div class='empty'>Carregando...</div>";
   const snap = await getDocs(query(collection(db, "trips"), where("agencyId", "==", agencyId)));

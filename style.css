@@ -718,6 +718,7 @@ input[type="number"]::placeholder, input[type="search"]::placeholder, input[type
 .trip-card:hover{ border-color:var(--gold-dim); }
 .trip-card-title{ font-family:'Big Shoulders Display', sans-serif; font-weight:800; font-size:20px; overflow-wrap:anywhere; }
 .trip-card-meta{ font-size:12px; color:var(--muted); margin-top:4px; overflow-wrap:anywhere; }
+.trip-card-status{ font-size:12px; color:var(--muted); margin-top:2px; }
 
 /* ---------- Empty state ---------- */
 .empty{ text-align:center; color:var(--muted); font-size:13px; padding:24px 10px; }
