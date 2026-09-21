@@ -317,6 +317,25 @@ header.app-header{
 .countdown-num{ font-family:'JetBrains Mono', monospace; font-size:18px; color:var(--gold); }
 .countdown-text{ font-size:12.5px; color:var(--muted); }
 
+/* Painel da Agência — contadores em destaque (Fase 2, 18/set/2026) */
+.agency-stats{ display:flex; gap:10px; }
+.agency-stat-box{
+  flex:1; background:rgba(255,255,255,0.04); border:1px solid var(--line);
+  border-radius:12px; padding:12px 10px; text-align:center;
+}
+.agency-stat-value{
+  font-family:'JetBrains Mono', monospace; font-size:26px; font-weight:700;
+  color:var(--gold); line-height:1.1;
+}
+.agency-stat-value .agency-stat-max{ color:var(--muted); font-size:16px; font-weight:400; }
+.agency-stat-label{
+  font-size:11px; color:var(--muted); text-transform:uppercase;
+  letter-spacing:0.06em; margin-top:3px;
+}
+.agency-stat-box.at-limit{ border-color:var(--red); background:rgba(214,93,93,0.12); }
+.agency-stat-box.at-limit .agency-stat-value{ color:var(--red); }
+.agency-stat-box.at-limit .agency-stat-value .agency-stat-max{ color:var(--red); opacity:0.75; }
+
 /* ---------- Tabs ---------- */
 nav.tabs{
   display:flex;

@@ -832,11 +832,19 @@ async function loadAgencyPanel() {
   const activeCount = currentAgency.activeTripsCount || 0;
 
   $("agencyPanelName").textContent = currentAgency.name || "Agência";
+  $("agencyPanelPlanName").textContent = `Plano ${plan.label}`;
   const maxUsersLabel = plan.maxUsers === Infinity ? "∞" : plan.maxUsers;
   const maxTripsLabel = plan.maxActiveTrips === Infinity ? "∞" : plan.maxActiveTrips;
-  $("agencyPanelPlanLine").textContent = `Plano ${plan.label} · ${memberCount} de ${maxUsersLabel} usuários · ${activeCount} de ${maxTripsLabel} viagens ativas`;
+
+  const usersBox = $("agencyStatUsersBox");
+  $("agencyStatUsersValue").innerHTML = `${memberCount}<span class="agency-stat-max">/${maxUsersLabel}</span>`;
+  usersBox.classList.toggle("at-limit", plan.maxUsers !== Infinity && memberCount >= plan.maxUsers);
 
   const atLimit = plan.maxActiveTrips !== Infinity && activeCount >= plan.maxActiveTrips;
+  const tripsBox = $("agencyStatTripsBox");
+  $("agencyStatTripsValue").innerHTML = `${activeCount}<span class="agency-stat-max">/${maxTripsLabel}</span>`;
+  tripsBox.classList.toggle("at-limit", atLimit);
+
   const warnEl = $("agencyPanelLimitWarning");
   if (atLimit) {
     warnEl.style.display = "block";
@@ -896,6 +904,7 @@ async function loadAgencyPanel() {
           await updateDoc(doc(db, "trips", trip.id), { countsTowardLimit: turningOn });
           await updateDoc(doc(db, "agencies", agencyId), { activeTripsCount: increment(turningOn ? 1 : -1) });
           logActivityFor(trip.id, "agencia", "toggle", `Contador ${turningOn ? "ligado" : "desligado"} manualmente pela agência.`);
+          loadAgencyPanel();
         } catch (err) {
           e.target.checked = !turningOn;
           alert("Não foi possível atualizar o contador: " + err.message);
@@ -906,7 +915,8 @@ async function loadAgencyPanel() {
     if (cancelBtn) {
       cancelBtn.addEventListener("click", async (e) => {
         e.stopPropagation();
-        if (!confirm(`Cancelar "${trip.name}"? Ninguém fora da agência vai continuar tendo acesso a essa viagem.`)) return;
+        const ok = await confirmDialog(`Cancelar "${trip.name}"? Ninguém fora da agência vai continuar tendo acesso a essa viagem.`, "Cancelar viagem");
+        if (!ok) return;
         try {
           const patch = { agencyCancelled: true };
           if (trip.countsTowardLimit) patch.countsTowardLimit = false;

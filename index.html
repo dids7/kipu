@@ -278,9 +278,19 @@
       <!-- PAINEL DA AGÊNCIA (Fase 2, 18/set/2026) -->
       <div id="agencyPanel" class="hidden">
         <div class="card" style="margin-bottom:14px;">
-          <div class="card-title" id="agencyPanelName" style="font-size:16px; margin-bottom:6px;">—</div>
-          <div class="screen-sub" id="agencyPanelPlanLine" style="margin:0 0 10px;">—</div>
-          <div class="screen-sub" id="agencyPanelLimitWarning" style="margin:0; color:var(--gold); display:none;"></div>
+          <div class="card-title" id="agencyPanelName" style="font-size:16px; margin-bottom:2px;">—</div>
+          <div class="screen-sub" id="agencyPanelPlanName" style="margin:0 0 12px;">—</div>
+          <div class="agency-stats">
+            <div class="agency-stat-box" id="agencyStatUsersBox">
+              <div class="agency-stat-value" id="agencyStatUsersValue">—</div>
+              <div class="agency-stat-label">usuários</div>
+            </div>
+            <div class="agency-stat-box" id="agencyStatTripsBox">
+              <div class="agency-stat-value" id="agencyStatTripsValue">—</div>
+              <div class="agency-stat-label">viagens ativas</div>
+            </div>
+          </div>
+          <div class="screen-sub" id="agencyPanelLimitWarning" style="margin:10px 0 0; color:var(--gold); display:none;"></div>
         </div>
 
         <button id="showAgencyNewTripFormBtn" class="add-toggle">＋ Criar nova viagem</button>
