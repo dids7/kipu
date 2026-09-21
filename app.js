@@ -818,6 +818,120 @@ async function autoOffExpiredAgencyTrips(agencyId, trips) {
   }
 }
 
+let lastAgencyTrips = []; // cache do último fetch, pra "Ver histórico" não precisar recarregar do banco
+
+// Card compacto: título/meta à esquerda, controles empilhados à direita
+// — uma linha só, em vez de duas.
+function buildTripCardRight(trip, started) {
+  if (trip.agencyCancelled) {
+    return `<button class="btn btn-outline btn-small" data-reactivate-trip type="button">Reativar</button>`;
+  }
+  return `
+    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+      <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:${started ? "default" : "pointer"};">
+        <input type="checkbox" data-counts-toggle ${trip.countsTowardLimit ? "checked" : ""} ${started ? "disabled" : ""}>
+        Conta no limite
+      </label>
+      ${!started ? `<button class="btn btn-outline btn-small" data-cancel-trip type="button">Cancelar</button>` : ""}
+    </div>
+  `;
+}
+
+function renderAgencyTripCard(trip, container) {
+  const agencyId = currentAgency.id;
+  const today = localISODate();
+  const started = trip.startDate && today >= trip.startDate;
+  const card = document.createElement("div");
+  card.className = "trip-card";
+  let statusLabel = "";
+  if (!trip.agencyCancelled && !trip.countsTowardLimit) statusLabel = " · ⚪ não conta no limite";
+  card.innerHTML = `
+    <div class="card-row" style="align-items:center;">
+      <div>
+        <div class="trip-card-title">${trip.name}${statusLabel}</div>
+        <div class="trip-card-meta">${trip.destination || ""} · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}</div>
+      </div>
+      ${buildTripCardRight(trip, started)}
+    </div>
+  `;
+  card.addEventListener("click", (e) => {
+    if (e.target.closest("[data-counts-toggle], [data-cancel-trip], [data-reactivate-trip]")) return;
+    openTrip(trip.id);
+  });
+  const toggleEl = card.querySelector("[data-counts-toggle]");
+  if (toggleEl && !started) {
+    toggleEl.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const turningOn = e.target.checked;
+      try {
+        await updateDoc(doc(db, "trips", trip.id), { countsTowardLimit: turningOn });
+        await updateDoc(doc(db, "agencies", agencyId), { activeTripsCount: increment(turningOn ? 1 : -1) });
+        logActivityFor(trip.id, "agencia", "toggle", `Contador ${turningOn ? "ligado" : "desligado"} manualmente pela agência.`);
+        loadAgencyPanel();
+      } catch (err) {
+        e.target.checked = !turningOn;
+        alert("Não foi possível atualizar o contador: " + err.message);
+      }
+    });
+  }
+  const cancelBtn = card.querySelector("[data-cancel-trip]");
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const ok = await confirmDialog(`Cancelar "${trip.name}"? Ela sai da lista principal (vai pro Histórico) e ninguém fora da agência continua tendo acesso.`, "Cancelar viagem");
+      if (!ok) return;
+      try {
+        const patch = { agencyCancelled: true };
+        if (trip.countsTowardLimit) patch.countsTowardLimit = false;
+        await updateDoc(doc(db, "trips", trip.id), patch);
+        if (trip.countsTowardLimit) {
+          await updateDoc(doc(db, "agencies", agencyId), { activeTripsCount: increment(-1) });
+        }
+        logActivityFor(trip.id, "agencia", "cancel", "Viagem cancelada pela agência — acesso bloqueado pra quem não é da agência.");
+        loadAgencyPanel();
+      } catch (err) {
+        alert("Não foi possível cancelar a viagem: " + err.message);
+      }
+    });
+  }
+  const reactivateBtn = card.querySelector("[data-reactivate-trip]");
+  if (reactivateBtn) {
+    reactivateBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const ok = await confirmDialog(`Reativar "${trip.name}"? Ela volta pra lista principal e todo mundo recupera o acesso.`, "Reativar");
+      if (!ok) return;
+      try {
+        await updateDoc(doc(db, "trips", trip.id), { agencyCancelled: false });
+        logActivityFor(trip.id, "agencia", "reactivate", "Viagem reativada pela agência — cancelamento desfeito.");
+        loadAgencyPanel();
+      } catch (err) {
+        alert("Não foi possível reativar a viagem: " + err.message);
+      }
+    });
+  }
+  container.appendChild(card);
+}
+
+// Redesenha as duas listas (principal + histórico) a partir do cache
+// (lastAgencyTrips) — sem tocar no Firestore. É isso que faz o botão
+// "Ver histórico" abrir/fechar na hora, sem piscar.
+function renderAgencyLists() {
+  const listEl = $("agencyTripList");
+  const historyListEl = $("agencyHistoryList");
+  const activeTrips = lastAgencyTrips.filter((tr) => !tr.agencyCancelled).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
+  const cancelledTrips = lastAgencyTrips.filter((tr) => tr.agencyCancelled).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
+
+  $("showAgencyHistoryBtn").textContent = `📜 Ver histórico (${cancelledTrips.length})`;
+
+  listEl.innerHTML = activeTrips.length === 0 ? "<div class='empty'>Nenhuma viagem criada ainda.</div>" : "";
+  activeTrips.forEach((trip) => renderAgencyTripCard(trip, listEl));
+
+  if (!historyListEl.classList.contains("hidden")) {
+    historyListEl.innerHTML = cancelledTrips.length === 0 ? "<div class='empty'>Nenhuma viagem cancelada.</div>" : "";
+    cancelledTrips.forEach((trip) => renderAgencyTripCard(trip, historyListEl));
+  }
+}
+
 async function loadAgencyPanel() {
   const agencyId = currentAgency.id;
   // Recarrega o doc da agência (contadores podem ter mudado desde o login).
@@ -854,124 +968,19 @@ async function loadAgencyPanel() {
   }
   $("agencyCreateTripBtn").disabled = atLimit;
 
-  const listEl = $("agencyTripList");
-  const historyListEl = $("agencyHistoryList");
-  listEl.innerHTML = "<div class='empty'>Carregando...</div>";
+  $("agencyTripList").innerHTML = "<div class='empty'>Carregando...</div>";
   const snap = await getDocs(query(collection(db, "trips"), where("agencyId", "==", agencyId)));
   const allTrips = [];
   snap.forEach((d) => allTrips.push({ id: d.id, ...d.data() }));
 
   await autoOffExpiredAgencyTrips(agencyId, allTrips);
-
-  const today = localISODate();
-  const activeTrips = allTrips.filter((tr) => !tr.agencyCancelled).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
-  const cancelledTrips = allTrips.filter((tr) => tr.agencyCancelled).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
-
-  $("showAgencyHistoryBtn").textContent = `📜 Ver histórico (${cancelledTrips.length})`;
-
-  // Card compacto: título/meta à esquerda, controles empilhados à direita
-  // — uma linha só, em vez de duas (reduz o espaço vazio reportado em
-  // 18/set/2026).
-  function buildTripCardRight(trip, started) {
-    if (trip.agencyCancelled) {
-      return `<button class="btn btn-outline btn-small" data-reactivate-trip type="button">Reativar</button>`;
-    }
-    return `
-      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
-        <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:${started ? "default" : "pointer"};">
-          <input type="checkbox" data-counts-toggle ${trip.countsTowardLimit ? "checked" : ""} ${started ? "disabled" : ""}>
-          Conta no limite
-        </label>
-        ${!started ? `<button class="btn btn-outline btn-small" data-cancel-trip type="button">Cancelar</button>` : ""}
-      </div>
-    `;
-  }
-
-  function renderTripCard(trip, container) {
-    const started = trip.startDate && today >= trip.startDate;
-    const card = document.createElement("div");
-    card.className = "trip-card";
-    let statusLabel = "";
-    if (!trip.agencyCancelled && !trip.countsTowardLimit) statusLabel = " · ⚪ não conta no limite";
-    card.innerHTML = `
-      <div class="card-row" style="align-items:center;">
-        <div>
-          <div class="trip-card-title">${trip.name}${statusLabel}</div>
-          <div class="trip-card-meta">${trip.destination || ""} · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}</div>
-        </div>
-        ${buildTripCardRight(trip, started)}
-      </div>
-    `;
-    card.addEventListener("click", (e) => {
-      if (e.target.closest("[data-counts-toggle], [data-cancel-trip], [data-reactivate-trip]")) return;
-      openTrip(trip.id);
-    });
-    const toggleEl = card.querySelector("[data-counts-toggle]");
-    if (toggleEl && !started) {
-      toggleEl.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const turningOn = e.target.checked;
-        try {
-          await updateDoc(doc(db, "trips", trip.id), { countsTowardLimit: turningOn });
-          await updateDoc(doc(db, "agencies", agencyId), { activeTripsCount: increment(turningOn ? 1 : -1) });
-          logActivityFor(trip.id, "agencia", "toggle", `Contador ${turningOn ? "ligado" : "desligado"} manualmente pela agência.`);
-          loadAgencyPanel();
-        } catch (err) {
-          e.target.checked = !turningOn;
-          alert("Não foi possível atualizar o contador: " + err.message);
-        }
-      });
-    }
-    const cancelBtn = card.querySelector("[data-cancel-trip]");
-    if (cancelBtn) {
-      cancelBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const ok = await confirmDialog(`Cancelar "${trip.name}"? Ela sai da lista principal (vai pro Histórico) e ninguém fora da agência continua tendo acesso.`, "Cancelar viagem");
-        if (!ok) return;
-        try {
-          const patch = { agencyCancelled: true };
-          if (trip.countsTowardLimit) patch.countsTowardLimit = false;
-          await updateDoc(doc(db, "trips", trip.id), patch);
-          if (trip.countsTowardLimit) {
-            await updateDoc(doc(db, "agencies", agencyId), { activeTripsCount: increment(-1) });
-          }
-          logActivityFor(trip.id, "agencia", "cancel", "Viagem cancelada pela agência — acesso bloqueado pra quem não é da agência.");
-          loadAgencyPanel();
-        } catch (err) {
-          alert("Não foi possível cancelar a viagem: " + err.message);
-        }
-      });
-    }
-    const reactivateBtn = card.querySelector("[data-reactivate-trip]");
-    if (reactivateBtn) {
-      reactivateBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const ok = await confirmDialog(`Reativar "${trip.name}"? Ela volta pra lista principal e todo mundo recupera o acesso.`, "Reativar");
-        if (!ok) return;
-        try {
-          await updateDoc(doc(db, "trips", trip.id), { agencyCancelled: false });
-          logActivityFor(trip.id, "agencia", "reactivate", "Viagem reativada pela agência — cancelamento desfeito.");
-          loadAgencyPanel();
-        } catch (err) {
-          alert("Não foi possível reativar a viagem: " + err.message);
-        }
-      });
-    }
-    container.appendChild(card);
-  }
-
-  listEl.innerHTML = activeTrips.length === 0 ? "<div class='empty'>Nenhuma viagem criada ainda.</div>" : "";
-  activeTrips.forEach((trip) => renderTripCard(trip, listEl));
-
-  if (!historyListEl.classList.contains("hidden")) {
-    historyListEl.innerHTML = cancelledTrips.length === 0 ? "<div class='empty'>Nenhuma viagem cancelada.</div>" : "";
-    cancelledTrips.forEach((trip) => renderTripCard(trip, historyListEl));
-  }
+  lastAgencyTrips = allTrips;
+  renderAgencyLists();
 }
 
 $("showAgencyHistoryBtn")?.addEventListener("click", () => {
   $("agencyHistoryList").classList.toggle("hidden");
-  loadAgencyPanel();
+  renderAgencyLists();
 });
 
 $("agencyCreateTripBtn")?.addEventListener("click", async () => {

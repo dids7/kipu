@@ -884,10 +884,13 @@ input[type="number"]::placeholder, input[type="search"]::placeholder, input[type
     gap:12px;
     align-items:start;
   }
-  .agency-stats{ justify-content:flex-start; }
+  .agency-stats{ justify-content:center; }
   .agency-stat-box{ flex:0 0 150px; }
-  #agencyPanel > .card:first-child{ max-width:420px; }
   #agencyNewTripForm{ max-width:480px; }
+  /* Altura fixa (2 linhas) na meta da viagem — sem isso, uma viagem cujo
+     texto quebra em 2 linhas (ex: "Marrocos · 29/10 – 25/11") fica com
+     caixa mais alta que a vizinha que coube numa linha só. */
+  #agencyPanel .trip-card-meta{ min-height:2.6em; }
 
   /* App principal: header no topo, nav lateral + conteúdo lado a lado */
   #appScreen{
