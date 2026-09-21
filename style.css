@@ -891,6 +891,11 @@ input[type="number"]::placeholder, input[type="search"]::placeholder, input[type
      texto quebra em 2 linhas (ex: "Marrocos · 29/10 – 25/11") fica com
      caixa mais alta que a vizinha que coube numa linha só. */
   #agencyPanel .trip-card-meta{ min-height:2.6em; }
+  /* Controles (checkbox/botão) embaixo do texto, não do lado — assim a
+     largura do card depende só da coluna do grid, nunca do tamanho do
+     nome/data escritos dentro (bug reportado 18/set/2026). */
+  #agencyPanel .trip-card .card-row{ flex-direction:column; align-items:stretch; gap:10px; }
+  #agencyPanel .trip-card .card-row > div:last-child{ align-self:flex-start; }
 
   /* App principal: header no topo, nav lateral + conteúdo lado a lado */
   #appScreen{

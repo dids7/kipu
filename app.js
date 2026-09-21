@@ -846,7 +846,7 @@ function renderAgencyTripCard(trip, container) {
   let statusLabel = "";
   if (!trip.agencyCancelled && !trip.countsTowardLimit) statusLabel = " · ⚪ não conta no limite";
   card.innerHTML = `
-    <div class="card-row" style="align-items:center;">
+    <div class="card-row">
       <div>
         <div class="trip-card-title">${trip.name}${statusLabel}</div>
         <div class="trip-card-meta">${trip.destination || ""} · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}</div>
