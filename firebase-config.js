@@ -18,6 +18,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+// Força o Google a sempre mostrar a tela de escolha de conta, em vez de
+// pular direto pra última conta logada no navegador — importante porque
+// o mesmo dispositivo pode alternar entre conta pessoal e conta de teste
+// de agência.
+googleProvider.setCustomParameters({ prompt: "select_account" });
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
