@@ -35,7 +35,7 @@ let myRole = "colaborador";
 const ROLE_PERMS = {
   admin:       { viewCalendar: 1, editCalendar: 1, viewMala: 1, editMala: "all", viewTarefas: 1, editTarefas: "all", viewDocs: 1, editDocs: 1, viewHistorico: 1, addReminder: 1, addParticipant: true, removeParticipant: true, promote: true, editTrip: true, deleteTrip: true, reset: true },
   colaborador: { viewCalendar: 1, editCalendar: 1, viewMala: 1, editMala: "all", viewTarefas: 1, editTarefas: "all", viewDocs: 1, editDocs: 1, viewHistorico: 1, addReminder: 1, addParticipant: true, removeParticipant: true, promote: false, editTrip: true, deleteTrip: false, reset: false },
-  agencia:     { viewCalendar: 1, editCalendar: 1, viewMala: 0, editMala: "none", viewTarefas: 0, editTarefas: "none", viewDocs: 0, editDocs: 0, viewHistorico: 0, addReminder: 0, addParticipant: "beforeTripStart", removeParticipant: false, promote: false, editTrip: false, deleteTrip: false, reset: false },
+  agencia:     { viewCalendar: 1, editCalendar: 1, viewMala: 0, editMala: "none", viewTarefas: 0, editTarefas: "none", viewDocs: 1, editDocs: 1, viewHistorico: 0, addReminder: 0, addParticipant: "beforeTripStart", removeParticipant: false, promote: false, editTrip: false, deleteTrip: false, reset: false },
   convidado:   { viewCalendar: 1, editCalendar: 0, viewMala: 1, editMala: "own", viewTarefas: 1, editTarefas: "toggle", viewDocs: 1, editDocs: 1, viewHistorico: 1, addReminder: 1, addParticipant: false, removeParticipant: false, promote: false, editTrip: false, deleteTrip: false, reset: false }
 };
 const ROLE_ORDER = ["admin", "colaborador", "agencia", "convidado"];
@@ -45,6 +45,13 @@ function myPerms() {
 }
 function can(action) {
   return !!myPerms()[action];
+}
+// Fase 4 (18/set/2026): Agência só enxerga (Itinerário/Estadia/Documentos/
+// Contatos) o que ela mesma criou — usado tanto pra filtrar a lista quanto
+// pra decidir se mostra "nenhum item" (sem isso, sobrariam itens do
+// cliente contados como se a Agência devesse vê-los).
+function agencyOwnershipVisible(data) {
+  return myRole !== "agencia" || data.createdByRole === "agencia";
 }
 function canAddParticipant() {
   const val = myPerms().addParticipant;
@@ -69,8 +76,11 @@ function roleLabel(role) {
 }
 
 function applyRolePermissions() {
-  // Abas: Agência só enxerga Calendário, Itinerário e Estadia.
-  const restrictedTabs = ["mala", "tarefas", "documentos", "gastos", "emergencia", "historico"];
+  // Abas: Agência enxerga Calendário, Itinerário, Estadia, Documentos e
+  // Contatos de Emergência (Fase 4, 18/set/2026 — só o que ela mesma
+  // criou nas duas últimas). Mala, Tarefas, Gastos e Histórico continuam
+  // fora do alcance da Agência.
+  const restrictedTabs = ["mala", "tarefas", "gastos", "historico"];
   document.querySelectorAll(".tab").forEach((btn) => {
     const tabName = btn.dataset.tab;
     const hide = !can("viewCalendar") ? false : (myRole === "agencia" && restrictedTabs.includes(tabName));
@@ -1967,8 +1977,9 @@ function subscribeItinerario() {
   const unsub = onSnapshot(q, (snap) => {
     itinerarioByDate = {};
     const listEl = $("itinerarioList");
-    updateBulkImportDefaultVisibility(snap.empty);
-    if (snap.empty) {
+    const visibleCount = snap.docs.filter((d) => agencyOwnershipVisible(d.data())).length;
+    updateBulkImportDefaultVisibility(visibleCount === 0);
+    if (visibleCount === 0) {
       listEl.innerHTML = `<div class='empty'>${t("empty.itinerary")}</div>`;
       renderCalendar();
       if (selectedCalDate) renderItineraryForDay(selectedCalDate);
@@ -1978,6 +1989,10 @@ function subscribeItinerario() {
     listEl.innerHTML = "";
     snap.forEach((d) => {
       const it = d.data();
+      // Fase 4 (18/set/2026): Agência só enxerga o que ela mesma criou —
+      // o que o cliente/colaborador acrescentar por conta própria fica
+      // fora da visão da Agência.
+      if (!agencyOwnershipVisible(it)) return;
       if (it.status === "cogitando") {
         updateDoc(doc(db, "trips", currentTripId, "itinerario", d.id), { status: "programado" }).catch(() => {});
         it.status = "programado";
@@ -2079,7 +2094,10 @@ $("saveItinerarioBtn").addEventListener("click", async () => {
     await updateDoc(doc(db, "trips", currentTripId, "itinerario", editingItinerarioId), payload);
     logActivity("itinerario", "item editado", title);
   } else {
-    await addDoc(collection(db, "trips", currentTripId, "itinerario"), payload);
+    // createdByRole só é gravado na criação — nunca sobrescrito numa
+    // edição, senão um item criado pela Agência que um Colaborador edita
+    // depois sumiria da visão da Agência sem querer (Fase 4, 18/set/2026).
+    await addDoc(collection(db, "trips", currentTripId, "itinerario"), { ...payload, createdByRole: myRole });
     logActivity("itinerario", "item adicionado", title);
   }
   resetItinerarioForm();
@@ -2353,7 +2371,7 @@ $("importItinerarioBtn")?.addEventListener("click", async () => {
     addDoc(collection(db, "trips", currentTripId, "itinerario"), {
       title: it.title, date: it.date, time: it.time, endTime: it.endTime,
       location: it.location, value: it.value, paymentStatus: "pendente",
-      status: it.status, responsible: ""
+      status: it.status, responsible: "", createdByRole: myRole
     })
   ));
   logActivity("itinerario", "importação em massa", `${items.length} item(ns) importados`);
@@ -2383,10 +2401,12 @@ function subscribeEstadia() {
   const unsub = onSnapshot(collection(db, "trips", currentTripId, "estadia"), (snap) => {
     estadiaCache = [];
     const listEl = $("estadiaList");
-    if (snap.empty) { listEl.innerHTML = `<div class='empty'>${t("empty.stay")}</div>`; return; }
+    const visibleCount = snap.docs.filter((d) => agencyOwnershipVisible(d.data())).length;
+    if (visibleCount === 0) { listEl.innerHTML = `<div class='empty'>${t("empty.stay")}</div>`; return; }
     listEl.innerHTML = "";
     snap.forEach((d) => {
       const s = d.data();
+      if (!agencyOwnershipVisible(s)) return;
       estadiaCache.push({ id: d.id, ...s });
       const canEditEst = can("editCalendar");
       const card = document.createElement("div");
@@ -2449,7 +2469,7 @@ $("saveEstadiaBtn").addEventListener("click", async () => {
     await updateDoc(doc(db, "trips", currentTripId, "estadia", editingEstadiaId), payload);
     logActivity("estadia", "hospedagem editada", name);
   } else {
-    await addDoc(collection(db, "trips", currentTripId, "estadia"), payload);
+    await addDoc(collection(db, "trips", currentTripId, "estadia"), { ...payload, createdByRole: myRole });
     logActivity("estadia", "hospedagem adicionada", name);
   }
   resetEstadiaForm();
@@ -2671,7 +2691,7 @@ function subscribeDocumentos() {
       visibleDocs.push({ id: d.id, ...doc_ });
     });
 
-    docsCache = visibleDocs;
+    docsCache = visibleDocs.filter(agencyOwnershipVisible);
     renderDocsList();
   });
   unsubscribers.push(unsub);
@@ -2814,7 +2834,7 @@ $("saveDocBtn").addEventListener("click", async () => {
     logActivity("documentos", "documento editado", title);
   } else {
     await addDoc(collection(db, "trips", currentTripId, "documentos"), {
-      title, docType, url, notes, fileType, fileName, storagePath, expiresAt, subjectIsMinor, uploadedBy: currentUser.email
+      title, docType, url, notes, fileType, fileName, storagePath, expiresAt, subjectIsMinor, uploadedBy: currentUser.email, createdByRole: myRole
     });
     logActivity("documentos", subjectIsMinor ? "documento adicionado (menor de idade — consentimento do responsável confirmado)" : "documento adicionado", title);
   }
@@ -3471,6 +3491,7 @@ function subscribeEmergencia() {
         logActivity("emergencia", "informação expirada removida (retenção automática)", it.label);
         return;
       }
+      if (!agencyOwnershipVisible(it)) return;
       emergItemsCache.push({ id: d.id, ...it });
     });
     renderEmergencyList();
@@ -3519,7 +3540,7 @@ $("saveEmergencyBtn").addEventListener("click", async () => {
     logActivity("emergencia", "informação editada", label);
   } else {
     await addDoc(collection(db, "trips", currentTripId, "emergencia"), {
-      label, value, subjectIsMinor, category: emergCategory, createdBy: currentUser.email, expiresAt: defaultRetentionDate(30)
+      label, value, subjectIsMinor, category: emergCategory, createdBy: currentUser.email, createdByRole: myRole, expiresAt: defaultRetentionDate(30)
     });
     logActivity("emergencia", subjectIsMinor ? "informação adicionada (menor de idade — consentimento do responsável confirmado)" : "informação adicionada", label);
   }
