@@ -627,6 +627,27 @@ $("showNewTripFormBtn").addEventListener("click", () => {
 // Pra trocar, é só mudar esse valor e subir o app.js de novo.
 const CREATE_TRIP_CODE = "kipu2026";
 
+// ================= AGÊNCIAS (Fase 1 — fundação, 17/set/2026) =================
+// E-mail de quem administra o Kipu — mesmo princípio do CREATE_TRIP_CODE:
+// não é segurança "de verdade" sozinho (a trava real está no
+// firestore.rules), isso aqui é só o que o app usa pra decidir o que
+// mostrar na tela. Provisório: Diego ainda vai criar um e-mail dedicado
+// pro Kipu — quando isso acontecer, troca só esse valor (e o mesmo valor
+// dentro de firestore.rules) e sobe os dois de novo.
+const AGENCY_MASTER_EMAIL = "dpr1405@gmail.com";
+
+// Tabela de planos — fixa aqui, não copiada em cada documento de agência.
+// Cada agencies/{agencyId} só guarda o planId (ex: "chaski"); mudar um
+// valor aqui afeta todas as agências daquele plano de uma vez. Preços em
+// R$ e nomes ainda provisórios (ver kipu-documentacao.md, seção 8.2).
+// Ainda não usada em nenhum lugar do app — entra em uso nas Fases 2/3
+// (Painel da Agência e limite automático).
+const AGENCY_PLANS = {
+  chaski: { label: "Chaski", maxUsers: 4, maxActiveTrips: 8, priceBRL: 99 },
+  inti: { label: "Inti", maxUsers: 8, maxActiveTrips: 16, priceBRL: 158 },
+  kipuca: { label: "Kipuca", maxUsers: Infinity, maxActiveTrips: Infinity, priceBRL: 249 }
+};
+
 // Convite por e-mail — grava um documento na coleção "mail", que a extensão
 // "Trigger Email" do Firebase observa e envia sozinha pelo provedor SMTP
 // configurado no Console (Gmail por enquanto, Resend depois de ter domínio
