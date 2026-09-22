@@ -674,7 +674,11 @@ async function loadTripList() {
     `;
     card.addEventListener("click", (e) => {
       if (e.target.closest("[data-admin-gear]")) return;
-      openTrip(d.id);
+      openTrip(d.id).catch((err) => {
+        console.warn("Não foi possível abrir a viagem:", err);
+        alert("Não foi possível abrir essa viagem — o acesso pode ter sido cancelado ou removido. Atualize a página pra ver a lista certinha.");
+        loadTripList();
+      });
     });
     const gearBtn = card.querySelector("[data-admin-gear]");
     if (gearBtn) gearBtn.addEventListener("click", (e) => { e.stopPropagation(); openAdminPanel(d.id); });
