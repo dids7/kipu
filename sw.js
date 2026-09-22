@@ -4,7 +4,7 @@
 // de login "crua". Os DADOS (viagens, documentos etc.) continuam vindo do
 // Firestore, que tem seu próprio cache offline (enableIndexedDbPersistence).
 
-const CACHE_NAME = "kipu-shell-v2";
+const CACHE_NAME = "kipu-shell-v3";
 const SHELL_FILES = ["./", "./index.html", "./style.css", "./app.js", "./translations.js", "./firebase-config.js", "./manifest.json"];
 
 self.addEventListener("install", (event) => {
@@ -30,7 +30,7 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: "no-store" })
       .then((response) => {
         const copy = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
