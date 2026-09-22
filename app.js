@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot,
-  query, where, orderBy, serverTimestamp, getDocs, getDoc, arrayUnion, increment
+  query, where, orderBy, serverTimestamp, getDocs, getDocsFromServer, getDoc, arrayUnion, increment
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   ref, uploadBytes, getDownloadURL, deleteObject
@@ -646,11 +646,24 @@ function goToTripPicker() {
   }
 }
 
+// Busca sempre tentando o servidor primeiro (nunca cache desatualizado do
+// dispositivo) — só cai pro cache se estiver de fato sem internet. Corrige
+// o bug de 19/set/2026: viagem cancelada ainda aparecendo na lista do
+// celular por causa de dado antigo guardado localmente.
+async function getDocsFreshFirst(q) {
+  try {
+    return await getDocsFromServer(q);
+  } catch (err) {
+    console.warn("Sem conexão com o servidor agora, usando cache local:", err);
+    return await getDocs(q);
+  }
+}
+
 async function loadTripList() {
   const listEl = $("tripList");
   listEl.innerHTML = "<div class='empty'>Carregando...</div>";
   const q = query(collection(db, "trips"), where("participantEmails", "array-contains", currentUser.email));
-  const snap = await getDocs(q);
+  const snap = await getDocsFreshFirst(q);
   if (snap.empty) {
     listEl.innerHTML = `<div class='empty'>${t("empty.noTrips")}</div>`;
     return;
@@ -998,7 +1011,7 @@ async function loadAgencyPanel() {
   renderAgencyStatsUI();
 
   $("agencyTripList").innerHTML = "<div class='empty'>Carregando...</div>";
-  const snap = await getDocs(query(collection(db, "trips"), where("agencyId", "==", agencyId)));
+  const snap = await getDocsFreshFirst(query(collection(db, "trips"), where("agencyId", "==", agencyId)));
   const allTrips = [];
   snap.forEach((d) => allTrips.push({ id: d.id, ...d.data() }));
 
