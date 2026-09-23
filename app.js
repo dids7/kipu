@@ -974,14 +974,14 @@ function renderAgencyLists() {
     cancelledTrips.forEach((trip) => renderAgencyTripCard(trip, historyListEl));
   }
 
-  renderAgencyExtraMetrics(activeTrips, cancelledTrips);
+  renderAgencyExtraMetrics(activeTrips);
 }
 
 // Métricas "bater o olho" do Dashboard da Agência (Achado de Produto #1,
-// 19/set/2026) — todas calculadas na hora a partir do que já temos, sem
-// precisar de campo novo no banco. Layout ainda simples de propósito —
-// Diego já avisou que vamos mexer no visual depois.
-function renderAgencyExtraMetrics(activeTrips, cancelledTrips) {
+// 19/set/2026; ajustado em seguida a pedido de Diego — tirou taxa de
+// cancelamento e destino mais usado, e pediu o mesmo padrão visual dos
+// contadores já existentes em vez de texto solto).
+function renderAgencyExtraMetrics(activeTrips) {
   const today = localISODate();
   const ongoing = activeTrips.filter((tr) => tr.startDate <= today && tr.endDate >= today);
   const upcoming7 = activeTrips.filter((tr) => tr.startDate > today && tr.startDate <= addDaysISO(today, 7));
@@ -989,27 +989,17 @@ function renderAgencyExtraMetrics(activeTrips, cancelledTrips) {
     .filter((tr) => tr.startDate > today)
     .sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
 
-  const totalEver = currentAgency.totalTripsCreated || 0;
-  const cancelRate = totalEver > 0 ? Math.round((cancelledTrips.length / totalEver) * 100) : 0;
+  $("agencyStatOngoingValue").textContent = ongoing.length;
+  $("agencyStatUpcomingValue").textContent = upcoming7.length;
 
-  const destCount = {};
-  lastAgencyTrips.forEach((tr) => {
-    const d = (tr.destination || "").trim();
-    if (!d) return;
-    destCount[d] = (destCount[d] || 0) + 1;
-  });
-  let topDestination = null, topDestCount = 0;
-  Object.entries(destCount).forEach(([d, c]) => { if (c > topDestCount) { topDestination = d; topDestCount = c; } });
-
-  const lines = [
-    `📍 ${ongoing.length} viagem(ns) em andamento agora`,
-    `🗓️ ${upcoming7.length} viagem(ns) começam nos próximos 7 dias`,
-    nextTrip ? `⏭️ Próxima: "${nextTrip.name}" em ${fmtDate(nextTrip.startDate)}` : `⏭️ Nenhuma viagem futura agendada`,
-    `❌ Taxa de cancelamento: ${cancelRate}% (${cancelledTrips.length} de ${totalEver} viagens já criadas)`,
-    topDestination ? `🌎 Destino mais usado: ${topDestination} (${topDestCount}x)` : null
-  ].filter(Boolean);
-
-  $("agencyExtraStats").innerHTML = lines.map((l) => `<div>${l}</div>`).join("");
+  const nextCard = $("agencyNextTripCard");
+  if (nextTrip) {
+    nextCard.style.display = "block";
+    $("agencyNextTripName").textContent = nextTrip.name;
+    $("agencyNextTripDate").textContent = `${nextTrip.destination || ""} · ${fmtDate(nextTrip.startDate)} – ${fmtDate(nextTrip.endDate)}`;
+  } else {
+    nextCard.style.display = "none";
+  }
 }
 
 // Atualiza só os cards de contador (usuários/viagens ativas) a partir do

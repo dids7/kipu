@@ -289,9 +289,21 @@
               <div class="agency-stat-value" id="agencyStatTripsValue">—</div>
               <div class="agency-stat-label">viagens ativas</div>
             </div>
+            <div class="agency-stat-box" id="agencyStatOngoingBox">
+              <div class="agency-stat-value" id="agencyStatOngoingValue">—</div>
+              <div class="agency-stat-label">em andamento</div>
+            </div>
+            <div class="agency-stat-box" id="agencyStatUpcomingBox">
+              <div class="agency-stat-value" id="agencyStatUpcomingValue">—</div>
+              <div class="agency-stat-label">próx. 7 dias</div>
+            </div>
           </div>
           <div class="screen-sub" id="agencyPanelLimitWarning" style="margin:10px 0 0; color:var(--gold); display:none;"></div>
-          <div id="agencyExtraStats" class="screen-sub" style="margin:10px 0 0;"></div>
+          <div id="agencyNextTripCard" class="agency-next-trip" style="display:none;">
+            <div class="agency-next-trip-label">⏭️ Próxima viagem</div>
+            <div class="agency-next-trip-name" id="agencyNextTripName">—</div>
+            <div class="agency-next-trip-date" id="agencyNextTripDate"></div>
+          </div>
         </div>
 
         <button id="showAgencyNewTripFormBtn" class="add-toggle">＋ Criar nova viagem</button>

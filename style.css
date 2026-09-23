@@ -318,9 +318,10 @@ header.app-header{
 .countdown-text{ font-size:12.5px; color:var(--muted); }
 
 /* Painel da Agência — contadores em destaque (Fase 2, 18/set/2026) */
-.agency-stats{ display:flex; gap:10px; }
+.agency-stats{ display:flex; gap:10px; flex-wrap:wrap; }
 .agency-stat-box{
-  flex:1; background:rgba(255,255,255,0.04); border:1px solid var(--line);
+  flex:1 1 calc(50% - 5px); min-width:120px;
+  background:rgba(255,255,255,0.04); border:1px solid var(--line);
   border-radius:12px; padding:12px 10px; text-align:center;
 }
 .agency-stat-value{
@@ -335,6 +336,18 @@ header.app-header{
 .agency-stat-box.at-limit{ border-color:var(--red); background:rgba(214,93,93,0.12); }
 .agency-stat-box.at-limit .agency-stat-value{ color:var(--red); }
 .agency-stat-box.at-limit .agency-stat-value .agency-stat-max{ color:var(--red); opacity:0.75; }
+
+/* "Próxima viagem" — card de destaque, mesmo padrão visual das stat-box */
+.agency-next-trip{
+  background:rgba(255,255,255,0.04); border:1px solid var(--gold-dim);
+  border-radius:12px; padding:10px 14px; margin-top:10px;
+}
+.agency-next-trip-label{
+  font-size:11px; color:var(--muted); text-transform:uppercase;
+  letter-spacing:0.06em; margin-bottom:3px;
+}
+.agency-next-trip-name{ font-family:'Big Shoulders Display', sans-serif; font-weight:800; font-size:18px; }
+.agency-next-trip-date{ font-size:12.5px; color:var(--muted); margin-top:2px; }
 
 /* ---------- Tabs ---------- */
 nav.tabs{
