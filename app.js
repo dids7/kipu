@@ -704,11 +704,13 @@ $("showNewTripFormBtn").addEventListener("click", () => {
 });
 wireDateRange($("tripStart"), $("tripEnd"));
 
-// Código pra CRIAR viagem — não é segurança de verdade (fica visível pra
-// quem abrir o código-fonte, igual a senha do reset), é só uma barreira
-// contra alguém achar o link do app e sair criando/usando sem o Diego saber.
-// Pra trocar, é só mudar esse valor e subir o app.js de novo.
-const CREATE_TRIP_CODE = "kipu2026";
+// Código pra CRIAR viagem — a checagem de verdade agora mora só no
+// firestore.rules (nunca vai pro GitHub público, diferente deste
+// arquivo). O app não sabe mais qual é o valor certo — só manda o que a
+// pessoa digitou e deixa o Firestore aceitar ou recusar. Corrigido em
+// 19/set/2026 (achado de segurança #1): antes esse código era comparado
+// aqui mesmo, visível pra qualquer um que abrisse o código-fonte, e a
+// regra do Firestore nem chegava a checar nada — não era proteção real.
 
 // ================= AGÊNCIAS (Fase 1 — fundação, 17/set/2026) =================
 // E-mail de quem administra o Kipu — mesmo princípio do CREATE_TRIP_CODE:
@@ -763,12 +765,8 @@ $("createTripBtn").addEventListener("click", async () => {
   const emailsRaw = $("tripParticipants").value.trim();
   const code = $("tripCreationCode").value.trim();
   $("tripCreationCodeError").classList.add("hidden");
-  if (code !== CREATE_TRIP_CODE) {
-    $("tripCreationCodeError").classList.remove("hidden");
-    return;
-  }
-  if (!name || !startDate || !endDate || !emailsRaw) {
-    alert("Preencha nome, datas e ao menos um participante.");
+  if (!name || !startDate || !endDate || !emailsRaw || !code) {
+    alert("Preencha nome, datas, ao menos um participante e o código de criação.");
     return;
   }
   if (endDate <= startDate) {
@@ -782,16 +780,25 @@ $("createTripBtn").addEventListener("click", async () => {
   }
   const participantRoles = {};
   participantEmails.forEach((e) => { participantRoles[e] = e === myEmail ? "admin" : "colaborador"; });
-  const docRef = await addDoc(collection(db, "trips"), {
-    name, destination, startDate, endDate,
-    participantEmails,
-    participantRoles,
-    adminEmails: [myEmail],
-    blockedEmails: [],
-    defaultJoinRole: "colaborador",
-    createdBy: currentUser.email,
-    createdAt: serverTimestamp()
-  });
+  let docRef;
+  try {
+    docRef = await addDoc(collection(db, "trips"), {
+      name, destination, startDate, endDate,
+      participantEmails,
+      participantRoles,
+      adminEmails: [myEmail],
+      blockedEmails: [],
+      defaultJoinRole: "colaborador",
+      createdBy: currentUser.email,
+      createdAt: serverTimestamp(),
+      creationCode: code
+    });
+  } catch (err) {
+    // A regra do Firestore recusou — na prática, quase sempre é o código
+    // de criação errado (é a única checagem extra que ela faz aqui).
+    $("tripCreationCodeError").classList.remove("hidden");
+    return;
+  }
   // Log simples de quem criou o quê — não trava a criação da viagem se falhar.
   addDoc(collection(db, "tripCreationLog"), {
     tripId: docRef.id, tripName: name, createdBy: currentUser.email, createdAt: serverTimestamp()
