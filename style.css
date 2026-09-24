@@ -1003,3 +1003,22 @@ input[type="number"]::placeholder, input[type="search"]::placeholder, input[type
 
   .form-card{ max-width:520px; }
 }
+
+/* Toast de aviso/erro (UX #1, 19/set/2026) — substitui alert() nativo do
+   navegador, que quebrava a identidade visual do app. */
+#toastContainer{
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+  z-index:9999; display:flex; flex-direction:column; gap:8px;
+  align-items:center; pointer-events:none; width:100%; padding:0 16px;
+}
+.toast{
+  background:var(--panel); border:1px solid var(--line); color:var(--ink);
+  padding:12px 18px; border-radius:12px; font-size:14px; line-height:1.4;
+  box-shadow:0 8px 24px rgba(0,0,0,0.45); max-width:420px; text-align:center;
+  pointer-events:auto; opacity:0; transform:translateY(12px);
+  transition:opacity 0.25s ease, transform 0.25s ease;
+}
+.toast.show{ opacity:1; transform:translateY(0); }
+.toast.warning{ border-color:var(--gold); }
+.toast.error{ border-color:var(--red); background:rgba(214,93,93,0.14); }
+.toast.info{ border-color:var(--line); }

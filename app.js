@@ -309,7 +309,7 @@ if ("serviceWorker" in navigator) {
     actionBtn.textContent = "Entendi";
     actionBtn.addEventListener("click", dismissBanner);
     showBanner();
-    profileBtn.addEventListener("click", () => alert(iosMessage));
+    profileBtn.addEventListener("click", () => showToast(iosMessage, "info"));
   } else {
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
@@ -318,7 +318,7 @@ if ("serviceWorker" in navigator) {
     });
     async function triggerInstall() {
       if (!deferredPrompt) {
-        alert("Pra instalar: abra o menu (⋮) do navegador e procure \"Instalar app\" ou \"Adicionar à tela inicial\".");
+        showToast("Pra instalar: abra o menu (⋮) do navegador e procure \"Instalar app\" ou \"Adicionar à tela inicial\".", "info");
         return;
       }
       deferredPrompt.prompt();
@@ -349,6 +349,23 @@ let allUserTrips = [];       // todas as viagens onde o usuário é participante
 const $ = (id) => document.getElementById(id);
 function show(el) { el.classList.remove("hidden"); }
 function hide(el) { el.classList.add("hidden"); }
+
+// Aviso estilizado (UX #1, 19/set/2026) — substitui showToast() nativo do
+// navegador em toda a aplicação. type: "warning" (padrão, validação de
+// formulário), "error" (falha real de uma ação) ou "info" (aviso neutro).
+function showToast(message, type = "warning") {
+  const container = document.getElementById("toastContainer");
+  if (!container) { alert(message); return; }
+  const el = document.createElement("div");
+  el.className = `toast ${type}`;
+  el.textContent = message;
+  container.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => {
+    el.classList.remove("show");
+    setTimeout(() => el.remove(), 300);
+  }, 3800);
+}
 
 function confirmDialog(message, okText = "Excluir") {
   return new Promise((resolve) => {
@@ -481,7 +498,7 @@ $("loginBtn").addEventListener("click", async () => {
   try {
     await signInWithPopup(auth, googleProvider);
   } catch (err) {
-    alert("Erro ao entrar: " + err.message);
+    showToast("Erro ao entrar: " + err.message, "error");
   }
 });
 $("logoutBtn").addEventListener("click", () => signOut(auth));
@@ -689,7 +706,7 @@ async function loadTripList() {
       if (e.target.closest("[data-admin-gear]")) return;
       openTrip(d.id).catch((err) => {
         console.warn("Não foi possível abrir a viagem:", err);
-        alert("Não foi possível abrir essa viagem — o acesso pode ter sido cancelado ou removido. Atualize a página pra ver a lista certinha.");
+        showToast("Não foi possível abrir essa viagem — o acesso pode ter sido cancelado ou removido. Atualize a página pra ver a lista certinha.", "error");
         loadTripList();
       });
     });
@@ -766,11 +783,11 @@ $("createTripBtn").addEventListener("click", async () => {
   const code = $("tripCreationCode").value.trim();
   $("tripCreationCodeError").classList.add("hidden");
   if (!name || !startDate || !endDate || !emailsRaw || !code) {
-    alert("Preencha nome, datas, ao menos um participante e o código de criação.");
+    showToast("Preencha nome, datas, ao menos um participante e o código de criação.");
     return;
   }
   if (endDate <= startDate) {
-    alert("A data de fim precisa ser depois da data de início.");
+    showToast("A data de fim precisa ser depois da data de início.");
     return;
   }
   const participantEmails = emailsRaw.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -781,6 +798,7 @@ $("createTripBtn").addEventListener("click", async () => {
   const participantRoles = {};
   participantEmails.forEach((e) => { participantRoles[e] = e === myEmail ? "admin" : "colaborador"; });
   let docRef;
+  $("createTripBtn").disabled = true;
   try {
     docRef = await addDoc(collection(db, "trips"), {
       name, destination, startDate, endDate,
@@ -797,6 +815,7 @@ $("createTripBtn").addEventListener("click", async () => {
     // A regra do Firestore recusou — na prática, quase sempre é o código
     // de criação errado (é a única checagem extra que ela faz aqui).
     $("tripCreationCodeError").classList.remove("hidden");
+    $("createTripBtn").disabled = false;
     return;
   }
   // Log simples de quem criou o quê — não trava a criação da viagem se falhar.
@@ -810,6 +829,7 @@ $("createTripBtn").addEventListener("click", async () => {
   $("newTripForm").classList.add("hidden");
   $("tripName").value = ""; $("tripDestination").value = "";
   $("tripStart").value = ""; $("tripEnd").value = ""; $("tripParticipants").value = ""; $("tripCreationCode").value = "";
+  $("createTripBtn").disabled = false;
   openTrip(docRef.id);
 });
 
@@ -908,7 +928,7 @@ function renderAgencyTripCard(trip, container) {
         renderAgencyLists();
       } catch (err) {
         e.target.checked = !turningOn;
-        alert("Não foi possível atualizar o contador: " + err.message);
+        showToast("Não foi possível atualizar o contador: " + err.message, "error");
       }
     });
   }
@@ -932,7 +952,7 @@ function renderAgencyTripCard(trip, container) {
         renderAgencyStatsUI();
         renderAgencyLists();
       } catch (err) {
-        alert("Não foi possível cancelar a viagem: " + err.message);
+        showToast("Não foi possível cancelar a viagem: " + err.message, "error");
       }
     });
   }
@@ -948,7 +968,7 @@ function renderAgencyTripCard(trip, container) {
         trip.agencyCancelled = false;
         renderAgencyLists();
       } catch (err) {
-        alert("Não foi possível reativar a viagem: " + err.message);
+        showToast("Não foi possível reativar a viagem: " + err.message, "error");
       }
     });
   }
@@ -1081,6 +1101,7 @@ $("agencyCreateTripBtn")?.addEventListener("click", async () => {
   const myEmail = currentUser.email.toLowerCase();
   const participantEmails = [clientEmail, myEmail];
   const participantRoles = { [clientEmail]: "admin", [myEmail]: "agencia" };
+  $("agencyCreateTripBtn").disabled = true;
   try {
     const docRef = await addDoc(collection(db, "trips"), {
       name, destination, startDate, endDate,
@@ -1111,6 +1132,7 @@ $("agencyCreateTripBtn")?.addEventListener("click", async () => {
   } catch (err) {
     statusEl.textContent = "Erro ao criar viagem: " + err.message;
     statusEl.classList.remove("hidden");
+    $("agencyCreateTripBtn").disabled = false;
   }
 });
 
@@ -1293,7 +1315,7 @@ async function onAdminRemoveParticipant(email) {
 function openTransferOwnerModal(currentOwnerEmail) {
   const others = (adminPanelTripData.participantEmails || []).filter((e) => e !== currentOwnerEmail);
   if (others.length === 0) {
-    alert("Adicione outra pessoa na viagem antes de transferir a titularidade.");
+    showToast("Adicione outra pessoa na viagem antes de transferir a titularidade.");
     return Promise.resolve(null);
   }
   const select = $("transferOwnerSelect");
@@ -1346,8 +1368,8 @@ async function onAdminTransferOwnership(currentOwnerEmail) {
 $("adminAddParticipantBtn").addEventListener("click", async () => {
   const email = $("adminNewEmail").value.trim().toLowerCase();
   const role = $("adminNewRole").value;
-  if (!email || !email.includes("@")) { alert("Digite um e-mail válido."); return; }
-  if ((adminPanelTripData.participantEmails || []).includes(email)) { alert("Esse participante já está na viagem."); return; }
+  if (!email || !email.includes("@")) { showToast("Digite um e-mail válido."); return; }
+  if ((adminPanelTripData.participantEmails || []).includes(email)) { showToast("Esse participante já está na viagem."); return; }
   const updated = [...(adminPanelTripData.participantEmails || []), email];
   const updatedRoles = { ...(adminPanelTripData.participantRoles || {}), [email]: role };
   const updatedBlocked = (adminPanelTripData.blockedEmails || []).filter((e) => e !== email);
@@ -1509,7 +1531,7 @@ $("saveTripEditBtn").addEventListener("click", async () => {
   const destination = $("editTripDestination").value.trim();
   const startDate = $("editTripStart").value;
   const endDate = $("editTripEnd").value;
-  if (!name || !startDate || !endDate) { alert("Preencha nome e as duas datas."); return; }
+  if (!name || !startDate || !endDate) { showToast("Preencha nome e as duas datas."); return; }
   const destinationChanged = destination !== currentTripData.destination;
   await updateDoc(doc(db, "trips", currentTripId), { name, destination, startDate, endDate });
   currentTripData = { ...currentTripData, name, destination, startDate, endDate };
@@ -1613,12 +1635,12 @@ async function removeParticipant(email) {
 }
 
 $("addParticipantBtn").addEventListener("click", async () => {
-  if (!canAddParticipant()) { alert("Você não tem permissão pra adicionar participantes agora."); return; }
+  if (!canAddParticipant()) { showToast("Você não tem permissão pra adicionar participantes agora."); return; }
   const input = $("newParticipantEmail");
   const email = input.value.trim().toLowerCase();
-  if (!email || !email.includes("@")) { alert("Digite um e-mail válido."); return; }
+  if (!email || !email.includes("@")) { showToast("Digite um e-mail válido."); return; }
   const current = currentTripData.participantEmails || [];
-  if (current.includes(email)) { alert("Esse participante já está na viagem."); input.value = ""; return; }
+  if (current.includes(email)) { showToast("Esse participante já está na viagem."); input.value = ""; return; }
   const updated = [...current, email];
   const role = currentTripData.defaultJoinRole || "colaborador";
   const updatedRoles = { ...(currentTripData.participantRoles || {}), [email]: role };
@@ -1866,9 +1888,10 @@ $("feedbackSkipBtn")?.addEventListener("click", () => {
   $("feedbackModal").classList.add("hidden");
 });
 $("feedbackSubmitBtn")?.addEventListener("click", async () => {
-  if (feedbackRatingValue === 0) { alert("Escolhe uma nota de 1 a 5 antes de enviar."); return; }
+  if (feedbackRatingValue === 0) { showToast("Escolhe uma nota de 1 a 5 antes de enviar."); return; }
   const isAdmin = myRole === "admin";
-  if (isAdmin && feedbackAppRatingValue === 0) { alert("Escolhe também uma nota pro Kipu antes de enviar."); return; }
+  if (isAdmin && feedbackAppRatingValue === 0) { showToast("Escolhe também uma nota pro Kipu antes de enviar."); return; }
+  $("feedbackSubmitBtn").disabled = true;
   try {
     const payload = {
       tripId: currentTripId,
@@ -1888,6 +1911,7 @@ $("feedbackSubmitBtn")?.addEventListener("click", async () => {
   } catch (err) {
     console.warn("Não foi possível enviar o feedback:", err);
   }
+  $("feedbackSubmitBtn").disabled = false;
   $("feedbackModal").classList.add("hidden");
 });
 
@@ -2138,20 +2162,27 @@ $("saveItinerarioBtn").addEventListener("click", async () => {
   const value = parseFloat($("itValue").value) || 0;
   const paymentStatus = $("itPaymentStatus").value;
   const responsible = $("itResponsible").value;
-  if (!date || !title) { alert("Preencha data e atividade."); return; }
+  if (!date || !title) { showToast("Preencha data e atividade."); return; }
   const payload = { date, time, endTime, title, location, status, value, paymentStatus, responsible };
 
-  if (editingItinerarioId) {
-    await updateDoc(doc(db, "trips", currentTripId, "itinerario", editingItinerarioId), payload);
-    logActivity("itinerario", "item editado", title);
-  } else {
-    // createdByRole só é gravado na criação — nunca sobrescrito numa
-    // edição, senão um item criado pela Agência que um Colaborador edita
-    // depois sumiria da visão da Agência sem querer (Fase 4, 18/set/2026).
-    await addDoc(collection(db, "trips", currentTripId, "itinerario"), { ...payload, createdByRole: myRole });
-    logActivity("itinerario", "item adicionado", title);
+  $("saveItinerarioBtn").disabled = true;
+  try {
+    if (editingItinerarioId) {
+      await updateDoc(doc(db, "trips", currentTripId, "itinerario", editingItinerarioId), payload);
+      logActivity("itinerario", "item editado", title);
+    } else {
+      // createdByRole só é gravado na criação — nunca sobrescrito numa
+      // edição, senão um item criado pela Agência que um Colaborador edita
+      // depois sumiria da visão da Agência sem querer (Fase 4, 18/set/2026).
+      await addDoc(collection(db, "trips", currentTripId, "itinerario"), { ...payload, createdByRole: myRole });
+      logActivity("itinerario", "item adicionado", title);
+    }
+    resetItinerarioForm();
+  } catch (err) {
+    showToast("Não foi possível salvar: " + err.message, "error");
+  } finally {
+    $("saveItinerarioBtn").disabled = false;
   }
-  resetItinerarioForm();
 });
 
 // ================= SEGMENTO ROTEIRO / DICAS ==================
@@ -2272,17 +2303,24 @@ $("saveDicaBtn")?.addEventListener("click", async () => {
   const nota = $("dicaNota").value.trim();
   const local = $("dicaLocal").value.trim();
   const indicadoPor = $("dicaIndicadoPor").value.trim();
-  if (!titulo) { alert("Preencha o título."); return; }
+  if (!titulo) { showToast("Preencha o título."); return; }
   const payload = { titulo, category, nota, local, indicadoPor };
 
-  if (editingDicaId) {
-    await updateDoc(doc(db, "trips", currentTripId, "dicas", editingDicaId), payload);
-    logActivity("dicas", "dica editada", titulo);
-  } else {
-    await addDoc(collection(db, "trips", currentTripId, "dicas"), { ...payload, createdBy: currentUser.email });
-    logActivity("dicas", "dica adicionada", titulo);
+  $("saveDicaBtn").disabled = true;
+  try {
+    if (editingDicaId) {
+      await updateDoc(doc(db, "trips", currentTripId, "dicas", editingDicaId), payload);
+      logActivity("dicas", "dica editada", titulo);
+    } else {
+      await addDoc(collection(db, "trips", currentTripId, "dicas"), { ...payload, createdBy: currentUser.email });
+      logActivity("dicas", "dica adicionada", titulo);
+    }
+    resetDicaForm();
+  } catch (err) {
+    showToast("Não foi possível salvar: " + err.message, "error");
+  } finally {
+    $("saveDicaBtn").disabled = false;
   }
-  resetDicaForm();
 });
 
 // ================= IMPORTAR ITINERÁRIO EM MASSA (via Claude/IA externa) =================
@@ -2514,16 +2552,23 @@ $("saveEstadiaBtn").addEventListener("click", async () => {
   const name = $("stayName").value.trim();
   const checkin = $("stayCheckin").value, checkout = $("stayCheckout").value;
   const address = $("stayAddress").value.trim(), status = $("stayStatus").value;
-  if (!name || !checkin || !checkout) { alert("Preencha nome e datas."); return; }
+  if (!name || !checkin || !checkout) { showToast("Preencha nome e datas."); return; }
   const payload = { name, checkin, checkout, address, status };
-  if (editingEstadiaId) {
-    await updateDoc(doc(db, "trips", currentTripId, "estadia", editingEstadiaId), payload);
-    logActivity("estadia", "hospedagem editada", name);
-  } else {
-    await addDoc(collection(db, "trips", currentTripId, "estadia"), { ...payload, createdByRole: myRole });
-    logActivity("estadia", "hospedagem adicionada", name);
+  $("saveEstadiaBtn").disabled = true;
+  try {
+    if (editingEstadiaId) {
+      await updateDoc(doc(db, "trips", currentTripId, "estadia", editingEstadiaId), payload);
+      logActivity("estadia", "hospedagem editada", name);
+    } else {
+      await addDoc(collection(db, "trips", currentTripId, "estadia"), { ...payload, createdByRole: myRole });
+      logActivity("estadia", "hospedagem adicionada", name);
+    }
+    resetEstadiaForm();
+  } catch (err) {
+    showToast("Não foi possível salvar: " + err.message, "error");
+  } finally {
+    $("saveEstadiaBtn").disabled = false;
   }
-  resetEstadiaForm();
 });
 
 // ================= DOCUMENTOS =================
@@ -2833,7 +2878,7 @@ $("saveDocBtn").addEventListener("click", async () => {
   const title = $("docTitle").value.trim();
   const docType = $("docType").value || "outro";
   if (docType === "__custom__") {
-    alert("Digite o nome da categoria nova e clique em Adicionar antes de salvar.");
+    showToast("Digite o nome da categoria nova e clique em Adicionar antes de salvar.");
     return;
   }
   const notes = $("docNotes").value.trim();
@@ -2855,42 +2900,47 @@ $("saveDocBtn").addEventListener("click", async () => {
       : null;
   }
 
-  if (!title) { alert("Preencha o título."); return; }
-  if (!file && !url) { alert("Anexe um arquivo ou cole um link."); return; }
+  if (!title) { showToast("Preencha o título."); return; }
+  if (!file && !url) { showToast("Anexe um arquivo ou cole um link."); return; }
 
-  let fileType = "", fileName = "", storagePath = "";
-  if (file) {
-    statusEl.classList.remove("hidden");
-    statusEl.textContent = "Preparando arquivo...";
-    const uploadFile = await maybeConvertHeic(file);
-    statusEl.textContent = "Enviando arquivo...";
-    try {
-      storagePath = `trips/${currentTripId}/documentos/${Date.now()}_${uploadFile.name}`;
-      const fileRef = ref(storage, storagePath);
-      await uploadBytes(fileRef, uploadFile);
-      url = await getDownloadURL(fileRef);
-      fileType = uploadFile.type;
-      fileName = uploadFile.name;
-      statusEl.textContent = "Upload concluído.";
-    } catch (err) {
-      statusEl.textContent = "Erro no upload: " + err.message;
-      return;
+  $("saveDocBtn").disabled = true;
+  try {
+    let fileType = "", fileName = "", storagePath = "";
+    if (file) {
+      statusEl.classList.remove("hidden");
+      statusEl.textContent = "Preparando arquivo...";
+      const uploadFile = await maybeConvertHeic(file);
+      statusEl.textContent = "Enviando arquivo...";
+      try {
+        storagePath = `trips/${currentTripId}/documentos/${Date.now()}_${uploadFile.name}`;
+        const fileRef = ref(storage, storagePath);
+        await uploadBytes(fileRef, uploadFile);
+        url = await getDownloadURL(fileRef);
+        fileType = uploadFile.type;
+        fileName = uploadFile.name;
+        statusEl.textContent = "Upload concluído.";
+      } catch (err) {
+        statusEl.textContent = "Erro no upload: " + err.message;
+        return;
+      }
     }
-  }
 
-  if (editingDocId) {
-    const payload = { title, docType, url, notes, expiresAt, subjectIsMinor };
-    if (file) { payload.fileType = fileType; payload.fileName = fileName; payload.storagePath = storagePath; }
-    await updateDoc(doc(db, "trips", currentTripId, "documentos", editingDocId), payload);
-    logActivity("documentos", "documento editado", title);
-  } else {
-    await addDoc(collection(db, "trips", currentTripId, "documentos"), {
-      title, docType, url, notes, fileType, fileName, storagePath, expiresAt, subjectIsMinor, uploadedBy: currentUser.email, createdByRole: myRole
-    });
-    logActivity("documentos", subjectIsMinor ? "documento adicionado (menor de idade — consentimento do responsável confirmado)" : "documento adicionado", title);
+    if (editingDocId) {
+      const payload = { title, docType, url, notes, expiresAt, subjectIsMinor };
+      if (file) { payload.fileType = fileType; payload.fileName = fileName; payload.storagePath = storagePath; }
+      await updateDoc(doc(db, "trips", currentTripId, "documentos", editingDocId), payload);
+      logActivity("documentos", "documento editado", title);
+    } else {
+      await addDoc(collection(db, "trips", currentTripId, "documentos"), {
+        title, docType, url, notes, fileType, fileName, storagePath, expiresAt, subjectIsMinor, uploadedBy: currentUser.email, createdByRole: myRole
+      });
+      logActivity("documentos", subjectIsMinor ? "documento adicionado (menor de idade — consentimento do responsável confirmado)" : "documento adicionado", title);
+    }
+    resetDocForm();
+    statusEl.classList.add("hidden");
+  } finally {
+    $("saveDocBtn").disabled = false;
   }
-  resetDocForm();
-  statusEl.classList.add("hidden");
 });
 
 
@@ -2990,11 +3040,18 @@ function renderMalaList() {
 $("addItemBtn").addEventListener("click", async () => {
   const name = $("newItemName").value.trim();
   if (!name) return;
-  await addDoc(collection(db, "trips", currentTripId, "mala"), {
-    name, type: malaSeg, done: false, ownerEmail: currentUser.email, qty: 1
-  });
-  logActivity("mala", "item adicionado", `${name} (${malaSeg})`);
-  $("newItemName").value = "";
+  $("addItemBtn").disabled = true;
+  try {
+    await addDoc(collection(db, "trips", currentTripId, "mala"), {
+      name, type: malaSeg, done: false, ownerEmail: currentUser.email, qty: 1
+    });
+    logActivity("mala", "item adicionado", `${name} (${malaSeg})`);
+    $("newItemName").value = "";
+  } catch (err) {
+    showToast("Não foi possível adicionar o item: " + err.message, "error");
+  } finally {
+    $("addItemBtn").disabled = false;
+  }
 });
 
 const DEFAULT_PACKING_LIST = [
@@ -3182,15 +3239,22 @@ $("closeTaskFormBtn")?.addEventListener("click", resetTaskForm);
 
 $("saveTaskBtn").addEventListener("click", async () => {
   const description = $("taskDesc").value.trim(), responsible = $("taskResponsible").value;
-  if (!description) { alert("Preencha a descrição."); return; }
-  if (editingTaskId) {
-    await updateDoc(doc(db, "trips", currentTripId, "tarefas", editingTaskId), { description, responsible });
-    logActivity("tarefas", "tarefa editada", description);
-  } else {
-    await addDoc(collection(db, "trips", currentTripId, "tarefas"), { description, responsible, status: "pendente" });
-    logActivity("tarefas", "tarefa adicionada", description);
+  if (!description) { showToast("Preencha a descrição."); return; }
+  $("saveTaskBtn").disabled = true;
+  try {
+    if (editingTaskId) {
+      await updateDoc(doc(db, "trips", currentTripId, "tarefas", editingTaskId), { description, responsible });
+      logActivity("tarefas", "tarefa editada", description);
+    } else {
+      await addDoc(collection(db, "trips", currentTripId, "tarefas"), { description, responsible, status: "pendente" });
+      logActivity("tarefas", "tarefa adicionada", description);
+    }
+    resetTaskForm();
+  } catch (err) {
+    showToast("Não foi possível salvar: " + err.message, "error");
+  } finally {
+    $("saveTaskBtn").disabled = false;
   }
-  resetTaskForm();
 });
 
 // ================= GASTOS =================
@@ -3457,13 +3521,13 @@ $("saveExpenseBtn").addEventListener("click", async () => {
   const description = $("expDesc").value.trim();
   const value = parseFloat($("expValue").value);
   const currency = $("expCurrency").value;
-  if (!description || !value) { alert("Preencha descrição e valor."); return; }
+  if (!description || !value) { showToast("Preencha descrição e valor."); return; }
 
   let payload = { description, value, currency, type: expTypeSeg };
   if (expTypeSeg === "shared") {
     const paidBy = $("expPaidBy").value;
     const splitAmong = Array.from($("expSplitGroup").querySelectorAll(".checkbox-chip.checked")).map((c) => c.dataset.email);
-    if (splitAmong.length === 0) { alert("Escolha ao menos um participante na divisão."); return; }
+    if (splitAmong.length === 0) { showToast("Escolha ao menos um participante na divisão."); return; }
     payload = { ...payload, paidBy, splitAmong };
   } else {
     payload.ownerEmail = currentUser.email;
@@ -3473,8 +3537,16 @@ $("saveExpenseBtn").addEventListener("click", async () => {
     await updateDoc(doc(db, "trips", currentTripId, "gastos", editingExpenseId), payload);
     logActivity("gastos", "gasto editado", `${description} — ${fmtOriginal(value, currency)}`);
   } else {
-    await addDoc(collection(db, "trips", currentTripId, "gastos"), payload);
-    logActivity("gastos", "gasto adicionado", `${description} — ${fmtOriginal(value, currency)} (${expTypeSeg})`);
+    $("saveExpenseBtn").disabled = true;
+    try {
+      await addDoc(collection(db, "trips", currentTripId, "gastos"), payload);
+      logActivity("gastos", "gasto adicionado", `${description} — ${fmtOriginal(value, currency)} (${expTypeSeg})`);
+    } catch (err) {
+      showToast("Não foi possível salvar: " + err.message, "error");
+      $("saveExpenseBtn").disabled = false;
+      return;
+    }
+    $("saveExpenseBtn").disabled = false;
   }
   resetExpenseForm();
 });
@@ -3583,19 +3655,26 @@ $("closeEmergencyFormBtn")?.addEventListener("click", resetEmergencyForm);
 $("saveEmergencyBtn").addEventListener("click", async () => {
   const label = $("emLabel").value.trim(), value = $("emValue").value.trim();
   const subjectIsMinor = $("emIsMinor").checked;
-  if (!label || !value) { alert("Preencha rótulo e valor."); return; }
-  if (editingEmergencyId) {
-    // Editar sem mexer na validade não reseta ela — mesmo padrão dos Documentos.
-    // Categoria não muda na edição (não há seletor no formulário de edição).
-    await updateDoc(doc(db, "trips", currentTripId, "emergencia", editingEmergencyId), { label, value, subjectIsMinor });
-    logActivity("emergencia", "informação editada", label);
-  } else {
-    await addDoc(collection(db, "trips", currentTripId, "emergencia"), {
-      label, value, subjectIsMinor, category: emergCategory, createdBy: currentUser.email, createdByRole: myRole, expiresAt: defaultRetentionDate(30)
-    });
-    logActivity("emergencia", subjectIsMinor ? "informação adicionada (menor de idade — consentimento do responsável confirmado)" : "informação adicionada", label);
+  if (!label || !value) { showToast("Preencha rótulo e valor."); return; }
+  $("saveEmergencyBtn").disabled = true;
+  try {
+    if (editingEmergencyId) {
+      // Editar sem mexer na validade não reseta ela — mesmo padrão dos Documentos.
+      // Categoria não muda na edição (não há seletor no formulário de edição).
+      await updateDoc(doc(db, "trips", currentTripId, "emergencia", editingEmergencyId), { label, value, subjectIsMinor });
+      logActivity("emergencia", "informação editada", label);
+    } else {
+      await addDoc(collection(db, "trips", currentTripId, "emergencia"), {
+        label, value, subjectIsMinor, category: emergCategory, createdBy: currentUser.email, createdByRole: myRole, expiresAt: defaultRetentionDate(30)
+      });
+      logActivity("emergencia", subjectIsMinor ? "informação adicionada (menor de idade — consentimento do responsável confirmado)" : "informação adicionada", label);
+    }
+    resetEmergencyForm();
+  } catch (err) {
+    showToast("Não foi possível salvar: " + err.message, "error");
+  } finally {
+    $("saveEmergencyBtn").disabled = false;
   }
-  resetEmergencyForm();
 });
 
 
@@ -3895,10 +3974,17 @@ $("calNextBtn").addEventListener("click", () => {
 
 $("saveReminderBtn").addEventListener("click", async () => {
   const text = $("reminderText").value.trim();
-  if (!text || !selectedCalDate) { alert("Escreva algo pro lembrete."); return; }
-  await addDoc(collection(db, "trips", currentTripId, "lembretes"), {
-    text, visibility: currentRemVis, authorEmail: currentUser.email, date: selectedCalDate
-  });
-  logActivity("calendario", "lembrete adicionado", `${selectedCalDate}: ${text} (${currentRemVis})`);
-  $("reminderText").value = "";
+  if (!text || !selectedCalDate) { showToast("Escreva algo pro lembrete."); return; }
+  $("saveReminderBtn").disabled = true;
+  try {
+    await addDoc(collection(db, "trips", currentTripId, "lembretes"), {
+      text, visibility: currentRemVis, authorEmail: currentUser.email, date: selectedCalDate
+    });
+    logActivity("calendario", "lembrete adicionado", `${selectedCalDate}: ${text} (${currentRemVis})`);
+    $("reminderText").value = "";
+  } catch (err) {
+    showToast("Não foi possível salvar o lembrete: " + err.message, "error");
+  } finally {
+    $("saveReminderBtn").disabled = false;
+  }
 });
