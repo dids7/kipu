@@ -367,6 +367,25 @@ function showToast(message, type = "warning") {
   }, 3800);
 }
 
+// Trava o botão E troca o texto por um aviso de "salvando" (UX #3,
+// 19/set/2026) — antes disso, nenhuma ação dava sinal nenhum entre o
+// clique e o resultado aparecer, o que podia parecer que o app travou
+// numa conexão mais lenta.
+function setButtonLoading(btn, loading, loadingText = "Salvando...") {
+  if (!btn) return;
+  if (loading) {
+    if (btn.dataset.originalText === undefined) btn.dataset.originalText = btn.textContent;
+    btn.textContent = loadingText;
+    btn.disabled = true;
+  } else {
+    btn.disabled = false;
+    if (btn.dataset.originalText !== undefined) {
+      btn.textContent = btn.dataset.originalText;
+      delete btn.dataset.originalText;
+    }
+  }
+}
+
 function confirmDialog(message, okText = "Excluir") {
   return new Promise((resolve) => {
     const overlay = $("confirmModal");
@@ -798,7 +817,7 @@ $("createTripBtn").addEventListener("click", async () => {
   const participantRoles = {};
   participantEmails.forEach((e) => { participantRoles[e] = e === myEmail ? "admin" : "colaborador"; });
   let docRef;
-  $("createTripBtn").disabled = true;
+  setButtonLoading($("createTripBtn"), true);
   try {
     docRef = await addDoc(collection(db, "trips"), {
       name, destination, startDate, endDate,
@@ -815,7 +834,7 @@ $("createTripBtn").addEventListener("click", async () => {
     // A regra do Firestore recusou — na prática, quase sempre é o código
     // de criação errado (é a única checagem extra que ela faz aqui).
     $("tripCreationCodeError").classList.remove("hidden");
-    $("createTripBtn").disabled = false;
+    setButtonLoading($("createTripBtn"), false);
     return;
   }
   // Log simples de quem criou o quê — não trava a criação da viagem se falhar.
@@ -829,7 +848,7 @@ $("createTripBtn").addEventListener("click", async () => {
   $("newTripForm").classList.add("hidden");
   $("tripName").value = ""; $("tripDestination").value = "";
   $("tripStart").value = ""; $("tripEnd").value = ""; $("tripParticipants").value = ""; $("tripCreationCode").value = "";
-  $("createTripBtn").disabled = false;
+  setButtonLoading($("createTripBtn"), false);
   openTrip(docRef.id);
 });
 
@@ -1101,7 +1120,7 @@ $("agencyCreateTripBtn")?.addEventListener("click", async () => {
   const myEmail = currentUser.email.toLowerCase();
   const participantEmails = [clientEmail, myEmail];
   const participantRoles = { [clientEmail]: "admin", [myEmail]: "agencia" };
-  $("agencyCreateTripBtn").disabled = true;
+  setButtonLoading($("agencyCreateTripBtn"), true);
   try {
     const docRef = await addDoc(collection(db, "trips"), {
       name, destination, startDate, endDate,
@@ -1132,7 +1151,7 @@ $("agencyCreateTripBtn")?.addEventListener("click", async () => {
   } catch (err) {
     statusEl.textContent = "Erro ao criar viagem: " + err.message;
     statusEl.classList.remove("hidden");
-    $("agencyCreateTripBtn").disabled = false;
+    setButtonLoading($("agencyCreateTripBtn"), false);
   }
 });
 
@@ -1891,7 +1910,7 @@ $("feedbackSubmitBtn")?.addEventListener("click", async () => {
   if (feedbackRatingValue === 0) { showToast("Escolhe uma nota de 1 a 5 antes de enviar."); return; }
   const isAdmin = myRole === "admin";
   if (isAdmin && feedbackAppRatingValue === 0) { showToast("Escolhe também uma nota pro Kipu antes de enviar."); return; }
-  $("feedbackSubmitBtn").disabled = true;
+  setButtonLoading($("feedbackSubmitBtn"), true);
   try {
     const payload = {
       tripId: currentTripId,
@@ -1911,7 +1930,7 @@ $("feedbackSubmitBtn")?.addEventListener("click", async () => {
   } catch (err) {
     console.warn("Não foi possível enviar o feedback:", err);
   }
-  $("feedbackSubmitBtn").disabled = false;
+  setButtonLoading($("feedbackSubmitBtn"), false);
   $("feedbackModal").classList.add("hidden");
 });
 
@@ -2165,7 +2184,7 @@ $("saveItinerarioBtn").addEventListener("click", async () => {
   if (!date || !title) { showToast("Preencha data e atividade."); return; }
   const payload = { date, time, endTime, title, location, status, value, paymentStatus, responsible };
 
-  $("saveItinerarioBtn").disabled = true;
+  setButtonLoading($("saveItinerarioBtn"), true);
   try {
     if (editingItinerarioId) {
       await updateDoc(doc(db, "trips", currentTripId, "itinerario", editingItinerarioId), payload);
@@ -2181,7 +2200,7 @@ $("saveItinerarioBtn").addEventListener("click", async () => {
   } catch (err) {
     showToast("Não foi possível salvar: " + err.message, "error");
   } finally {
-    $("saveItinerarioBtn").disabled = false;
+    setButtonLoading($("saveItinerarioBtn"), false);
   }
 });
 
@@ -2306,7 +2325,7 @@ $("saveDicaBtn")?.addEventListener("click", async () => {
   if (!titulo) { showToast("Preencha o título."); return; }
   const payload = { titulo, category, nota, local, indicadoPor };
 
-  $("saveDicaBtn").disabled = true;
+  setButtonLoading($("saveDicaBtn"), true);
   try {
     if (editingDicaId) {
       await updateDoc(doc(db, "trips", currentTripId, "dicas", editingDicaId), payload);
@@ -2319,7 +2338,7 @@ $("saveDicaBtn")?.addEventListener("click", async () => {
   } catch (err) {
     showToast("Não foi possível salvar: " + err.message, "error");
   } finally {
-    $("saveDicaBtn").disabled = false;
+    setButtonLoading($("saveDicaBtn"), false);
   }
 });
 
@@ -2554,7 +2573,7 @@ $("saveEstadiaBtn").addEventListener("click", async () => {
   const address = $("stayAddress").value.trim(), status = $("stayStatus").value;
   if (!name || !checkin || !checkout) { showToast("Preencha nome e datas."); return; }
   const payload = { name, checkin, checkout, address, status };
-  $("saveEstadiaBtn").disabled = true;
+  setButtonLoading($("saveEstadiaBtn"), true);
   try {
     if (editingEstadiaId) {
       await updateDoc(doc(db, "trips", currentTripId, "estadia", editingEstadiaId), payload);
@@ -2567,7 +2586,7 @@ $("saveEstadiaBtn").addEventListener("click", async () => {
   } catch (err) {
     showToast("Não foi possível salvar: " + err.message, "error");
   } finally {
-    $("saveEstadiaBtn").disabled = false;
+    setButtonLoading($("saveEstadiaBtn"), false);
   }
 });
 
@@ -2903,7 +2922,7 @@ $("saveDocBtn").addEventListener("click", async () => {
   if (!title) { showToast("Preencha o título."); return; }
   if (!file && !url) { showToast("Anexe um arquivo ou cole um link."); return; }
 
-  $("saveDocBtn").disabled = true;
+  setButtonLoading($("saveDocBtn"), true);
   try {
     let fileType = "", fileName = "", storagePath = "";
     if (file) {
@@ -2939,7 +2958,7 @@ $("saveDocBtn").addEventListener("click", async () => {
     resetDocForm();
     statusEl.classList.add("hidden");
   } finally {
-    $("saveDocBtn").disabled = false;
+    setButtonLoading($("saveDocBtn"), false);
   }
 });
 
@@ -3040,7 +3059,7 @@ function renderMalaList() {
 $("addItemBtn").addEventListener("click", async () => {
   const name = $("newItemName").value.trim();
   if (!name) return;
-  $("addItemBtn").disabled = true;
+  setButtonLoading($("addItemBtn"), true);
   try {
     await addDoc(collection(db, "trips", currentTripId, "mala"), {
       name, type: malaSeg, done: false, ownerEmail: currentUser.email, qty: 1
@@ -3050,7 +3069,7 @@ $("addItemBtn").addEventListener("click", async () => {
   } catch (err) {
     showToast("Não foi possível adicionar o item: " + err.message, "error");
   } finally {
-    $("addItemBtn").disabled = false;
+    setButtonLoading($("addItemBtn"), false);
   }
 });
 
@@ -3240,7 +3259,7 @@ $("closeTaskFormBtn")?.addEventListener("click", resetTaskForm);
 $("saveTaskBtn").addEventListener("click", async () => {
   const description = $("taskDesc").value.trim(), responsible = $("taskResponsible").value;
   if (!description) { showToast("Preencha a descrição."); return; }
-  $("saveTaskBtn").disabled = true;
+  setButtonLoading($("saveTaskBtn"), true);
   try {
     if (editingTaskId) {
       await updateDoc(doc(db, "trips", currentTripId, "tarefas", editingTaskId), { description, responsible });
@@ -3253,7 +3272,7 @@ $("saveTaskBtn").addEventListener("click", async () => {
   } catch (err) {
     showToast("Não foi possível salvar: " + err.message, "error");
   } finally {
-    $("saveTaskBtn").disabled = false;
+    setButtonLoading($("saveTaskBtn"), false);
   }
 });
 
@@ -3537,16 +3556,16 @@ $("saveExpenseBtn").addEventListener("click", async () => {
     await updateDoc(doc(db, "trips", currentTripId, "gastos", editingExpenseId), payload);
     logActivity("gastos", "gasto editado", `${description} — ${fmtOriginal(value, currency)}`);
   } else {
-    $("saveExpenseBtn").disabled = true;
+    setButtonLoading($("saveExpenseBtn"), true);
     try {
       await addDoc(collection(db, "trips", currentTripId, "gastos"), payload);
       logActivity("gastos", "gasto adicionado", `${description} — ${fmtOriginal(value, currency)} (${expTypeSeg})`);
     } catch (err) {
       showToast("Não foi possível salvar: " + err.message, "error");
-      $("saveExpenseBtn").disabled = false;
+      setButtonLoading($("saveExpenseBtn"), false);
       return;
     }
-    $("saveExpenseBtn").disabled = false;
+    setButtonLoading($("saveExpenseBtn"), false);
   }
   resetExpenseForm();
 });
@@ -3656,7 +3675,7 @@ $("saveEmergencyBtn").addEventListener("click", async () => {
   const label = $("emLabel").value.trim(), value = $("emValue").value.trim();
   const subjectIsMinor = $("emIsMinor").checked;
   if (!label || !value) { showToast("Preencha rótulo e valor."); return; }
-  $("saveEmergencyBtn").disabled = true;
+  setButtonLoading($("saveEmergencyBtn"), true);
   try {
     if (editingEmergencyId) {
       // Editar sem mexer na validade não reseta ela — mesmo padrão dos Documentos.
@@ -3673,7 +3692,7 @@ $("saveEmergencyBtn").addEventListener("click", async () => {
   } catch (err) {
     showToast("Não foi possível salvar: " + err.message, "error");
   } finally {
-    $("saveEmergencyBtn").disabled = false;
+    setButtonLoading($("saveEmergencyBtn"), false);
   }
 });
 
@@ -3975,7 +3994,7 @@ $("calNextBtn").addEventListener("click", () => {
 $("saveReminderBtn").addEventListener("click", async () => {
   const text = $("reminderText").value.trim();
   if (!text || !selectedCalDate) { showToast("Escreva algo pro lembrete."); return; }
-  $("saveReminderBtn").disabled = true;
+  setButtonLoading($("saveReminderBtn"), true);
   try {
     await addDoc(collection(db, "trips", currentTripId, "lembretes"), {
       text, visibility: currentRemVis, authorEmail: currentUser.email, date: selectedCalDate
@@ -3985,6 +4004,6 @@ $("saveReminderBtn").addEventListener("click", async () => {
   } catch (err) {
     showToast("Não foi possível salvar o lembrete: " + err.message, "error");
   } finally {
-    $("saveReminderBtn").disabled = false;
+    setButtonLoading($("saveReminderBtn"), false);
   }
 });
