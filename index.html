@@ -30,7 +30,7 @@
   <span id="installBannerText" data-i18n="install.text">📲 Instale o Kipu na tela inicial pra acessar mais rápido.</span>
   <div class="install-banner-actions">
     <button id="installBannerActionBtn" class="btn btn-primary btn-small" data-i18n="install.action">Instalar</button>
-    <button id="installBannerCloseBtn" class="icon-btn" title="Fechar">✕</button>
+    <button aria-label="Fechar" id="installBannerCloseBtn" class="icon-btn" title="Fechar">✕</button>
   </div>
 </div>
 <div class="bg-scene" aria-hidden="true"></div>
@@ -137,7 +137,7 @@
   <div class="modal-box" style="max-width:420px;">
     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:10px;">
       <div class="modal-title" id="docDetailTitle" style="margin:0;"></div>
-      <button id="docDetailCloseBtn" class="btn btn-outline" style="flex:0 0 auto; padding:4px 10px;">✕</button>
+      <button aria-label="Fechar" id="docDetailCloseBtn" class="btn btn-outline" style="flex:0 0 auto; padding:4px 10px;">✕</button>
     </div>
     <div id="docDetailImageWrap" style="text-align:center; margin-bottom:12px;"></div>
     <div class="card-meta" id="docDetailType" style="margin-bottom:2px;"></div>
@@ -223,7 +223,7 @@
       <div class="trip-label">
         <span id="userEmailLabel"></span>
         <div style="display:flex; align-items:center; gap:8px;">
-          <button id="profileBtn" class="icon-btn" title="Editar perfil">👤</button>
+          <button id="profileBtn" class="icon-btn" title="Editar perfil" aria-label="Editar perfil">👤</button>
           <button id="logoutBtn" class="btn btn-outline btn-small" title="Sair" data-i18n="picker.logout">Sair ⎋</button>
         </div>
       </div>
@@ -347,7 +347,7 @@
     <div class="greca"></div>
     <header class="app-header">
       <div class="trip-label">
-        <button id="backToTripsBtn" class="icon-btn" title="Trocar de viagem">←</button>
+        <button id="backToTripsBtn" class="icon-btn" title="Trocar de viagem" aria-label="Trocar de viagem">←</button>
         <div style="display:flex; align-items:center; gap:8px;">
           <div class="lang-switch" id="langSwitchApp">
             <button class="lang-btn" data-lang="pt">PT</button>
@@ -386,7 +386,7 @@
         <div id="roleIntroBanner" class="hidden card" style="margin-bottom:14px; border-left:4px solid var(--teal);">
           <div class="card-row">
             <span class="card-meta" id="roleIntroText" style="color:var(--ink); font-size:12.5px;"></span>
-            <button id="roleIntroCloseBtn" class="icon-btn" style="flex:0 0 auto;" title="Entendi">✕</button>
+            <button aria-label="Fechar" id="roleIntroCloseBtn" class="icon-btn" style="flex:0 0 auto;" title="Entendi">✕</button>
           </div>
         </div>
         <p class="screen-sub" id="hojeStatusLine"></p>
@@ -402,9 +402,9 @@
 
         <div class="card" id="calendarCard">
           <div class="card-row" style="margin-bottom:10px;">
-            <button id="calPrevBtn" class="icon-btn">‹</button>
+            <button id="calPrevBtn" class="icon-btn" aria-label="Mês anterior">‹</button>
             <div class="card-title" id="calMonthLabel">—</div>
-            <button id="calNextBtn" class="icon-btn">›</button>
+            <button id="calNextBtn" class="icon-btn" aria-label="Próximo mês">›</button>
           </div>
           <div id="calendarGrid" class="calendar-grid"></div>
           <div id="reminderEditor" class="hidden" style="margin-top:12px;">
@@ -497,7 +497,7 @@
             <textarea id="itImportTextarea" rows="8" style="width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; margin-top:4px;" placeholder="Embarque para Lima|2026-09-05|14:00||Aeroporto de Guarulhos|1200|confirmado"></textarea>
             <div class="form-row" style="margin-top:10px;">
               <button class="btn btn-primary btn-block" id="importItinerarioBtn" data-i18n="itinerary.importBtn">Importar</button>
-              <button class="btn btn-outline" id="closeBulkImportBtn" style="flex:0 0 auto;">✕</button>
+              <button aria-label="Fechar" class="btn btn-outline" id="closeBulkImportBtn" style="flex:0 0 auto;">✕</button>
             </div>
             <div id="itImportStatus" class="screen-sub hidden" style="margin-top:10px;"></div>
           </div>
@@ -529,7 +529,7 @@
             <div><label data-i18n="itinerary.responsible">Responsável — opcional</label><select id="itResponsible"><option value="">—</option></select></div>
             <div class="form-row">
               <button class="btn btn-primary btn-block" id="saveItinerarioBtn" data-i18n="common.save">Salvar</button>
-              <button class="btn btn-outline" id="cancelItinerarioEditBtn" style="flex:0 0 auto;">✕</button>
+              <button aria-label="Fechar" class="btn btn-outline" id="cancelItinerarioEditBtn" style="flex:0 0 auto;">✕</button>
             </div>
           </div>
           <div id="itinerarioList"></div>
@@ -555,7 +555,7 @@
             <div><label data-i18n="itinerary.dicaIndicadoPor">Quem indicou — opcional</label><input type="text" id="dicaIndicadoPor" placeholder="Ex: guia local, achamos por conta própria"></div>
             <div class="form-row">
               <button class="btn btn-primary btn-block" id="saveDicaBtn" data-i18n="common.save">Salvar</button>
-              <button class="btn btn-outline" id="cancelDicaEditBtn" style="flex:0 0 auto;">✕</button>
+              <button aria-label="Fechar" class="btn btn-outline" id="cancelDicaEditBtn" style="flex:0 0 auto;">✕</button>
             </div>
           </div>
           <div class="checkbox-group" id="dicaFilterGroup" style="margin-bottom:12px;"></div>
@@ -583,7 +583,7 @@
           </div>
           <div class="form-row">
             <button class="btn btn-primary btn-block" id="saveEstadiaBtn" data-i18n="common.save">Salvar</button>
-            <button class="btn btn-outline" id="closeEstadiaFormBtn" style="flex:0 0 auto;">✕</button>
+            <button aria-label="Fechar" class="btn btn-outline" id="closeEstadiaFormBtn" style="flex:0 0 auto;">✕</button>
           </div>
         </div>
         <div id="estadiaList"></div>
@@ -643,7 +643,7 @@
           <div id="docUploadStatus" class="screen-sub hidden"></div>
           <div class="form-row">
             <button class="btn btn-primary btn-block" id="saveDocBtn" data-i18n="common.save">Salvar</button>
-            <button class="btn btn-outline" id="closeDocFormBtn" style="flex:0 0 auto;">✕</button>
+            <button aria-label="Fechar" class="btn btn-outline" id="closeDocFormBtn" style="flex:0 0 auto;">✕</button>
           </div>
         </div>
         <div class="form-row" id="docFilters" style="margin-bottom:10px;">
@@ -710,7 +710,7 @@
           <div><label data-i18n="itinerary.responsible2">Responsável</label><select id="taskResponsible"></select></div>
           <div class="form-row">
             <button class="btn btn-primary btn-block" id="saveTaskBtn" data-i18n="common.save">Salvar</button>
-            <button class="btn btn-outline" id="closeTaskFormBtn" style="flex:0 0 auto;">✕</button>
+            <button aria-label="Fechar" class="btn btn-outline" id="closeTaskFormBtn" style="flex:0 0 auto;">✕</button>
           </div>
         </div>
         <div id="tasksList"></div>
@@ -788,7 +788,7 @@
           </div>
           <div class="form-row">
             <button class="btn btn-primary btn-block" id="saveExpenseBtn" data-i18n="common.save">Salvar</button>
-            <button class="btn btn-outline" id="closeExpenseFormBtn" style="flex:0 0 auto;">✕</button>
+            <button aria-label="Fechar" class="btn btn-outline" id="closeExpenseFormBtn" style="flex:0 0 auto;">✕</button>
           </div>
         </div>
 
@@ -829,7 +829,7 @@
           <div id="emMinorConsent" class="screen-sub hidden" style="margin:0 0 8px; color:var(--gold);" data-i18n="emergency.minorConsentNotice">Este consentimento é registrado conforme a LGPD (Art. 14) e pode ser revogado a qualquer momento excluindo o contato.</div>
           <div class="form-row">
             <button class="btn btn-primary btn-block" id="saveEmergencyBtn" data-i18n="common.save">Salvar</button>
-            <button class="btn btn-outline" id="closeEmergencyFormBtn" style="flex:0 0 auto;">✕</button>
+            <button aria-label="Fechar" class="btn btn-outline" id="closeEmergencyFormBtn" style="flex:0 0 auto;">✕</button>
           </div>
         </div>
         <div id="emergencyList"></div>

@@ -517,7 +517,7 @@ $("loginBtn").addEventListener("click", async () => {
   try {
     await signInWithPopup(auth, googleProvider);
   } catch (err) {
-    showToast("Erro ao entrar: " + err.message, "error");
+    showToast("Erro ao entrar. Tenta de novo em instantes.", "error"); console.warn("Erro ao entrar:", err);
   }
 });
 $("logoutBtn").addEventListener("click", () => signOut(auth));
@@ -718,7 +718,7 @@ async function loadTripList() {
           <div class="trip-card-title">${trip.name}</div>
           <div class="trip-card-meta">${trip.destination || ""} · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}</div>
         </div>
-        ${myTripRole === "admin" ? `<button class="icon-btn" data-admin-gear title="Gerenciar viagem" style="flex:0 0 auto;">⚙️</button>` : ""}
+        ${myTripRole === "admin" ? `<button class="icon-btn" data-admin-gear title="Gerenciar viagem" aria-label="Gerenciar viagem" style="flex:0 0 auto;">⚙️</button>` : ""}
       </div>
     `;
     card.addEventListener("click", (e) => {
@@ -947,7 +947,7 @@ function renderAgencyTripCard(trip, container) {
         renderAgencyLists();
       } catch (err) {
         e.target.checked = !turningOn;
-        showToast("Não foi possível atualizar o contador: " + err.message, "error");
+        showToast("Não foi possível atualizar o contador. Tenta de novo em instantes.", "error"); console.warn("Não foi possível atualizar o contador:", err);
       }
     });
   }
@@ -971,7 +971,7 @@ function renderAgencyTripCard(trip, container) {
         renderAgencyStatsUI();
         renderAgencyLists();
       } catch (err) {
-        showToast("Não foi possível cancelar a viagem: " + err.message, "error");
+        showToast("Não foi possível cancelar a viagem. Tenta de novo em instantes.", "error"); console.warn("Não foi possível cancelar a viagem:", err);
       }
     });
   }
@@ -987,7 +987,7 @@ function renderAgencyTripCard(trip, container) {
         trip.agencyCancelled = false;
         renderAgencyLists();
       } catch (err) {
-        showToast("Não foi possível reativar a viagem: " + err.message, "error");
+        showToast("Não foi possível reativar a viagem. Tenta de novo em instantes.", "error"); console.warn("Não foi possível reativar a viagem:", err);
       }
     });
   }
@@ -1149,7 +1149,8 @@ $("agencyCreateTripBtn")?.addEventListener("click", async () => {
     $("agencyTripStart").value = ""; $("agencyTripEnd").value = ""; $("agencyTripClientEmail").value = "";
     loadAgencyPanel();
   } catch (err) {
-    statusEl.textContent = "Erro ao criar viagem: " + err.message;
+    statusEl.textContent = "Erro ao criar viagem. Confira os dados e tente de novo.";
+    console.warn("Erro ao criar viagem pela agência:", err);
     statusEl.classList.remove("hidden");
     setButtonLoading($("agencyCreateTripBtn"), false);
   }
@@ -1187,7 +1188,7 @@ $("joinCodeBtn").addEventListener("click", async () => {
     $("joinCodeInput").value = "";
     openTrip(tripData.id);
   } catch (err) {
-    statusEl.textContent = `Não foi possível entrar (${err.code || err.message}). Confira o código e tente de novo.`;
+    statusEl.textContent = "Não foi possível entrar. Confira o código e tente de novo.";
     console.error("Erro ao entrar com código:", err);
   }
 });
@@ -2113,7 +2114,7 @@ function subscribeItinerario() {
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             ${canEditIt ? `<button class="item-del" data-action="edit" title="Editar">✎</button>
-            <button class="item-del" data-action="delete" title="Excluir">✕</button>
+            <button class="item-del" data-action="delete" title="Excluir" aria-label="Excluir">✕</button>
             <button class="badge badge-${it.status}" data-action="status">${t("status." + it.status)}</button>`
             : `<span class="badge badge-${it.status}">${t("status." + it.status)}</span>`}
           </div>
@@ -2198,7 +2199,7 @@ $("saveItinerarioBtn").addEventListener("click", async () => {
     }
     resetItinerarioForm();
   } catch (err) {
-    showToast("Não foi possível salvar: " + err.message, "error");
+    showToast("Não foi possível salvar. Tenta de novo em instantes.", "error"); console.warn("Não foi possível salvar:", err);
   } finally {
     setButtonLoading($("saveItinerarioBtn"), false);
   }
@@ -2282,7 +2283,7 @@ function renderDicasList() {
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
           <button class="item-del" data-action="edit" title="Editar">✎</button>
-          <button class="item-del" data-action="delete" title="Excluir">✕</button>
+          <button class="item-del" data-action="delete" title="Excluir" aria-label="Excluir">✕</button>
         </div>
       </div>`;
     card.querySelector('[data-action="edit"]').addEventListener("click", () => openDicaForEdit(dica.id, dica));
@@ -2336,7 +2337,7 @@ $("saveDicaBtn")?.addEventListener("click", async () => {
     }
     resetDicaForm();
   } catch (err) {
-    showToast("Não foi possível salvar: " + err.message, "error");
+    showToast("Não foi possível salvar. Tenta de novo em instantes.", "error"); console.warn("Não foi possível salvar:", err);
   } finally {
     setButtonLoading($("saveDicaBtn"), false);
   }
@@ -2528,7 +2529,7 @@ function subscribeEstadia() {
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             ${canEditEst ? `<button class="item-del" data-action="edit" title="Editar">✎</button>
-            <button class="item-del" data-action="delete" title="Excluir">✕</button>` : ""}
+            <button class="item-del" data-action="delete" title="Excluir" aria-label="Excluir">✕</button>` : ""}
             <span class="badge badge-${s.status === "pago" ? "confirmado" : "programado"}">${t("status." + s.status)}</span>
           </div>
         </div>`;
@@ -2584,7 +2585,7 @@ $("saveEstadiaBtn").addEventListener("click", async () => {
     }
     resetEstadiaForm();
   } catch (err) {
-    showToast("Não foi possível salvar: " + err.message, "error");
+    showToast("Não foi possível salvar. Tenta de novo em instantes.", "error"); console.warn("Não foi possível salvar:", err);
   } finally {
     setButtonLoading($("saveEstadiaBtn"), false);
   }
@@ -2733,7 +2734,7 @@ function renderDocsList() {
         <div class="doc-thumb-title">${doc_.title}</div>
         <div class="doc-thumb-actions">
           <button data-action="edit" title="Editar">✎</button>
-          <button data-action="delete" title="Excluir">✕</button>
+          <button data-action="delete" title="Excluir" aria-label="Excluir">✕</button>
         </div>
       `;
       thumb.addEventListener("click", (e) => {
@@ -2939,7 +2940,8 @@ $("saveDocBtn").addEventListener("click", async () => {
         fileName = uploadFile.name;
         statusEl.textContent = "Upload concluído.";
       } catch (err) {
-        statusEl.textContent = "Erro no upload: " + err.message;
+        statusEl.textContent = "Erro no upload. Tenta de novo em instantes.";
+        console.warn("Erro no upload de documento:", err);
         return;
       }
     }
@@ -3067,7 +3069,7 @@ $("addItemBtn").addEventListener("click", async () => {
     logActivity("mala", "item adicionado", `${name} (${malaSeg})`);
     $("newItemName").value = "";
   } catch (err) {
-    showToast("Não foi possível adicionar o item: " + err.message, "error");
+    showToast("Não foi possível adicionar o item. Tenta de novo em instantes.", "error"); console.warn("Não foi possível adicionar o item:", err);
   } finally {
     setButtonLoading($("addItemBtn"), false);
   }
@@ -3211,7 +3213,7 @@ function subscribeTarefas() {
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             ${canEditTask ? `<button class="item-del" data-action="edit" title="Editar">✎</button>
-            <button class="item-del" data-action="delete" title="Excluir">✕</button>` : ""}
+            <button class="item-del" data-action="delete" title="Excluir" aria-label="Excluir">✕</button>` : ""}
             ${canToggleTask
               ? `<button class="badge badge-${task.status}" data-action="status">${t("status." + task.status)}</button>`
               : `<span class="badge badge-${task.status}">${t("status." + task.status)}</span>`}
@@ -3270,7 +3272,7 @@ $("saveTaskBtn").addEventListener("click", async () => {
     }
     resetTaskForm();
   } catch (err) {
-    showToast("Não foi possível salvar: " + err.message, "error");
+    showToast("Não foi possível salvar. Tenta de novo em instantes.", "error"); console.warn("Não foi possível salvar:", err);
   } finally {
     setButtonLoading($("saveTaskBtn"), false);
   }
@@ -3363,7 +3365,7 @@ function renderExpenses() {
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
           <button class="item-del" data-action="edit" title="Editar">✎</button>
-          <button class="item-del" data-action="delete" title="Excluir">✕</button>
+          <button class="item-del" data-action="delete" title="Excluir" aria-label="Excluir">✕</button>
         </div>
       `;
       card.querySelector('[data-action="edit"]').addEventListener("click", () => openExpenseForEdit(e.id, e));
@@ -3387,7 +3389,7 @@ function renderExpenses() {
         <div class="card-title">${e.description} — ${fmtOriginal(e.value, currency)}${converted}</div>
         <div style="display:flex; align-items:center; gap:8px;">
           <button class="item-del" data-action="edit" title="Editar">✎</button>
-          <button class="item-del" data-action="delete" title="Excluir">✕</button>
+          <button class="item-del" data-action="delete" title="Excluir" aria-label="Excluir">✕</button>
         </div>
       `;
       card.querySelector('[data-action="edit"]').addEventListener("click", () => openExpenseForEdit(e.id, e));
@@ -3561,7 +3563,7 @@ $("saveExpenseBtn").addEventListener("click", async () => {
       await addDoc(collection(db, "trips", currentTripId, "gastos"), payload);
       logActivity("gastos", "gasto adicionado", `${description} — ${fmtOriginal(value, currency)} (${expTypeSeg})`);
     } catch (err) {
-      showToast("Não foi possível salvar: " + err.message, "error");
+      showToast("Não foi possível salvar. Tenta de novo em instantes.", "error"); console.warn("Não foi possível salvar:", err);
       setButtonLoading($("saveExpenseBtn"), false);
       return;
     }
@@ -3609,7 +3611,7 @@ function renderEmergencyList() {
       <div><span class="card-title">${it.label}</span><br><span class="card-meta">${it.value}</span></div>
       <div style="display:flex; align-items:center; gap:8px;">
         <button class="item-del" data-action="edit" title="Editar">✎</button>
-        <button class="item-del" data-action="delete" title="Excluir">✕</button>
+        <button class="item-del" data-action="delete" title="Excluir" aria-label="Excluir">✕</button>
       </div>
     `;
     card.querySelector('[data-action="edit"]').addEventListener("click", () => openEmergencyForEdit(it.id, it));
@@ -3690,7 +3692,7 @@ $("saveEmergencyBtn").addEventListener("click", async () => {
     }
     resetEmergencyForm();
   } catch (err) {
-    showToast("Não foi possível salvar: " + err.message, "error");
+    showToast("Não foi possível salvar. Tenta de novo em instantes.", "error"); console.warn("Não foi possível salvar:", err);
   } finally {
     setButtonLoading($("saveEmergencyBtn"), false);
   }
@@ -4002,7 +4004,7 @@ $("saveReminderBtn").addEventListener("click", async () => {
     logActivity("calendario", "lembrete adicionado", `${selectedCalDate}: ${text} (${currentRemVis})`);
     $("reminderText").value = "";
   } catch (err) {
-    showToast("Não foi possível salvar o lembrete: " + err.message, "error");
+    showToast("Não foi possível salvar o lembrete. Tenta de novo em instantes.", "error"); console.warn("Não foi possível salvar o lembrete:", err);
   } finally {
     setButtonLoading($("saveReminderBtn"), false);
   }
