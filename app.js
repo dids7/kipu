@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot,
-  query, where, orderBy, serverTimestamp, getDocs, getDocsFromServer, getDoc, arrayUnion, increment
+  query, where, orderBy, serverTimestamp, getDocs, getDocsFromServer, getDoc, arrayUnion, increment, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   ref, uploadBytes, getDownloadURL, deleteObject
@@ -905,24 +905,51 @@ $("showAgencyNewTripFormBtn")?.addEventListener("click", () => {
 });
 wireDateRange($("agencyTripStart"), $("agencyTripEnd"));
 
-// Confere se uma viagem da agência já passou da data de fim e, se ainda
-// estava contando no limite, desliga sozinha (sem travar acesso — é só o
-// fim natural da viagem, diferente de "Cancelar"). Roda toda vez que o
-// Painel da Agência abre.
-async function autoOffExpiredAgencyTrips(agencyId, trips) {
+// Mantém o contador de viagens ativas coerente com a regra (QA #2, 25/set/2026):
+// só existem DUAS formas de uma viagem deixar de ocupar vaga — ela terminar
+// (desliga sozinha aqui) ou a agência cancelar (botão "Cancelar"). Não existe
+// mais desligar manualmente. Roda toda vez que o Painel da Agência abre, e faz
+// duas coisas, cada uma numa transação (grava viagem + contador juntos, ou
+// nada — e se dois funcionários abrirem o painel ao mesmo tempo, só um deles
+// efetivamente mexe no contador, sem descontar em dobro):
+// 1. Viagem encerrada que ainda contava → desliga (-1).
+// 2. Viagem não cancelada, ainda não terminada, que estava fora da contagem
+//    (resíduo do switch manual antigo) → volta a contar (+1). Pode deixar a
+//    agência temporariamente acima do limite; nesse caso ela só não cria
+//    viagem nova até alguma terminar ou ser cancelada.
+// Devolve quanto o contador mudou no total, pra tela atualizar sem recarregar.
+async function syncAgencyTripCounters(agencyId, trips) {
   const today = localISODate();
+  let delta = 0;
   for (const trip of trips) {
-    if (trip.countsTowardLimit && trip.endDate && trip.endDate < today) {
-      try {
-        await updateDoc(doc(db, "trips", trip.id), { countsTowardLimit: false });
-        await updateDoc(doc(db, "agencies", agencyId), { activeTripsCount: increment(-1) });
-        logActivityFor(trip.id, "agencia", "auto-off", "Contador desligado automaticamente (viagem encerrada).");
-        trip.countsTowardLimit = false;
-      } catch (err) {
-        console.warn("Não foi possível desligar contador da viagem encerrada:", err);
+    const ended = !!(trip.endDate && trip.endDate < today);
+    const shouldCount = !trip.agencyCancelled && !ended;
+    if (!!trip.countsTowardLimit === shouldCount) continue;
+    try {
+      const changed = await runTransaction(db, async (tx) => {
+        const tripRef = doc(db, "trips", trip.id);
+        const fresh = await tx.get(tripRef);
+        if (!fresh.exists()) return false;
+        const data = fresh.data();
+        const freshEnded = !!(data.endDate && data.endDate < today);
+        const freshShould = !data.agencyCancelled && !freshEnded;
+        if (!!data.countsTowardLimit === freshShould) return false; // outra sessão já ajustou
+        tx.update(tripRef, { countsTowardLimit: freshShould });
+        tx.update(doc(db, "agencies", agencyId), { activeTripsCount: increment(freshShould ? 1 : -1) });
+        return true;
+      });
+      if (changed) {
+        delta += shouldCount ? 1 : -1;
+        logActivityFor(trip.id, "agencia", shouldCount ? "auto-on" : "auto-off",
+          shouldCount ? "Contador religado automaticamente (viagem ativa estava fora da contagem)."
+                      : "Contador desligado automaticamente (viagem encerrada).");
       }
+      trip.countsTowardLimit = shouldCount;
+    } catch (err) {
+      console.warn("Não foi possível ajustar o contador da viagem:", err);
     }
   }
+  return delta;
 }
 
 let lastAgencyTrips = []; // cache do último fetch, pra "Ver histórico" não precisar recarregar do banco
@@ -933,15 +960,8 @@ function buildTripCardRight(trip, started) {
   if (trip.agencyCancelled) {
     return `<button class="btn btn-outline btn-small" data-reactivate-trip type="button">Reativar</button>`;
   }
-  return `
-    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
-      <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:${started ? "default" : "pointer"};">
-        <input type="checkbox" data-counts-toggle ${trip.countsTowardLimit ? "checked" : ""} ${started ? "disabled" : ""}>
-        Conta no limite
-      </label>
-      ${!started ? `<button class="btn btn-outline btn-small" data-cancel-trip type="button">Cancelar</button>` : ""}
-    </div>
-  `;
+  // Sem switch manual (QA #2): a vaga só abre quando a viagem termina ou é cancelada.
+  return !started ? `<button class="btn btn-outline btn-small" data-cancel-trip type="button">Cancelar</button>` : "";
 }
 
 function renderAgencyTripCard(trip, container) {
@@ -951,7 +971,7 @@ function renderAgencyTripCard(trip, container) {
   const card = document.createElement("div");
   card.className = "trip-card";
   let statusBadge = "";
-  if (!trip.agencyCancelled && !trip.countsTowardLimit) statusBadge = "⚪ não conta no limite";
+  if (!trip.agencyCancelled && !trip.countsTowardLimit) statusBadge = "⚪ encerrada — não conta no limite";
   card.innerHTML = `
     <div class="card-row">
       <div>
@@ -963,28 +983,9 @@ function renderAgencyTripCard(trip, container) {
     </div>
   `;
   card.addEventListener("click", (e) => {
-    if (e.target.closest("[data-counts-toggle], [data-cancel-trip], [data-reactivate-trip]")) return;
+    if (e.target.closest("[data-cancel-trip], [data-reactivate-trip]")) return;
     openTrip(trip.id);
   });
-  const toggleEl = card.querySelector("[data-counts-toggle]");
-  if (toggleEl && !started) {
-    toggleEl.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const turningOn = e.target.checked;
-      try {
-        await updateDoc(doc(db, "trips", trip.id), { countsTowardLimit: turningOn });
-        await updateDoc(doc(db, "agencies", agencyId), { activeTripsCount: increment(turningOn ? 1 : -1) });
-        logActivityFor(trip.id, "agencia", "toggle", `Contador ${turningOn ? "ligado" : "desligado"} manualmente pela agência.`);
-        trip.countsTowardLimit = turningOn;
-        currentAgency.activeTripsCount = (currentAgency.activeTripsCount || 0) + (turningOn ? 1 : -1);
-        renderAgencyStatsUI();
-        renderAgencyLists();
-      } catch (err) {
-        e.target.checked = !turningOn;
-        showToast("Não foi possível atualizar o contador. Tenta de novo em instantes.", "error"); console.warn("Não foi possível atualizar o contador:", err);
-      }
-    });
-  }
   const cancelBtn = card.querySelector("[data-cancel-trip]");
   if (cancelBtn) {
     cancelBtn.addEventListener("click", async (e) => {
@@ -992,13 +993,20 @@ function renderAgencyTripCard(trip, container) {
       const ok = await confirmDialog(`Cancelar "${trip.name}"? Ela sai da lista principal (vai pro Histórico) e ninguém fora da agência continua tendo acesso.`, "Cancelar viagem");
       if (!ok) return;
       try {
-        const patch = { agencyCancelled: true };
-        if (trip.countsTowardLimit) patch.countsTowardLimit = false;
-        await updateDoc(doc(db, "trips", trip.id), patch);
-        if (trip.countsTowardLimit) {
-          await updateDoc(doc(db, "agencies", agencyId), { activeTripsCount: increment(-1) });
-          currentAgency.activeTripsCount = (currentAgency.activeTripsCount || 0) - 1;
-        }
+        // Transação: marca cancelada + libera a vaga juntos (ou nada), e só
+        // desconta se a viagem ainda contava de fato no banco.
+        const freed = await runTransaction(db, async (tx) => {
+          const tripRef = doc(db, "trips", trip.id);
+          const fresh = await tx.get(tripRef);
+          if (!fresh.exists()) throw new Error("Viagem não encontrada.");
+          const data = fresh.data();
+          if (data.agencyCancelled) return false; // já cancelada por outra sessão
+          const wasCounting = !!data.countsTowardLimit;
+          tx.update(tripRef, wasCounting ? { agencyCancelled: true, countsTowardLimit: false } : { agencyCancelled: true });
+          if (wasCounting) tx.update(doc(db, "agencies", agencyId), { activeTripsCount: increment(-1) });
+          return wasCounting;
+        });
+        if (freed) currentAgency.activeTripsCount = Math.max(0, (currentAgency.activeTripsCount || 0) - 1);
         logActivityFor(trip.id, "agencia", "cancel", "Viagem cancelada pela agência — acesso bloqueado pra quem não é da agência.");
         trip.agencyCancelled = true;
         trip.countsTowardLimit = false;
@@ -1013,12 +1021,52 @@ function renderAgencyTripCard(trip, container) {
   if (reactivateBtn) {
     reactivateBtn.addEventListener("click", async (e) => {
       e.stopPropagation();
-      const ok = await confirmDialog(`Reativar "${trip.name}"? Ela volta pra lista principal e todo mundo recupera o acesso.`, "Reativar");
+      const alreadyEnded = !!(trip.endDate && trip.endDate < localISODate());
+      const ok = await confirmDialog(
+        alreadyEnded
+          ? `Reativar "${trip.name}"? Ela volta pra lista principal e todo mundo recupera o acesso. Como a viagem já terminou, ela não ocupa vaga no plano.`
+          : `Reativar "${trip.name}"? Ela volta pra lista principal, todo mundo recupera o acesso, e ela volta a ocupar 1 vaga de viagem ativa no plano.`,
+        "Reativar"
+      );
       if (!ok) return;
+      // QA #2: reativar volta a contar no limite (senão, cancelar + reativar
+      // viraria um jeito de ter viagem ativa sem ocupar vaga). Transação: lê o
+      // contador atual da agência, confere a vaga e grava viagem + contador juntos.
+      const plan = AGENCY_PLANS[currentAgency.planId] || AGENCY_PLANS.chaski;
       try {
-        await updateDoc(doc(db, "trips", trip.id), { agencyCancelled: false });
-        logActivityFor(trip.id, "agencia", "reactivate", "Viagem reativada pela agência — cancelamento desfeito.");
+        const result = await runTransaction(db, async (tx) => {
+          const tripRef = doc(db, "trips", trip.id);
+          const agencyRef = doc(db, "agencies", agencyId);
+          const freshTrip = await tx.get(tripRef);
+          const freshAgency = await tx.get(agencyRef);
+          if (!freshTrip.exists() || !freshAgency.exists()) throw new Error("Viagem ou agência não encontrada.");
+          const data = freshTrip.data();
+          if (!data.agencyCancelled) return "already";
+          const ended = !!(data.endDate && data.endDate < localISODate());
+          if (ended) {
+            tx.update(tripRef, { agencyCancelled: false, countsTowardLimit: false });
+            return "ok-no-count";
+          }
+          const activeNow = freshAgency.data().activeTripsCount || 0;
+          if (plan.maxActiveTrips !== Infinity && activeNow >= plan.maxActiveTrips) return "no-slot";
+          tx.update(tripRef, { agencyCancelled: false, countsTowardLimit: true });
+          tx.update(agencyRef, { activeTripsCount: increment(1) });
+          return "ok-counted";
+        });
+        if (result === "no-slot") {
+          showToast("Sem vaga no plano agora — cancele outra viagem que ainda não começou, espere alguma terminar, ou fale com a gente sobre upgrade.", "warning");
+          return;
+        }
+        if (result === "ok-counted") {
+          currentAgency.activeTripsCount = (currentAgency.activeTripsCount || 0) + 1;
+          trip.countsTowardLimit = true;
+          logActivityFor(trip.id, "agencia", "reactivate", "Viagem reativada pela agência — cancelamento desfeito, voltou a contar no limite.");
+        } else if (result === "ok-no-count") {
+          trip.countsTowardLimit = false;
+          logActivityFor(trip.id, "agencia", "reactivate", "Viagem reativada pela agência — cancelamento desfeito (já encerrada, não conta no limite).");
+        }
         trip.agencyCancelled = false;
+        renderAgencyStatsUI();
         renderAgencyLists();
       } catch (err) {
         showToast("Não foi possível reativar a viagem. Tenta de novo em instantes.", "error"); console.warn("Não foi possível reativar a viagem:", err);
@@ -1099,7 +1147,7 @@ function renderAgencyStatsUI() {
   const warnEl = $("agencyPanelLimitWarning");
   if (atLimit) {
     warnEl.style.display = "block";
-    warnEl.textContent = "Limite de viagens ativas do plano atingido — desligue ou encerre alguma viagem antes de criar outra.";
+    warnEl.textContent = "Limite de viagens ativas do plano atingido — a vaga abre quando uma viagem terminar ou for cancelada (antes de começar).";
   } else {
     warnEl.style.display = "none";
   }
@@ -1122,7 +1170,11 @@ async function loadAgencyPanel() {
   const allTrips = [];
   snap.forEach((d) => allTrips.push({ id: d.id, ...d.data() }));
 
-  await autoOffExpiredAgencyTrips(agencyId, allTrips);
+  const counterDelta = await syncAgencyTripCounters(agencyId, allTrips);
+  if (counterDelta !== 0) {
+    currentAgency.activeTripsCount = Math.max(0, (currentAgency.activeTripsCount || 0) + counterDelta);
+    renderAgencyStatsUI();
+  }
   lastAgencyTrips = allTrips;
   renderAgencyLists();
 }
