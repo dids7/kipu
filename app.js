@@ -29,6 +29,40 @@ function localISODate(d = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+// ================= SEGURANÇA DE TEXTO (QA #1, 25/set/2026) =================
+// Todo texto que veio de um usuário (título, nota, nome, local...) e vai
+// entrar num innerHTML PRECISA passar por escapeHtml() — sem isso, alguém
+// poderia cadastrar, por exemplo, uma dica com título "<img onerror=...>"
+// e esse código rodaria no navegador de todo mundo que abrisse a aba (XSS).
+// Com o escape, o texto aparece literalmente na tela, nunca vira código.
+// Regra pra código novo: dado de usuário em innerHTML → escapeHtml();
+// em textContent não precisa (textContent já é seguro por natureza).
+function escapeHtml(value) {
+  if (value === null || value === undefined) return "";
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Só deixa passar link http:// ou https:// — bloqueia "javascript:" e
+// outros esquemas perigosos num href/src. Link sem esquema (ex: digitado
+// como "www.site.com") ganha "https://" na frente. Devolve "" se inválido.
+// Sempre usar junto com escapeHtml() ao montar o atributo.
+function safeUrl(url) {
+  if (!url) return "";
+  let str = String(url).trim();
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(str)) str = "https://" + str;
+  try {
+    const parsed = new URL(str);
+    return (parsed.protocol === "https:" || parsed.protocol === "http:") ? parsed.href : "";
+  } catch (err) {
+    return "";
+  }
+}
+
 // ================= PERMISSÕES (papéis) =================
 let myRole = "colaborador";
 
@@ -471,8 +505,8 @@ function calendarLink(it) {
 
 function fmtDate(d) {
   if (!d) return "";
-  const [y, m, day] = d.split("-");
-  return `${day}/${m}`;
+  const [y, m, day] = String(d).split("-");
+  return escapeHtml(`${day}/${m}`); // data vem do banco — escapada por segurança (QA #1)
 }
 
 // Soma dias a uma data "YYYY-MM-DD" sem cair em bug de fuso — cria a data
@@ -715,8 +749,8 @@ async function loadTripList() {
     card.innerHTML = `
       <div class="card-row">
         <div>
-          <div class="trip-card-title">${trip.name}</div>
-          <div class="trip-card-meta">${trip.destination || ""} · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}</div>
+          <div class="trip-card-title">${escapeHtml(trip.name)}</div>
+          <div class="trip-card-meta">${escapeHtml(trip.destination || "")} · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}</div>
         </div>
         ${myTripRole === "admin" ? `<button class="icon-btn" data-admin-gear title="Gerenciar viagem" aria-label="Gerenciar viagem" style="flex:0 0 auto;">⚙️</button>` : ""}
       </div>
@@ -781,7 +815,7 @@ function sendInviteEmail(toEmail, tripName, tripId, inviterName) {
     <div style="font-family:'Public Sans',Arial,sans-serif; max-width:480px; margin:0 auto; background:#0f1927; padding:32px 24px; border-radius:16px; color:#f4ede1;">
       <div style="font-size:13px; letter-spacing:0.08em; text-transform:uppercase; color:#d4a750; margin-bottom:6px;">Kipu</div>
       <h1 style="font-size:22px; margin:0 0 16px; color:#f4ede1;">Você foi convidado(a) pra uma viagem! 🎒</h1>
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;"><strong>${inviterName}</strong> te chamou pra <strong>"${tripName}"</strong> no Kipu — o app onde a gente organiza tudo junto: itinerário, hospedagem, documentos, mala, gastos e mais, sem precisar ficar mandando mensagem separada pra cada coisa.</p>
+      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;"><strong>${escapeHtml(inviterName)}</strong> te chamou pra <strong>"${escapeHtml(tripName)}"</strong> no Kipu — o app onde a gente organiza tudo junto: itinerário, hospedagem, documentos, mala, gastos e mais, sem precisar ficar mandando mensagem separada pra cada coisa.</p>
       <a href="${joinLink}" style="display:inline-block; background:#d4a750; color:#0f1927; font-weight:700; text-decoration:none; padding:12px 24px; border-radius:8px; margin:8px 0 20px;">Entrar na viagem →</a>
       <p style="font-size:13px; line-height:1.6; color:#a9b4c0; margin:0 0 20px;">Se o botão não funcionar, copie e cole este link no navegador:<br>${joinLink}</p>
       <p style="font-size:12px; color:#6b7684; margin:0;">Você recebeu este e-mail porque foi adicionado(a) como participante desta viagem no Kipu.</p>
@@ -921,9 +955,9 @@ function renderAgencyTripCard(trip, container) {
   card.innerHTML = `
     <div class="card-row">
       <div>
-        <div class="trip-card-title">${trip.name}</div>
+        <div class="trip-card-title">${escapeHtml(trip.name)}</div>
         <div class="trip-card-status" style="visibility:${statusBadge ? "visible" : "hidden"};">${statusBadge || "&nbsp;"}</div>
-        <div class="trip-card-meta">${trip.destination || ""} · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}</div>
+        <div class="trip-card-meta">${escapeHtml(trip.destination || "")} · ${fmtDate(trip.startDate)} – ${fmtDate(trip.endDate)}</div>
       </div>
       ${buildTripCardRight(trip, started)}
     </div>
@@ -1242,7 +1276,7 @@ function renderAdminParticipants() {
     row.className = "list-row";
     row.style.padding = "8px 0";
     row.innerHTML = `
-      <span class="card-meta" title="${email}">${nameFor(email)} ${isOriginalAdmin ? "🔒" : ""}</span>
+      <span class="card-meta" title="${escapeHtml(email)}">${escapeHtml(nameFor(email))} ${isOriginalAdmin ? "🔒" : ""}</span>
       <div style="display:flex; align-items:center; gap:6px;">
         <select data-role-select ${isOriginalAdmin ? "disabled" : ""} style="width:auto; font-size:11px; padding:5px 7px;">
           <option value="admin" data-i18n="role.admin">Admin</option>
@@ -1339,7 +1373,7 @@ function openTransferOwnerModal(currentOwnerEmail) {
     return Promise.resolve(null);
   }
   const select = $("transferOwnerSelect");
-  select.innerHTML = others.map((e) => `<option value="${e}">${nameFor(e)}</option>`).join("");
+  select.innerHTML = others.map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(nameFor(e))}</option>`).join("");
   $("transferOwnerMessage").textContent =
     `Escolha quem vai virar o novo dono principal da viagem, no lugar de ${nameFor(currentOwnerEmail)}. ` +
     `Essa pessoa passa a ser Admin (se ainda não for) e ganha a proteção de nunca poder ser removida — ` +
@@ -1617,7 +1651,7 @@ function renderParticipants(trip, editable) {
     const role = roles[email] || "colaborador";
     const canRemoveThis = editable && !isLast && !isOriginalAdmin;
     row.innerHTML = `
-      <span class="card-meta" title="${email}">${nameFor(email)} ${isOriginalAdmin ? "🔒" : ""}<span class="badge" style="margin-left:6px; font-size:9.5px; background:var(--panel-raised); color:var(--muted);">${roleLabel(role)}</span></span>
+      <span class="card-meta" title="${escapeHtml(email)}">${escapeHtml(nameFor(email))} ${isOriginalAdmin ? "🔒" : ""}<span class="badge" style="margin-left:6px; font-size:9.5px; background:var(--panel-raised); color:var(--muted);">${escapeHtml(roleLabel(role))}</span></span>
       ${canRemoveThis ? `<button class="item-del">✕</button>` : isOriginalAdmin ? `<span class="card-meta" style="font-size:10px;" title="Admin original — não pode ser removido">🔒</span>` : ""}
     `;
     if (canRemoveThis) {
@@ -1786,7 +1820,7 @@ async function geocodeDestination(rawDestination) {
 
 function renderWeatherUnavailable() {
   const hojeEl = $("hojeWeatherCard");
-  if (hojeEl) hojeEl.innerHTML = `<p class="screen-sub" style="margin-top:2px;">${t("weather.unavailable").replace("{destino}", currentTripData.destination)}</p>`;
+  if (hojeEl) hojeEl.innerHTML = `<p class="screen-sub" style="margin-top:2px;">${t("weather.unavailable").replace("{destino}", escapeHtml(currentTripData.destination))}</p>`;
   const calEl = $("calWeatherStrip");
   if (calEl) calEl.innerHTML = "";
 }
@@ -1802,7 +1836,7 @@ function renderHojeWeather() {
       <div class="weather-icon">${weatherIcon(weatherData.current.code)}</div>
       <div>
         <div class="weather-temp">${weatherData.current.temp}°C</div>
-        <div class="weather-desc" title="${weatherData.lat}, ${weatherData.lon}">${weatherLabel(weatherData.current.code)} · ${locationLabel}</div>
+        <div class="weather-desc" title="${weatherData.lat}, ${weatherData.lon}">${weatherLabel(weatherData.current.code)} · ${escapeHtml(locationLabel)}</div>
         ${todayForecast ? `<div class="weather-minmax">${t("weather.minMax").replace("{min}", todayForecast.min).replace("{max}", todayForecast.max)}</div>` : ""}
       </div>
     </div>`;
@@ -1980,14 +2014,14 @@ function renderHojeTab() {
       itItems.map((it) => {
         const hasValue = it.value && Number(it.value) > 0;
         return `
-          <div class="card" data-itin-id="${it.id}" style="padding:12px 14px; margin-bottom:8px; cursor:pointer; border-left:4px solid var(--gold);">
+          <div class="card" data-itin-id="${escapeHtml(it.id)}" style="padding:12px 14px; margin-bottom:8px; cursor:pointer; border-left:4px solid var(--gold);">
             <div class="card-row">
               <div>
-                <div class="card-title" style="font-size:14px;">${it.title}</div>
-                <div class="card-meta">${it.time ? it.time + (it.endTime ? "–" + it.endTime : "") : ""}${hasValue ? " · R$ " + Number(it.value).toFixed(2) : ""}</div>
-                ${it.location ? `<div class="card-meta">${it.location} ${mapLink(it.location)}</div>` : ""}
+                <div class="card-title" style="font-size:14px;">${escapeHtml(it.title)}</div>
+                <div class="card-meta">${it.time ? escapeHtml(it.time + (it.endTime ? "–" + it.endTime : "")) : ""}${hasValue ? " · R$ " + Number(it.value).toFixed(2) : ""}</div>
+                ${it.location ? `<div class="card-meta">${escapeHtml(it.location)} ${mapLink(it.location)}</div>` : ""}
               </div>
-              <span class="badge badge-${it.status}">${t("status." + it.status)}</span>
+              <span class="badge badge-${escapeHtml(it.status)}">${escapeHtml(t("status." + it.status))}</span>
             </div>
           </div>`;
       }).join("");
@@ -2013,8 +2047,8 @@ function renderHojeTab() {
         return `
           <div class="card" style="padding:12px 14px; margin-bottom:8px; border-left:4px solid ${accentColor};">
             <span class="card-meta" style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink);">
-              <span class="badge badge-${r.visibility}">${r.visibility === "shared" ? t("badge.group") : t("badge.onlyMe")}</span>
-              ${r.text}
+              <span class="badge badge-${escapeHtml(r.visibility)}">${r.visibility === "shared" ? t("badge.group") : t("badge.onlyMe")}</span>
+              ${escapeHtml(r.text)}
             </span>
           </div>`;
       }).join("");
@@ -2028,7 +2062,7 @@ function renderHojeTab() {
 
 function populateResponsibleSelects() {
   const emails = currentTripData.participantEmails || [];
-  const opts = emails.map((e) => `<option value="${e}">${nameFor(e)}</option>`).join("");
+  const opts = emails.map((e) => `<option value="${escapeHtml(e)}">${escapeHtml(nameFor(e))}</option>`).join("");
   ["itResponsible", "taskResponsible", "expPaidBy"].forEach((id) => {
     $(id).innerHTML = (id === "itResponsible" ? "<option value=''>—</option>" : "") + opts;
   });
@@ -2096,27 +2130,27 @@ function subscribeItinerario() {
       itinerarioByDate[it.date].push({ id: d.id, ...it });
 
       const hasValue = it.value && Number(it.value) > 0;
-      const timeRange = it.time ? `· ${it.time}${it.endTime ? "–" + it.endTime : ""}` : "";
+      const timeRange = it.time ? `· ${escapeHtml(it.time)}${it.endTime ? "–" + escapeHtml(it.endTime) : ""}` : "";
       const canEditIt = can("editCalendar");
       const card = document.createElement("div");
       card.className = "card";
       card.innerHTML = `
         <div class="card-row">
           <div>
-            <div class="card-title">${it.title}</div>
+            <div class="card-title">${escapeHtml(it.title)}</div>
             <div class="card-meta">
               ${fmtDate(it.date)} ${timeRange}
-              ${hasValue ? ` · R$ ${Number(it.value).toFixed(2)} (${it.paymentStatus || "pendente"})` : ""}
-              ${it.responsible ? ` · resp: ${nameFor(it.responsible)}` : ""}
-              ${it.location ? ` · ${it.location}` : ""}
+              ${hasValue ? ` · R$ ${Number(it.value).toFixed(2)} (${escapeHtml(it.paymentStatus || "pendente")})` : ""}
+              ${it.responsible ? ` · resp: ${escapeHtml(nameFor(it.responsible))}` : ""}
+              ${it.location ? ` · ${escapeHtml(it.location)}` : ""}
             </div>
             ${mapLink(it.location)} ${calendarLink(it)}
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             ${canEditIt ? `<button class="item-del" data-action="edit" title="Editar">✎</button>
             <button class="item-del" data-action="delete" title="Excluir" aria-label="Excluir">✕</button>
-            <button class="badge badge-${it.status}" data-action="status">${t("status." + it.status)}</button>`
-            : `<span class="badge badge-${it.status}">${t("status." + it.status)}</span>`}
+            <button class="badge badge-${escapeHtml(it.status)}" data-action="status">${escapeHtml(t("status." + it.status))}</button>`
+            : `<span class="badge badge-${escapeHtml(it.status)}">${escapeHtml(t("status." + it.status))}</span>`}
           </div>
         </div>`;
       if (canEditIt) {
@@ -2273,13 +2307,13 @@ function renderDicasList() {
     card.innerHTML = `
       <div class="card-row">
         <div>
-          <div class="card-title">${DICA_CATEGORY_ICONS[dica.category] || "📌"} ${dica.titulo}</div>
+          <div class="card-title">${DICA_CATEGORY_ICONS[dica.category] || "📌"} ${escapeHtml(dica.titulo)}</div>
           <div class="card-meta">
-            ${dicaCategoryLabel(dica.category)}
-            ${dica.indicadoPor ? ` · ${t("itinerary.dicaByLine")} ${dica.indicadoPor}` : ""}
+            ${escapeHtml(dicaCategoryLabel(dica.category))}
+            ${dica.indicadoPor ? ` · ${t("itinerary.dicaByLine")} ${escapeHtml(dica.indicadoPor)}` : ""}
           </div>
-          ${dica.nota ? `<div class="card-meta" style="margin-top:4px;">${dica.nota}</div>` : ""}
-          ${dica.local ? `<div class="card-meta">${dica.local}</div>${mapLink(dica.local)}` : ""}
+          ${dica.nota ? `<div class="card-meta" style="margin-top:4px;">${escapeHtml(dica.nota)}</div>` : ""}
+          ${dica.local ? `<div class="card-meta">${escapeHtml(dica.local)}</div>${mapLink(dica.local)}` : ""}
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
           <button class="item-del" data-action="edit" title="Editar">✎</button>
@@ -2523,14 +2557,14 @@ function subscribeEstadia() {
       card.innerHTML = `
         <div class="card-row">
           <div>
-            <div class="card-title">${s.name}</div>
-            <div class="card-meta">${fmtDate(s.checkin)} – ${fmtDate(s.checkout)} · ${s.address || ""}</div>
+            <div class="card-title">${escapeHtml(s.name)}</div>
+            <div class="card-meta">${fmtDate(s.checkin)} – ${fmtDate(s.checkout)} · ${escapeHtml(s.address || "")}</div>
             ${mapLink(s.address)}
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             ${canEditEst ? `<button class="item-del" data-action="edit" title="Editar">✎</button>
             <button class="item-del" data-action="delete" title="Excluir" aria-label="Excluir">✕</button>` : ""}
-            <span class="badge badge-${s.status === "pago" ? "confirmado" : "programado"}">${t("status." + s.status)}</span>
+            <span class="badge badge-${s.status === "pago" ? "confirmado" : "programado"}">${escapeHtml(t("status." + s.status))}</span>
           </div>
         </div>`;
       if (canEditEst) {
@@ -2730,8 +2764,8 @@ function renderDocsList() {
       const thumb = document.createElement("div");
       thumb.className = "doc-thumb";
       thumb.innerHTML = `
-        ${isImage ? `<img src="${doc_.url}" loading="lazy">` : `<span class="doc-thumb-icon">${doc_.url ? "🔗" : "📄"}</span>`}
-        <div class="doc-thumb-title">${doc_.title}</div>
+        ${isImage && safeUrl(doc_.url) ? `<img src="${escapeHtml(safeUrl(doc_.url))}" loading="lazy">` : `<span class="doc-thumb-icon">${doc_.url ? "🔗" : "📄"}</span>`}
+        <div class="doc-thumb-title">${escapeHtml(doc_.title)}</div>
         <div class="doc-thumb-actions">
           <button data-action="edit" title="Editar">✎</button>
           <button data-action="delete" title="Excluir" aria-label="Excluir">✕</button>
@@ -2763,8 +2797,9 @@ function openDocDetailModal(doc_) {
   const isImage = doc_.fileType && doc_.fileType.startsWith("image/");
   const todayISO = localISODate();
   $("docDetailTitle").textContent = doc_.title;
-  $("docDetailImageWrap").innerHTML = isImage
-    ? `<img src="${doc_.url}" style="max-width:100%; max-height:55vh; border-radius:10px;">`
+  const docSafeUrl = safeUrl(doc_.url);
+  $("docDetailImageWrap").innerHTML = isImage && docSafeUrl
+    ? `<img src="${escapeHtml(docSafeUrl)}" style="max-width:100%; max-height:55vh; border-radius:10px;">`
     : `<div style="font-size:56px;">${doc_.url ? "🔗" : "📄"}</div>`;
   $("docDetailType").textContent = docTypeLabel(doc_.docType || "outro");
   $("docDetailOwner").textContent = t("documents.uploadedBy").replace("{name}", nameFor(doc_.uploadedBy));
@@ -2777,8 +2812,8 @@ function openDocDetailModal(doc_) {
   } else {
     $("docDetailExpiry").classList.add("hidden");
   }
-  $("docDetailLinkWrap").innerHTML = doc_.url
-    ? `<a href="${doc_.url}" target="_blank" style="color:var(--gold); font-size:12.5px;">Abrir ${doc_.fileName ? doc_.fileName : "link"} ↗</a>`
+  $("docDetailLinkWrap").innerHTML = docSafeUrl
+    ? `<a href="${escapeHtml(docSafeUrl)}" target="_blank" rel="noopener" style="color:var(--gold); font-size:12.5px;">Abrir ${escapeHtml(doc_.fileName ? doc_.fileName : "link")} ↗</a>`
     : "";
   $("docDetailEditBtn").onclick = () => { $("docDetailModal").classList.add("hidden"); openDocForEdit(doc_.id, doc_); };
   $("docDetailDeleteBtn").onclick = () => { $("docDetailModal").classList.add("hidden"); deleteItem("documentos", doc_.id, doc_.title, "documentos", doc_.storagePath); };
@@ -3008,14 +3043,14 @@ function renderMalaList() {
     const row = document.createElement("div");
     row.className = "item";
     row.innerHTML = `
-      <button class="checkbox ${it.done ? "checked " + it.type : ""}">${it.done ? "✓" : ""}</button>
-      <div class="item-name ${it.done ? "done" : ""}" title="Clique duas vezes pra renomear">${it.name}</div>
+      <button class="checkbox ${it.done ? "checked " + escapeHtml(it.type) : ""}">${it.done ? "✓" : ""}</button>
+      <div class="item-name ${it.done ? "done" : ""}" title="Clique duas vezes pra renomear">${escapeHtml(it.name)}</div>
       <div class="qty-stepper">
         <button class="qty-btn" data-action="minus">−</button>
-        <span class="qty-value">${it.qty || 1}</span>
+        <span class="qty-value">${escapeHtml(it.qty || 1)}</span>
         <button class="qty-btn" data-action="plus">+</button>
       </div>
-      <span class="badge badge-${it.type}">${it.type === "shared" ? t("badge.group") : t("badge.onlyMe")}</span>
+      <span class="badge badge-${escapeHtml(it.type)}">${it.type === "shared" ? t("badge.group") : t("badge.onlyMe")}</span>
       <button class="item-del">✕</button>
     `;
     row.querySelector('[data-action="minus"]').addEventListener("click", async () => {
@@ -3182,11 +3217,11 @@ function renderGroupProgress() {
       const style = e.done
         ? `background:${color}; color:#1B2A41; border-color:${color};`
         : `background:transparent; color:${color}; border-color:${color};`;
-      return `<span class="owner-badge" style="${style}" title="${displayName}${e.done ? " ✓" : ""}">${initial}</span>`;
+      return `<span class="owner-badge" style="${style}" title="${escapeHtml(displayName)}${e.done ? " ✓" : ""}">${escapeHtml(initial)}</span>`;
     }).join("");
     return `
       <div class="list-row">
-        <span class="card-meta" style="color:var(--ink); font-weight:600;">${g.displayName}</span>
+        <span class="card-meta" style="color:var(--ink); font-weight:600;">${escapeHtml(g.displayName)}</span>
         <div style="display:flex; gap:4px; flex-wrap:wrap;">${badges}</div>
       </div>`;
   }).join("");
@@ -3208,15 +3243,15 @@ function subscribeTarefas() {
       card.innerHTML = `
         <div class="card-row">
           <div>
-            <div class="card-title">${task.description}</div>
-            <div class="card-meta">resp: ${nameFor(task.responsible)}</div>
+            <div class="card-title">${escapeHtml(task.description)}</div>
+            <div class="card-meta">resp: ${escapeHtml(nameFor(task.responsible))}</div>
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             ${canEditTask ? `<button class="item-del" data-action="edit" title="Editar">✎</button>
             <button class="item-del" data-action="delete" title="Excluir" aria-label="Excluir">✕</button>` : ""}
             ${canToggleTask
-              ? `<button class="badge badge-${task.status}" data-action="status">${t("status." + task.status)}</button>`
-              : `<span class="badge badge-${task.status}">${t("status." + task.status)}</span>`}
+              ? `<button class="badge badge-${escapeHtml(task.status)}" data-action="status">${escapeHtml(t("status." + task.status))}</button>`
+              : `<span class="badge badge-${escapeHtml(task.status)}">${escapeHtml(t("status." + task.status))}</span>`}
           </div>
         </div>`;
       if (canToggleTask) {
@@ -3360,8 +3395,8 @@ function renderExpenses() {
       const converted = currency !== "BRL" ? ` (≈ ${fmtBRL(toBRL(e.value, currency))})` : "";
       card.innerHTML = `
         <div>
-          <div class="card-title">${e.description} — ${fmtOriginal(e.value, currency)}${converted}</div>
-          <div class="card-meta">pago por ${nameFor(e.paidBy)} · dividido entre ${(e.splitAmong || []).length} pessoa(s)</div>
+          <div class="card-title">${escapeHtml(e.description)} — ${escapeHtml(fmtOriginal(e.value, currency))}${converted}</div>
+          <div class="card-meta">pago por ${escapeHtml(nameFor(e.paidBy))} · dividido entre ${(e.splitAmong || []).length} pessoa(s)</div>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
           <button class="item-del" data-action="edit" title="Editar">✎</button>
@@ -3386,7 +3421,7 @@ function renderExpenses() {
       const currency = e.currency || "BRL";
       const converted = currency !== "BRL" ? ` (≈ ${fmtBRL(toBRL(e.value, currency))})` : "";
       card.innerHTML = `
-        <div class="card-title">${e.description} — ${fmtOriginal(e.value, currency)}${converted}</div>
+        <div class="card-title">${escapeHtml(e.description)} — ${escapeHtml(fmtOriginal(e.value, currency))}${converted}</div>
         <div style="display:flex; align-items:center; gap:8px;">
           <button class="item-del" data-action="edit" title="Editar">✎</button>
           <button class="item-del" data-action="delete" title="Excluir" aria-label="Excluir">✕</button>
@@ -3415,7 +3450,7 @@ function renderBalance() {
   el.innerHTML = Object.entries(balances).map(([email, val]) => {
     const cls = val >= 0 ? "balance-positive" : "balance-negative";
     const label = val >= 0 ? "a receber" : "deve";
-    return `<div class="list-row"><span class="card-meta">${nameFor(email)}</span><span class="${cls}">${fmtBRL(Math.abs(val))} ${label}</span></div>`;
+    return `<div class="list-row"><span class="card-meta">${escapeHtml(nameFor(email))}</span><span class="${cls}">${fmtBRL(Math.abs(val))} ${label}</span></div>`;
   }).join("");
 }
 
@@ -3608,7 +3643,7 @@ function renderEmergencyList() {
     const card = document.createElement("div");
     card.className = "card card-row";
     card.innerHTML = `
-      <div><span class="card-title">${it.label}</span><br><span class="card-meta">${it.value}</span></div>
+      <div><span class="card-title">${escapeHtml(it.label)}</span><br><span class="card-meta">${escapeHtml(it.value)}</span></div>
       <div style="display:flex; align-items:center; gap:8px;">
         <button class="item-del" data-action="edit" title="Editar">✎</button>
         <button class="item-del" data-action="delete" title="Excluir" aria-label="Excluir">✕</button>
@@ -3766,7 +3801,7 @@ function subscribeHistorico() {
       const row = document.createElement("div");
       row.className = "log-entry";
       const time = log.timestamp ? log.timestamp.toDate().toLocaleString("pt-BR") : "agora";
-      row.innerHTML = `<span class="log-author">${nameFor(log.authorEmail)}</span> — ${log.action}: ${log.description} <div class="log-time">${time}</div>`;
+      row.innerHTML = `<span class="log-author">${escapeHtml(nameFor(log.authorEmail))}</span> — ${escapeHtml(log.action)}: ${escapeHtml(log.description)} <div class="log-time">${time}</div>`;
       listEl.appendChild(row);
     });
   });
@@ -3921,15 +3956,15 @@ function renderItineraryForDay(iso) {
     items.map((it) => {
       const hasValue = it.value && Number(it.value) > 0;
       return `
-        <div class="card" data-itin-id="${it.id}" style="padding:12px 14px; margin-bottom:8px; cursor:pointer; border-left:4px solid var(--gold);">
+        <div class="card" data-itin-id="${escapeHtml(it.id)}" style="padding:12px 14px; margin-bottom:8px; cursor:pointer; border-left:4px solid var(--gold);">
           <div class="card-row">
             <div>
-              <div class="card-title" style="font-size:14px;">${it.title}</div>
-              <div class="card-meta">${it.time ? it.time + (it.endTime ? "–" + it.endTime : "") : ""}${hasValue ? " · R$ " + Number(it.value).toFixed(2) : ""}</div>
-              ${it.location ? `<div class="card-meta">${it.location} ${mapLink(it.location)}</div>` : ""}
+              <div class="card-title" style="font-size:14px;">${escapeHtml(it.title)}</div>
+              <div class="card-meta">${it.time ? escapeHtml(it.time + (it.endTime ? "–" + it.endTime : "")) : ""}${hasValue ? " · R$ " + Number(it.value).toFixed(2) : ""}</div>
+              ${it.location ? `<div class="card-meta">${escapeHtml(it.location)} ${mapLink(it.location)}</div>` : ""}
               <div class="card-meta">${calendarLink(it)}</div>
             </div>
-            <span class="badge badge-${it.status}">${t("status." + it.status)}</span>
+            <span class="badge badge-${escapeHtml(it.status)}">${escapeHtml(t("status." + it.status))}</span>
           </div>
         </div>`;
     }).join("") +
@@ -3960,8 +3995,8 @@ function renderReminderEntries(iso) {
     row.innerHTML = `
       <div class="card-row">
         <span class="card-meta" style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink);">
-          <span class="badge badge-${r.visibility}">${r.visibility === "shared" ? t("badge.group") : t("badge.onlyMe")}</span>
-          ${r.text}
+          <span class="badge badge-${escapeHtml(r.visibility)}">${r.visibility === "shared" ? t("badge.group") : t("badge.onlyMe")}</span>
+          ${escapeHtml(r.text)}
         </span>
         ${canDelete ? `<button class="item-del">✕</button>` : ""}
       </div>
