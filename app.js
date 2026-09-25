@@ -68,6 +68,49 @@ function safeUrl(url) {
 // é lido como caminho aninhado (participantRoles → "maria@gmail" → "com") —
 // o papel ia parar no lugar errado e nunca valia de verdade. FieldPath trata o
 // e-mail inteiro como UMA chave só. `extra` = outros campos simples do mesmo update.
+// Falha de ação sem tratamento (QA #5, 25/set/2026): mostra um aviso na tela
+// em vez de falhar calada, e manda pro Sentry se ele estiver carregado.
+function reportActionError(message, err) {
+  console.warn(message, err);
+  try { if (window.Sentry && window.Sentry.captureException) window.Sentry.captureException(err); } catch (e) { /* ignora */ }
+  showToast(message, "error");
+}
+// Envolve uma função async pra que qualquer erro vire aviso na tela.
+function withErrorToast(fn, message) {
+  return async (...args) => {
+    try {
+      return await fn(...args);
+    } catch (err) {
+      reportActionError(message, err);
+    }
+  };
+}
+// Erro numa assinatura em tempo real (onSnapshot) — antes a aba só ficava
+// vazia, sem nenhum aviso (QA #5). Um aviso por área por sessão, pra não
+// repetir. Agência sem acesso a Mala/Tarefas/Gastos/Histórico é esperado
+// (abas escondidas pra esse papel), então nesse caso não avisa.
+const snapshotErrorShown = new Set();
+function onSnapshotError(area) {
+  return (err) => {
+    const expected = err && err.code === "permission-denied" && myRole === "agencia"
+      && ["Mala", "Tarefas", "Gastos", "Histórico"].includes(area);
+    if (expected) return;
+    console.warn(`Erro ao carregar ${area}:`, err);
+    try { if (window.Sentry && window.Sentry.captureException) window.Sentry.captureException(err); } catch (e) { /* ignora */ }
+    if (snapshotErrorShown.has(area)) return;
+    snapshotErrorShown.add(area);
+    showToast(`Não foi possível carregar ${area} agora. Atualize a página pra tentar de novo.`, "error");
+  };
+}
+// Abre uma viagem tratando erro (ex: acesso cancelado) — mesmo padrão já usado
+// nos cards de "Suas Viagens", agora também no Painel da Agência e no
+// "entrar por código" (QA #14).
+function openTripSafely(tripId) {
+  return openTrip(tripId).catch((err) => {
+    reportActionError("Não foi possível abrir essa viagem — o acesso pode ter sido cancelado ou removido. Atualize a página.", err);
+  });
+}
+
 function updateParticipantRole(tripRef, email, role, extra = {}) {
   const args = [new FieldPath("participantRoles", email), role];
   Object.entries(extra).forEach(([key, value]) => args.push(key, value));
@@ -453,7 +496,11 @@ function confirmDialog(message, okText = "Excluir") {
   });
 }
 
-async function deleteItem(subcollection, id, label, area, storagePath) {
+// QA #5: versão com aviso de erro na tela (a lógica está em deleteItemImpl).
+function deleteItem(...args) {
+  return withErrorToast(deleteItemImpl, "Não foi possível excluir. Tenta de novo em instantes.")(...args);
+}
+async function deleteItemImpl(subcollection, id, label, area, storagePath) {
   const ok = await confirmDialog(`Excluir "${label}"? Essa ação não pode ser desfeita.`);
   if (!ok) return;
   if (storagePath) {
@@ -535,10 +582,10 @@ function addDaysISO(iso, days) {
 function wireDateRange(startInput, endInput) {
   startInput.addEventListener("change", () => {
     if (!startInput.value) { endInput.removeAttribute("min"); return; }
-    const minEnd = addDaysISO(startInput.value, 1);
-    endInput.min = minEnd;
-    if (endInput.value && endInput.value <= startInput.value) {
-      endInput.value = minEnd;
+    // Fim pode ser no mesmo dia do início (viagem de 1 dia — QA #12).
+    endInput.min = startInput.value;
+    if (endInput.value && endInput.value < startInput.value) {
+      endInput.value = startInput.value;
     }
   });
 }
@@ -866,8 +913,8 @@ $("createTripBtn").addEventListener("click", async () => {
     showToast("Preencha nome, datas, ao menos um participante e o código de criação.");
     return;
   }
-  if (endDate <= startDate) {
-    showToast("A data de fim precisa ser depois da data de início.");
+  if (endDate < startDate) { // viagem de 1 dia (fim = início) é permitida — QA #12
+    showToast("A data de fim não pode ser antes da data de início.");
     return;
   }
   const participantEmails = emailsRaw.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -931,6 +978,7 @@ $("showAgencyNewTripFormBtn")?.addEventListener("click", () => {
   $("agencyNewTripForm").classList.toggle("hidden");
 });
 wireDateRange($("agencyTripStart"), $("agencyTripEnd"));
+if ($("editTripStart") && $("editTripEnd")) wireDateRange($("editTripStart"), $("editTripEnd")); // QA #8
 
 // Mantém o contador de viagens ativas coerente com a regra (QA #2, 25/set/2026):
 // só existem DUAS formas de uma viagem deixar de ocupar vaga — ela terminar
@@ -1011,7 +1059,7 @@ function renderAgencyTripCard(trip, container) {
   `;
   card.addEventListener("click", (e) => {
     if (e.target.closest("[data-cancel-trip], [data-reactivate-trip]")) return;
-    openTrip(trip.id);
+    openTripSafely(trip.id);
   });
   const cancelBtn = card.querySelector("[data-cancel-trip]");
   if (cancelBtn) {
@@ -1224,8 +1272,8 @@ $("agencyCreateTripBtn")?.addEventListener("click", async () => {
     statusEl.classList.remove("hidden");
     return;
   }
-  if (endDate <= startDate) {
-    statusEl.textContent = "A data de fim precisa ser depois da data de início.";
+  if (endDate < startDate) { // viagem de 1 dia (fim = início) é permitida — QA #12
+    statusEl.textContent = "A data de fim não pode ser antes da data de início.";
     statusEl.classList.remove("hidden");
     return;
   }
@@ -1292,7 +1340,7 @@ $("joinCodeBtn").addEventListener("click", async () => {
     const myEmail = currentUser.email.toLowerCase();
     if ((tripData.participantEmails || []).map((e) => e.toLowerCase()).includes(myEmail)) {
       statusEl.textContent = `Você já faz parte de "${tripData.name}" — abrindo...`;
-      openTrip(tripData.id);
+      openTripSafely(tripData.id);
       return;
     }
     if ((tripData.blockedEmails || []).map((e) => e.toLowerCase()).includes(myEmail)) {
@@ -1306,7 +1354,7 @@ $("joinCodeBtn").addEventListener("click", async () => {
       participantEmails: arrayUnion(myEmail)
     });
     $("joinCodeInput").value = "";
-    openTrip(tripData.id);
+    openTripSafely(tripData.id);
   } catch (err) {
     statusEl.textContent = "Não foi possível entrar. Confira o código e tente de novo.";
     console.error("Erro ao entrar com código:", err);
@@ -1389,7 +1437,11 @@ function applyLanguageToElement(el) {
   el.querySelectorAll("[data-i18n]").forEach((opt) => { opt.textContent = t(opt.getAttribute("data-i18n")); });
 }
 
-async function onAdminRoleChange(email, newRole, selectEl) {
+// QA #5: versão com aviso de erro na tela (a lógica está em onAdminRoleChangeImpl).
+function onAdminRoleChange(...args) {
+  return withErrorToast(onAdminRoleChangeImpl, "Não foi possível mudar o papel. Atualize a página e tente de novo.")(...args);
+}
+async function onAdminRoleChangeImpl(email, newRole, selectEl) {
   if (newRole === "admin") {
     const ok = await new Promise((resolve) => {
       $("promoteConfirmMessage").textContent = `Tem certeza? Isso dá a ${nameFor(email)} o mesmo poder que você tem, incluindo excluir a viagem e resetar dados.`;
@@ -1426,7 +1478,11 @@ async function onAdminRoleChange(email, newRole, selectEl) {
   }
 }
 
-async function onAdminRemoveParticipant(email) {
+// QA #5: versão com aviso de erro na tela (a lógica está em onAdminRemoveParticipantImpl).
+function onAdminRemoveParticipant(...args) {
+  return withErrorToast(onAdminRemoveParticipantImpl, "Não foi possível remover o participante. Atualize a página e tente de novo.")(...args);
+}
+async function onAdminRemoveParticipantImpl(email) {
   const ok = await confirmDialog(`Remover ${email} da viagem?`);
   if (!ok) return;
   const updated = adminPanelTripData.participantEmails.filter((e) => e !== email);
@@ -1479,7 +1535,11 @@ function openTransferOwnerModal(currentOwnerEmail) {
   });
 }
 
-async function onAdminTransferOwnership(currentOwnerEmail) {
+// QA #5: versão com aviso de erro na tela (a lógica está em onAdminTransferOwnershipImpl).
+function onAdminTransferOwnership(...args) {
+  return withErrorToast(onAdminTransferOwnershipImpl, "Não foi possível transferir a titularidade. Atualize a página e tente de novo.")(...args);
+}
+async function onAdminTransferOwnershipImpl(currentOwnerEmail) {
   const newOwnerEmail = await openTransferOwnerModal(currentOwnerEmail);
   if (!newOwnerEmail) return;
 
@@ -1672,8 +1732,14 @@ $("saveTripEditBtn").addEventListener("click", async () => {
   const startDate = $("editTripStart").value;
   const endDate = $("editTripEnd").value;
   if (!name || !startDate || !endDate) { showToast("Preencha nome e as duas datas."); return; }
+  if (endDate < startDate) { showToast("A data de fim não pode ser antes da data de início."); return; } // QA #8
   const destinationChanged = destination !== currentTripData.destination;
-  await updateDoc(doc(db, "trips", currentTripId), { name, destination, startDate, endDate });
+  try {
+    await updateDoc(doc(db, "trips", currentTripId), { name, destination, startDate, endDate });
+  } catch (err) {
+    reportActionError("Não foi possível salvar a viagem. Tenta de novo em instantes.", err);
+    return;
+  }
   currentTripData = { ...currentTripData, name, destination, startDate, endDate };
   logActivity("geral", "viagem editada", `${name} (${startDate} – ${endDate})`);
   $("currentTripTitle").textContent = name;
@@ -1747,7 +1813,11 @@ function renderParticipants(trip, editable) {
   });
 }
 
-async function removeParticipant(email) {
+// QA #5: versão com aviso de erro na tela (a lógica está em removeParticipantImpl).
+function removeParticipant(...args) {
+  return withErrorToast(removeParticipantImpl, "Não foi possível remover o participante. Atualize a página e tente de novo.")(...args);
+}
+async function removeParticipantImpl(email) {
   if (email === currentTripData.createdBy) {
     await confirmDialog("O Admin original não pode ser removido da viagem. Só excluindo a viagem inteira.", "Entendi");
     return;
@@ -1979,10 +2049,13 @@ function feedbackDismissedKey() { return `kipu_feedback_dismissed_${currentTripI
 function maybeShowFeedbackPopup() {
   if (!currentTripData || !currentTripData.endDate || !currentTripId) return;
   if (!$("feedbackModal").classList.contains("hidden")) return; // já aberto, não reabre por cima
-  const penultimateDay = dayBefore(currentTripData.endDate);
-  if (localISODate() !== penultimateDay) return;
+  // Viagem de 1 dia (QA #12): o "penúltimo dia" seria a véspera, antes do
+  // passeio acontecer — então pergunta no próprio dia, só na janela da noite.
+  const oneDayTrip = currentTripData.startDate === currentTripData.endDate;
+  const feedbackDay = oneDayTrip ? currentTripData.endDate : dayBefore(currentTripData.endDate);
+  if (localISODate() !== feedbackDay) return;
   const hour = new Date().getHours(); // hora local de quem está usando
-  if (hour < 12) return; // antes da primeira janela, nem checa o resto
+  if (hour < (oneDayTrip ? 20 : 12)) return; // antes da primeira janela, nem checa o resto
   const windowName = hour >= 20 ? "evening" : "noon";
   if (localStorage.getItem(feedbackDoneKey())) return;
   if (localStorage.getItem(feedbackDismissedKey()) === windowName) return;
@@ -2249,11 +2322,15 @@ function subscribeItinerario() {
     renderCalendar();
     if (selectedCalDate) renderItineraryForDay(selectedCalDate);
     renderHojeTab();
-  });
+  }, onSnapshotError("Itinerário"));
   unsubscribers.push(unsub);
 }
 const statusCycle = { programado: "confirmado", confirmado: "programado" };
-async function cycleItinerarioStatus(id, current, title) {
+// QA #5: versão com aviso de erro na tela (a lógica está em cycleItinerarioStatusImpl).
+function cycleItinerarioStatus(...args) {
+  return withErrorToast(cycleItinerarioStatusImpl, "Não foi possível mudar o status. Tenta de novo em instantes.")(...args);
+}
+async function cycleItinerarioStatusImpl(id, current, title) {
   const next = statusCycle[current] || "programado";
   await updateDoc(doc(db, "trips", currentTripId, "itinerario", id), { status: next });
   logActivity("itinerario", "status alterado", `"${title}": ${current} → ${next}`);
@@ -2356,7 +2433,7 @@ function subscribeDicas() {
     snap.forEach((d) => dicasCache.push({ id: d.id, ...d.data() }));
     renderDicaFilters();
     renderDicasList();
-  });
+  }, onSnapshotError("Dicas"));
   unsubscribers.push(unsub);
 }
 
@@ -2659,7 +2736,7 @@ function subscribeEstadia() {
       }
       listEl.appendChild(card);
     });
-  });
+  }, onSnapshotError("Estadia"));
   unsubscribers.push(unsub);
 }
 
@@ -2782,7 +2859,11 @@ function populateDocFilterPerson() {
 
 // Cria uma categoria nova pra essa viagem (compartilhada com todo mundo) a
 // partir do que a pessoa digitou no campo inline do formulário.
-async function confirmNewDocType() {
+// QA #5: versão com aviso de erro na tela (a lógica está em confirmNewDocTypeImpl).
+function confirmNewDocType(...args) {
+  return withErrorToast(confirmNewDocTypeImpl, "Não foi possível criar a categoria. Tenta de novo em instantes.")(...args);
+}
+async function confirmNewDocTypeImpl() {
   const input = $("docNewTypeInput");
   const label = input.value.trim();
   if (!label) return;
@@ -2930,7 +3011,7 @@ function subscribeDocumentos() {
 
     docsCache = visibleDocs.filter(agencyOwnershipVisible);
     renderDocsList();
-  });
+  }, onSnapshotError("Documentos"));
   unsubscribers.push(unsub);
 }
 $("docFilterType")?.addEventListener("change", renderDocsList);
@@ -3104,7 +3185,7 @@ function subscribeMala() {
     snap.forEach((d) => malaItemsCache.push({ id: d.id, ...d.data() }));
     renderMalaList();
     updateDefaultToggleState();
-  });
+  }, onSnapshotError("Mala"));
   unsubscribers.push(unsub);
 
   const q2 = collection(db, "trips", currentTripId, "mala");
@@ -3115,7 +3196,7 @@ function subscribeMala() {
       if (it.type === "shared") allSharedItemsCache.push(it);
     });
     renderGroupProgress();
-  });
+  }, onSnapshotError("Mala"));
   unsubscribers.push(unsub2);
 }
 function renderMalaList() {
@@ -3239,7 +3320,11 @@ function updateDefaultToggleState() {
   sharedBtn.textContent = hasSharedDefaults ? "✓ " + t("packing.activatedShared") : t("packing.activateShared");
 }
 
-async function toggleDefaultList(kind) {
+// QA #5: versão com aviso de erro na tela (a lógica está em toggleDefaultListImpl).
+function toggleDefaultList(...args) {
+  return withErrorToast(toggleDefaultListImpl, "Não foi possível atualizar a lista padrão. Tenta de novo em instantes.")(...args);
+}
+async function toggleDefaultListImpl(kind) {
   // kind: "personal" ou "shared" — cada botão mexe só na própria categoria,
   // em vez de ativar as duas abas de uma vez (era a fonte de confusão antiga).
   const feedbackEl = $("defaultListFeedback");
@@ -3353,7 +3438,7 @@ function subscribeTarefas() {
       }
       listEl.appendChild(card);
     });
-  });
+  }, onSnapshotError("Tarefas"));
   unsubscribers.push(unsub);
 }
 
@@ -3462,7 +3547,7 @@ function subscribeGastos() {
     snap.forEach((d) => expensesCache.push({ id: d.id, ...d.data() }));
     renderExpenses();
     renderBalance();
-  });
+  }, onSnapshotError("Gastos"));
   unsubscribers.push(unsub);
 }
 
@@ -3664,6 +3749,7 @@ $("saveExpenseBtn").addEventListener("click", async () => {
   const value = parseFloat($("expValue").value);
   const currency = $("expCurrency").value;
   if (!description || !value) { showToast("Preencha descrição e valor."); return; }
+  if (!(value > 0)) { showToast("O valor precisa ser maior que zero."); return; } // QA #13
 
   let payload = { description, value, currency, type: expTypeSeg };
   if (expTypeSeg === "shared") {
@@ -3676,7 +3762,18 @@ $("saveExpenseBtn").addEventListener("click", async () => {
   }
 
   if (editingExpenseId) {
-    await updateDoc(doc(db, "trips", currentTripId, "gastos", editingExpenseId), payload);
+    // QA #13: ao trocar o tipo, apaga os campos do tipo anterior — senão um
+    // gasto que virou "do grupo" continuava com dono (e o "Remover meus
+    // dados" de quem criou apagaria um gasto do grupo inteiro).
+    const editPayload = expTypeSeg === "shared"
+      ? { ...payload, ownerEmail: deleteField() }
+      : { ...payload, paidBy: deleteField(), splitAmong: deleteField() };
+    try {
+      await updateDoc(doc(db, "trips", currentTripId, "gastos", editingExpenseId), editPayload);
+    } catch (err) {
+      reportActionError("Não foi possível salvar o gasto. Tenta de novo em instantes.", err);
+      return;
+    }
     logActivity("gastos", "gasto editado", `${description} — ${fmtOriginal(value, currency)}`);
   } else {
     setButtonLoading($("saveExpenseBtn"), true);
@@ -3760,7 +3857,7 @@ function subscribeEmergencia() {
       emergItemsCache.push({ id: d.id, ...it });
     });
     renderEmergencyList();
-  });
+  }, onSnapshotError("Emergência"));
   unsubscribers.push(unsub);
 }
 
@@ -3912,7 +4009,7 @@ function subscribeHistorico() {
       row.innerHTML = `<span class="log-author">${escapeHtml(nameFor(log.authorEmail))}</span> — ${escapeHtml(log.action)}: ${escapeHtml(log.description)} <div class="log-time">${time}</div>`;
       listEl.appendChild(row);
     });
-  });
+  }, onSnapshotError("Histórico"));
   unsubscribers.push(unsub);
 }
 
@@ -3986,7 +4083,7 @@ function subscribeReminders() {
     renderCalendar();
     if (selectedCalDate) renderReminderEntries(selectedCalDate);
     renderHojeTab();
-  });
+  }, onSnapshotError("Lembretes"));
   unsubscribers.push(unsub);
 }
 
