@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot,
-  query, where, orderBy, serverTimestamp, getDocs, getDocsFromServer, getDoc, arrayUnion, increment, runTransaction
+  query, where, orderBy, serverTimestamp, getDocs, getDocsFromServer, getDoc, arrayUnion, increment, runTransaction, FieldPath, arrayRemove, deleteField
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   ref, uploadBytes, getDownloadURL, deleteObject
@@ -61,6 +61,17 @@ function safeUrl(url) {
   } catch (err) {
     return "";
   }
+}
+
+// Grava o papel de UM participante (QA #15, 25/set/2026). E-mail tem ponto
+// ("maria@gmail.com"), e no updateDoc um texto como "participantRoles.maria@gmail.com"
+// é lido como caminho aninhado (participantRoles → "maria@gmail" → "com") —
+// o papel ia parar no lugar errado e nunca valia de verdade. FieldPath trata o
+// e-mail inteiro como UMA chave só. `extra` = outros campos simples do mesmo update.
+function updateParticipantRole(tripRef, email, role, extra = {}) {
+  const args = [new FieldPath("participantRoles", email), role];
+  Object.entries(extra).forEach(([key, value]) => args.push(key, value));
+  return updateDoc(tripRef, ...args);
 }
 
 // ================= PERMISSÕES (papéis) =================
@@ -724,6 +735,11 @@ async function getDocsFreshFirst(q) {
   try {
     return await getDocsFromServer(q);
   } catch (err) {
+    // QA (25/set/2026): antes, QUALQUER erro caía pro cache — inclusive
+    // "acesso negado", o que escondia problema de regra atrás de dado velho.
+    // Agora só usa o cache quando é mesmo falta de conexão.
+    const offline = err && (err.code === "unavailable" || (typeof navigator !== "undefined" && navigator.onLine === false));
+    if (!offline) throw err;
     console.warn("Sem conexão com o servidor agora, usando cache local:", err);
     return await getDocs(q);
   }
@@ -733,13 +749,24 @@ async function loadTripList() {
   const listEl = $("tripList");
   listEl.innerHTML = "<div class='empty'>Carregando...</div>";
   const q = query(collection(db, "trips"), where("participantEmails", "array-contains", currentUser.email));
-  const snap = await getDocsFreshFirst(q);
-  if (snap.empty) {
+  let snap;
+  try {
+    snap = await getDocsFreshFirst(q);
+  } catch (err) {
+    console.warn("Não foi possível carregar a lista de viagens:", err);
+    listEl.innerHTML = "<div class='empty'>Não foi possível carregar suas viagens agora. Atualize a página pra tentar de novo.</div>";
+    return;
+  }
+  // QA #3 / bug 8.17 (25/set/2026): viagem cancelada pela agência não
+  // aparece mais na lista de quem não é da agência (o acesso já era negado
+  // pela regra — só o card continuava aparecendo).
+  const visibleDocs = snap.docs.filter((d) => d.data().agencyCancelled !== true);
+  if (visibleDocs.length === 0) {
     listEl.innerHTML = `<div class='empty'>${t("empty.noTrips")}</div>`;
     return;
   }
   listEl.innerHTML = "";
-  snap.forEach((d) => {
+  visibleDocs.forEach((d) => {
     const trip = d.data();
     const claimedRole = (trip.participantRoles || {})[currentUser.email] || (trip.participantRoles ? "colaborador" : "admin");
     const isRealAdmin = !trip.participantRoles || (trip.adminEmails || []).includes(currentUser.email);
@@ -1267,9 +1294,8 @@ $("joinCodeBtn").addEventListener("click", async () => {
 
     statusEl.textContent = `Encontrado: "${tripData.name}". Entrando...`;
     const joinRole = tripData.defaultJoinRole || "colaborador";
-    await updateDoc(doc(db, "trips", tripData.id), {
-      participantEmails: arrayUnion(myEmail),
-      [`participantRoles.${myEmail}`]: joinRole
+    await updateParticipantRole(doc(db, "trips", tripData.id), myEmail, joinRole, {
+      participantEmails: arrayUnion(myEmail)
     });
     $("joinCodeInput").value = "";
     openTrip(tripData.id);
@@ -1373,7 +1399,7 @@ async function onAdminRoleChange(email, newRole, selectEl) {
     if (!ok) { selectEl.value = adminPanelTripData.participantRoles[email] || "colaborador"; return; }
   }
   adminPanelTripData.participantRoles[email] = newRole;
-  const patch = { [`participantRoles.${email}`]: newRole };
+  const patch = {};
   const currentAdmins = adminPanelTripData.adminEmails || [];
   if (newRole === "admin" && !currentAdmins.includes(email)) {
     adminPanelTripData.adminEmails = [...currentAdmins, email];
@@ -1382,7 +1408,7 @@ async function onAdminRoleChange(email, newRole, selectEl) {
     adminPanelTripData.adminEmails = currentAdmins.filter((e) => e !== email);
     patch.adminEmails = adminPanelTripData.adminEmails;
   }
-  await updateDoc(doc(db, "trips", adminPanelTripId), patch);
+  await updateParticipantRole(doc(db, "trips", adminPanelTripId), email, newRole, patch);
   logActivity("geral", "papel alterado", `${email} → ${roleLabel(newRole)}`);
   if (adminPanelTripId === currentTripId) {
     currentTripData.participantRoles = adminPanelTripData.participantRoles;
@@ -1449,12 +1475,12 @@ async function onAdminTransferOwnership(currentOwnerEmail) {
   const newOwnerEmail = await openTransferOwnerModal(currentOwnerEmail);
   if (!newOwnerEmail) return;
 
-  const patch = { createdBy: newOwnerEmail, [`participantRoles.${newOwnerEmail}`]: "admin" };
+  const patch = { createdBy: newOwnerEmail };
   const currentAdmins = adminPanelTripData.adminEmails || [];
   const alreadyAdmin = currentAdmins.includes(newOwnerEmail);
   if (!alreadyAdmin) patch.adminEmails = arrayUnion(newOwnerEmail);
 
-  await updateDoc(doc(db, "trips", adminPanelTripId), patch);
+  await updateParticipantRole(doc(db, "trips", adminPanelTripId), newOwnerEmail, "admin", patch);
 
   adminPanelTripData.createdBy = newOwnerEmail;
   adminPanelTripData.participantRoles[newOwnerEmail] = "admin";
@@ -1548,7 +1574,7 @@ async function openTrip(tripId) {
   // cobre cada data (pode ser esta ou outra, ex: Peru dia 4-12, Miami dia 22-26)
   const allSnap = await getDocs(query(collection(db, "trips"), where("participantEmails", "array-contains", currentUser.email)));
   allUserTrips = [];
-  allSnap.forEach((d) => allUserTrips.push({ id: d.id, ...d.data() }));
+  allSnap.forEach((d) => { if (d.data().agencyCancelled !== true) allUserTrips.push({ id: d.id, ...d.data() }); }); // canceladas ficam fora do calendário também (QA #3)
 
   await loadParticipantNames(currentTripData.participantEmails);
 
@@ -3805,38 +3831,60 @@ async function eraseMyData() {
   );
   if (!ok) return;
 
-  // Log primeiro, enquanto o usuário ainda é participante (senão a regra de
-  // segurança bloqueia a escrita no activityLog depois que ele sair da lista).
-  await logActivity("geral", "solicitação de exclusão de dados pelo titular", email);
+  // QA #7 (25/set/2026): tudo dentro de try/catch — antes, se qualquer passo
+  // falhasse (ex: a regra não deixava Convidado sair da viagem), os dados
+  // eram apagados mas a pessoa continuava na viagem, sem nenhum aviso.
+  const btn = $("eraseMyDataBtn");
+  if (btn) setButtonLoading(btn, true);
+  try {
+    // Log primeiro, enquanto o usuário ainda é participante (senão a regra de
+    // segurança bloqueia a escrita no activityLog depois que ele sair da lista).
+    await logActivity("geral", "solicitação de exclusão de dados pelo titular", email);
 
-  // Apaga, em paralelo, tudo que é claramente dado pessoal do próprio usuário.
-  const deleteWhereOwner = async (subcollection, field) => {
-    const q = query(collection(db, "trips", currentTripId, subcollection), where(field, "==", email));
-    const snap = await getDocs(q);
-    await Promise.all(snap.docs.map(async (d) => {
-      const data = d.data();
-      if (data.storagePath) {
-        await deleteObject(ref(storage, data.storagePath)).catch(() => {});
-      }
-      await deleteDoc(doc(db, "trips", currentTripId, subcollection, d.id));
-    }));
-  };
-  await Promise.all([
-    deleteWhereOwner("mala", "ownerEmail"),
-    deleteWhereOwner("gastos", "ownerEmail"),   // só gastos pessoais têm ownerEmail
-    deleteWhereOwner("documentos", "uploadedBy"),
-    deleteWhereOwner("emergencia", "createdBy")
-  ]);
+    // Apaga, em paralelo, tudo que é claramente dado pessoal do próprio usuário.
+    // Agência não tem Mala/Gastos, e só enxerga Documentos/Emergência que ela
+    // mesma criou — a consulta precisa dizer isso, senão o Firestore recusa.
+    const isAgencyRole = myRole === "agencia";
+    const deleteWhereOwner = async (subcollection, field) => {
+      const filters = [where(field, "==", email)];
+      if (isAgencyRole) filters.push(where("createdByRole", "==", "agencia"));
+      const q = query(collection(db, "trips", currentTripId, subcollection), ...filters);
+      const snap = await getDocs(q);
+      await Promise.all(snap.docs.map(async (d) => {
+        const data = d.data();
+        if (data.storagePath) {
+          await deleteObject(ref(storage, data.storagePath)).catch(() => {});
+        }
+        await deleteDoc(doc(db, "trips", currentTripId, subcollection, d.id));
+      }));
+    };
+    const jobs = [
+      deleteWhereOwner("documentos", "uploadedBy"),
+      deleteWhereOwner("emergencia", "createdBy")
+    ];
+    if (!isAgencyRole) {
+      jobs.push(deleteWhereOwner("mala", "ownerEmail"));
+      jobs.push(deleteWhereOwner("gastos", "ownerEmail")); // só gastos pessoais têm ownerEmail
+    }
+    await Promise.all(jobs);
 
-  // Remove o próprio e-mail da viagem (mesma lógica de removeParticipant, auto-aplicada).
-  const updatedEmails = (currentTripData.participantEmails || []).filter((e) => e !== email);
-  const updatedRoles = { ...(currentTripData.participantRoles || {}) };
-  delete updatedRoles[email];
-  const updatedAdmins = (currentTripData.adminEmails || []).filter((e) => e !== email);
-  await updateDoc(doc(db, "trips", currentTripId), {
-    participantEmails: updatedEmails, participantRoles: updatedRoles, adminEmails: updatedAdmins
-  });
-
+    // Sai da viagem: remove SÓ o próprio e-mail (arrayRemove/deleteField, em
+    // vez de regravar as listas inteiras — assim não apaga sem querer alguém
+    // que tenha entrado enquanto a tela estava aberta). A regra isSelfLeave
+    // do firestore.rules aceita exatamente esse formato, pra qualquer papel.
+    await updateDoc(doc(db, "trips", currentTripId),
+      "participantEmails", arrayRemove(email),
+      new FieldPath("participantRoles", email), deleteField(),
+      "adminEmails", arrayRemove(email)
+    );
+  } catch (err) {
+    console.warn("Não foi possível concluir a remoção dos dados:", err);
+    showToast("Não foi possível concluir a remoção dos seus dados. Parte deles pode já ter sido apagada — tente de novo em instantes; se continuar, fale com o Admin da viagem.", "error");
+    if (btn) setButtonLoading(btn, false);
+    return;
+  }
+  if (btn) setButtonLoading(btn, false);
+  showToast("Pronto — você saiu da viagem e seus dados pessoais foram apagados.", "info");
   goToTripPicker();
 }
 $("eraseMyDataBtn")?.addEventListener("click", eraseMyData);
