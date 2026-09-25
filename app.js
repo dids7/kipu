@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot,
-  query, where, orderBy, serverTimestamp, getDocs, getDocsFromServer, getDoc, arrayUnion, increment, runTransaction, FieldPath, arrayRemove, deleteField
+  query, where, orderBy, serverTimestamp, getDocs, getDocsFromServer, getDoc, arrayUnion, increment, runTransaction, FieldPath, arrayRemove, deleteField, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   ref, uploadBytes, getDownloadURL, deleteObject
@@ -962,7 +962,7 @@ async function syncAgencyTripCounters(agencyId, trips) {
         const freshShould = !data.agencyCancelled && !freshEnded;
         if (!!data.countsTowardLimit === freshShould) return false; // outra sessão já ajustou
         tx.update(tripRef, { countsTowardLimit: freshShould });
-        tx.update(doc(db, "agencies", agencyId), { activeTripsCount: increment(freshShould ? 1 : -1) });
+        tx.update(doc(db, "agencies", agencyId), { activeTripsCount: increment(freshShould ? 1 : -1), lastCounterTripId: trip.id });
         return true;
       });
       if (changed) {
@@ -1030,7 +1030,7 @@ function renderAgencyTripCard(trip, container) {
           if (data.agencyCancelled) return false; // já cancelada por outra sessão
           const wasCounting = !!data.countsTowardLimit;
           tx.update(tripRef, wasCounting ? { agencyCancelled: true, countsTowardLimit: false } : { agencyCancelled: true });
-          if (wasCounting) tx.update(doc(db, "agencies", agencyId), { activeTripsCount: increment(-1) });
+          if (wasCounting) tx.update(doc(db, "agencies", agencyId), { activeTripsCount: increment(-1), lastCounterTripId: trip.id });
           return wasCounting;
         });
         if (freed) currentAgency.activeTripsCount = Math.max(0, (currentAgency.activeTripsCount || 0) - 1);
@@ -1077,7 +1077,7 @@ function renderAgencyTripCard(trip, container) {
           const activeNow = freshAgency.data().activeTripsCount || 0;
           if (plan.maxActiveTrips !== Infinity && activeNow >= plan.maxActiveTrips) return "no-slot";
           tx.update(tripRef, { agencyCancelled: false, countsTowardLimit: true });
-          tx.update(agencyRef, { activeTripsCount: increment(1) });
+          tx.update(agencyRef, { activeTripsCount: increment(1), lastCounterTripId: trip.id });
           return "ok-counted";
         });
         if (result === "no-slot") {
@@ -1235,7 +1235,13 @@ $("agencyCreateTripBtn")?.addEventListener("click", async () => {
   const participantRoles = { [clientEmail]: "admin", [myEmail]: "agencia" };
   setButtonLoading($("agencyCreateTripBtn"), true);
   try {
-    const docRef = await addDoc(collection(db, "trips"), {
+    // QA Rodada C (25/set/2026): viagem + contador gravados JUNTOS numa
+    // operação só (writeBatch) — ou grava tudo, ou nada. O ID da viagem é
+    // gerado antes, pra agência poder "assinar" no contador qual viagem
+    // causou o +1 (lastCounterTripId) — a regra do Firestore confere isso.
+    const docRef = doc(collection(db, "trips"));
+    const batch = writeBatch(db);
+    batch.set(docRef, {
       name, destination, startDate, endDate,
       participantEmails,
       participantRoles,
@@ -1248,10 +1254,12 @@ $("agencyCreateTripBtn")?.addEventListener("click", async () => {
       countsTowardLimit: true,
       agencyCancelled: false
     });
-    await updateDoc(doc(db, "agencies", agencyId), {
+    batch.update(doc(db, "agencies", agencyId), {
       activeTripsCount: increment(1),
-      totalTripsCreated: increment(1)
+      totalTripsCreated: increment(1),
+      lastCounterTripId: docRef.id
     });
+    await batch.commit();
     // Total histórico geral (Painel Master, Fase 5) — melhor esforço, não
     // trava a criação da viagem se o doc stats/global ainda não existir.
     updateDoc(doc(db, "stats", "global"), { totalTripsAllTime: increment(1) }).catch(() => {});
