@@ -1,0 +1,418 @@
+rules_version = '2';
+
+// =====================================================================
+// Kipu — Regras de segurança do Firestore
+// ---------------------------------------------------------------------
+// FONTE OFICIAL: este arquivo no GitHub (dids7/kipu). Toda mudança de
+// regra: 1) edita aqui no GitHub, 2) cola o arquivo INTEIRO no Firebase
+// Console (Firestore → Regras) e publica. Nunca colar uma cópia antiga.
+//
+// Este arquivo é PÚBLICO e não pode conter nenhum segredo. O código de
+// criação de viagem pessoal mora no documento config/creation (campo
+// "code"), que ninguém consegue ler nem gravar pelo app — só pelo Console.
+// (ARQ-2, 26/set/2026)
+// =====================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /trips/{tripId} {
+
+      function parentTrip() {
+        return get(/databases/$(database)/documents/trips/$(tripId)).data;
+      }
+      // ---- Agência (Fase 2, 18/set/2026) ----
+      // Membro de agência tem acesso a TODA viagem daquela agência, não só
+      // a que ele mesmo criou — outro funcionário da mesma agência precisa
+      // ver/gerenciar as viagens dos colegas no Painel também.
+      function isAgencyMemberOfTrip(tripData) {
+        return tripData.get("agencyId", "") != "" &&
+          request.auth.token.email in get(/databases/$(database)/documents/agencies/$(tripData.agencyId)).data.get("memberEmails", []);
+      }
+      // Viagem cancelada pela agência — trava de acesso: se a agência
+      // cancelou (antes da viagem começar), ninguém além de quem é membro
+      // daquela agência continua vendo os dados.
+      function agencyCancelled(tripData) {
+        return tripData.get("agencyCancelled", false) == true;
+      }
+      function tripAccessible(tripData) {
+        return !agencyCancelled(tripData) || isAgencyMemberOfTrip(tripData);
+      }
+      // Papel "de exibição" (usado pra decidir o que cada aba mostra).
+      // participantRoles tem prioridade; se o e-mail não está lá mas é
+      // membro da agência dona da viagem, também conta como "agencia".
+      // ATENÇÃO: o "colaborador" do final é só o padrão de quem JÁ É
+      // participante mas não tem papel gravado (viagens antigas). Quem não
+      // é participante também cai aqui — por isso toda regra que usa
+      // roleFrom() pra dar poder de edição TAMBÉM precisa checar
+      // participação (ver QA #15b, 25/set/2026).
+      function roleFrom(tripData) {
+        return !("participantRoles" in tripData)
+          ? "admin"
+          : (request.auth.token.email in tripData.participantRoles
+              ? tripData.participantRoles[request.auth.token.email]
+              : (isAgencyMemberOfTrip(tripData) ? "agencia" : "colaborador"));
+      }
+      // Admin "de verdade" — precisa estar no campo travado adminEmails,
+      // não só o mapa de exibição (que Colaborador também edita).
+      // QA (25/set/2026): em viagem antiga (sem participantRoles), antes
+      // isso devolvia "true" pra QUALQUER pessoa logada — agora só pra
+      // quem é participante daquela viagem.
+      function isRealAdmin(tripData) {
+        return !("participantRoles" in tripData)
+          ? request.auth.token.email in tripData.get("participantEmails", [])
+          : (request.auth.token.email in tripData.get("adminEmails", []));
+      }
+      function roleIn() {
+        return roleFrom(parentTrip());
+      }
+      function amRealAdmin() {
+        return isRealAdmin(parentTrip());
+      }
+      function isParticipant() {
+        return (request.auth.token.email in parentTrip().participantEmails || isAgencyMemberOfTrip(parentTrip()))
+          && tripAccessible(parentTrip());
+      }
+      // ---- Limite de plano (Fase 3, 18/set/2026) ----
+      // Espelha AGENCY_PLANS do app.js — se o limite de algum plano mudar,
+      // atualizar os dois lugares juntos.
+      function agencyMaxActiveTrips(planId) {
+        return planId == "chaski" ? 8
+          : planId == "inti" ? 16
+          : 999999; // "kipuca" (ilimitado) ou planId desconhecido
+      }
+      // QA #16 (25/set/2026): além de ter vaga, quem cria a viagem de
+      // agência precisa ser MEMBRO daquela agência.
+      function agencyAllowsNewTrip(agencyId) {
+        let ag = get(/databases/$(database)/documents/agencies/$(agencyId)).data;
+        return request.auth.token.email in ag.get("memberEmails", [])
+          && ag.get("activeTripsCount", 0) < agencyMaxActiveTrips(ag.get("planId", "chaski"));
+      }
+
+      // ---- Contador de viagens ativas amarrado à viagem (QA Rodada C, 25/set/2026) ----
+      // "Hoje" no fuso UTC, no mesmo formato das datas da viagem (AAAA-MM-DD).
+      // Regra só conhece UTC: no Brasil, depois das 21h, já é "amanhã" aqui
+      // — margem aceita (ver documentação 8.18, Rodada C).
+      function todayUTC() {
+        let y = request.time.year();
+        let m = request.time.month();
+        let d = request.time.day();
+        return string(y) + "-" + (m < 10 ? "0" : "") + string(m) + "-" + (d < 10 ? "0" : "") + string(d);
+      }
+      // O contador da agência mudou em exatamente `delta` NESTA mesma
+      // operação, "assinado" com o ID desta viagem.
+      function counterMovedWith(agencyId, delta) {
+        let path = /databases/$(database)/documents/agencies/$(agencyId);
+        return getAfter(path).data.get("activeTripsCount", 0) == get(path).data.get("activeTripsCount", 0) + delta
+          && getAfter(path).data.get("lastCounterTripId", "") == tripId;
+      }
+      function agencyHasRoom(agencyId) {
+        let ag = get(/databases/$(database)/documents/agencies/$(agencyId)).data;
+        return ag.get("activeTripsCount", 0) < agencyMaxActiveTrips(ag.get("planId", "chaski"));
+      }
+      // O que o Painel da Agência pode mudar numa viagem (só contador e
+      // cancelamento), e em que condições:
+      // - cancelar: só antes da data de início;
+      // - reativar: volta contando (com vaga no plano) ou, se já terminou, sem contar;
+      // - viagem cancelada nunca conta;
+      // - deixar de contar: só cancelando ou com a viagem já encerrada;
+      // - passar a contar: só viagem que ainda não terminou;
+      // - sempre que "conta no limite" muda, o contador da agência muda junto.
+      function agencyTripChangeOk() {
+        let before = resource.data;
+        let after = request.resource.data;
+        let today = todayUTC();
+        let countsBefore = before.get("countsTowardLimit", false) == true;
+        let countsAfter = after.get("countsTowardLimit", false) == true;
+        let cancBefore = before.get("agencyCancelled", false) == true;
+        let cancAfter = after.get("agencyCancelled", false) == true;
+        let ended = before.get("endDate", "9999-12-31") < today;
+        let notStarted = today < before.get("startDate", "0000-01-01");
+        return after.diff(before).affectedKeys().hasOnly(["countsTowardLimit", "agencyCancelled"])
+          && (!(cancAfter && !cancBefore) || notStarted)
+          && (!(cancBefore && !cancAfter) || (countsAfter ? agencyHasRoom(before.agencyId) : ended))
+          && (!cancAfter || !countsAfter)
+          && (!(countsBefore && !countsAfter) || cancAfter || ended)
+          && (!(countsAfter && !countsBefore) || !ended)
+          && (countsBefore == countsAfter || counterMovedWith(before.agencyId, countsAfter ? 1 : -1));
+      }
+
+      // ---- Criação de viagem ----
+      function isAgencyTripCreation() {
+        return "agencyId" in request.resource.data
+          && request.resource.data.agencyId != ""
+          && agencyAllowsNewTrip(request.resource.data.agencyId)
+          // Rodada C: nasce contando no limite, não cancelada, e o contador
+          // da agência sobe +1 na MESMA operação (writeBatch no app).
+          && request.resource.data.get("countsTowardLimit", false) == true
+          && request.resource.data.get("agencyCancelled", false) == false
+          && counterMovedWith(request.resource.data.agencyId, 1);
+      }
+      // Viagem pessoal exige o código de criação. ARQ-2 (26/set/2026): o
+      // valor NÃO fica mais escrito aqui — mora no documento
+      // config/creation (campo "code"), que só o Console edita. Pra trocar
+      // o código, é só editar esse campo no Console (sem republicar regra).
+      // Se o documento não existir ou o campo estiver vazio, ninguém cria
+      // viagem pessoal (viagem de agência não é afetada).
+      function isPersonalTripCreationAuthorized() {
+        let creationCode = get(/databases/$(database)/documents/config/creation).data.get("code", "");
+        return (!("agencyId" in request.resource.data) || request.resource.data.agencyId == "")
+          && creationCode != ""
+          && request.resource.data.get("creationCode", "") == creationCode;
+      }
+
+      // ---- Entrar pelo código de convite (QA #15, 25/set/2026) ----
+      // Quem entra pelo código só pode ACRESCENTAR o próprio e-mail (sem
+      // remover ninguém) e gravar SÓ o próprio papel, igual ao papel padrão
+      // da viagem. Nada de mexer em blockedEmails nem no papel dos outros.
+      function isSelfJoin() {
+        let email = request.auth.token.email;
+        let before = resource.data;
+        let after = request.resource.data;
+        return after.diff(before).affectedKeys().hasOnly(["participantEmails", "participantRoles"])
+          && !(email in before.participantEmails)
+          && !(email in before.get("blockedEmails", []))
+          && email in after.participantEmails
+          && after.participantEmails.hasAll(before.participantEmails)
+          && after.participantEmails.size() == before.participantEmails.size() + 1
+          && after.get("participantRoles", {}).diff(before.get("participantRoles", {})).affectedKeys().hasOnly([email])
+          && after.get("participantRoles", {})[email] == before.get("defaultJoinRole", "colaborador");
+      }
+
+      // ---- Sair da viagem / "Remover meus dados" (QA #7, 25/set/2026) ----
+      // Qualquer participante (qualquer papel) pode se remover — só o
+      // PRÓPRIO e-mail, de participantEmails, participantRoles e
+      // adminEmails, sem tocar em mais ninguém. O dono original
+      // (createdBy) não usa esse caminho: precisa transferir antes.
+      function isSelfLeave() {
+        let email = request.auth.token.email;
+        let before = resource.data;
+        let after = request.resource.data;
+        let adminsBefore = before.get("adminEmails", []);
+        let adminsAfter = after.get("adminEmails", []);
+        return after.diff(before).affectedKeys().hasOnly(["participantEmails", "participantRoles", "adminEmails"])
+          && email != before.get("createdBy", "")
+          && email in before.participantEmails
+          && !(email in after.participantEmails)
+          && before.participantEmails.hasAll(after.participantEmails)
+          && after.participantEmails.size() == before.participantEmails.size() - 1
+          && after.get("participantRoles", {}).diff(before.get("participantRoles", {})).affectedKeys().hasOnly([email])
+          && !(email in after.get("participantRoles", {}))
+          && !(email in adminsAfter)
+          && adminsBefore.hasAll(adminsAfter)
+          && adminsAfter.size() == adminsBefore.size() - (email in adminsBefore ? 1 : 0);
+      }
+
+      allow create: if request.auth != null && (isAgencyTripCreation() || isPersonalTripCreationAuthorized());
+      // "get" aberto pra quem ainda não é participante (é assim que o
+      // fluxo de "entrar por código" lê o nome da viagem antes de entrar),
+      // mas nega se a viagem estiver cancelada pela agência.
+      allow get: if request.auth != null && tripAccessible(resource.data);
+      allow list: if request.auth != null
+        && (request.auth.token.email in resource.data.participantEmails || isAgencyMemberOfTrip(resource.data))
+        && tripAccessible(resource.data);
+
+      // Excluir a viagem: só Admin de verdade (adminEmails).
+      allow delete: if request.auth != null && isRealAdmin(resource.data);
+
+      // Editar dados da viagem:
+      // - Admin de verdade: tudo, menos os campos de controle da agência.
+      // - Colaborador: tudo MENOS os campos sensíveis — e SÓ se for
+      //   participante de verdade (QA #15b).
+      // - Entrar pelo código: só o próprio e-mail (isSelfJoin).
+      // - Sair da viagem: só o próprio e-mail (isSelfLeave).
+      // - Migração única de viagens antigas (sem adminEmails).
+      // - Painel da Agência: só contador e cancelamento (agencyTripChangeOk).
+      allow update: if request.auth != null && tripAccessible(resource.data) && (
+        (
+          // O cliente final é Admin da própria viagem de agência, e não pode
+          // desvinculá-la da agência nem mexer no contador/cancelamento.
+          isRealAdmin(resource.data) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["agencyId", "agencyCancelled", "countsTowardLimit"])
+        )
+        ||
+        (
+          request.auth.token.email in resource.data.participantEmails &&
+          roleFrom(resource.data) in ["admin", "colaborador"] &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["adminEmails", "createdBy", "defaultJoinRole", "agencyId", "agencyCancelled", "countsTowardLimit"])
+        )
+        ||
+        isSelfJoin()
+        ||
+        isSelfLeave()
+        ||
+        (
+          // Migração única: se a viagem AINDA não tem o campo adminEmails,
+          // qualquer participante pode criar esse campo (e os vizinhos da
+          // migração). Assim que adminEmails existir, fecha sozinha.
+          !("adminEmails" in resource.data) &&
+          request.auth.token.email in resource.data.participantEmails &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["participantRoles", "adminEmails", "blockedEmails", "defaultJoinRole"])
+        )
+        ||
+        (
+          // Painel da Agência: só membro de verdade da agência dona da
+          // viagem (não basta o papel de exibição "agencia").
+          roleFrom(resource.data) == "agencia" &&
+          isAgencyMemberOfTrip(resource.data) &&
+          agencyTripChangeOk()
+        )
+      );
+
+      // ---- Calendário / Itinerário / Estadia ----
+      match /itinerario/{docId} {
+        allow read: if request.auth != null && isParticipant()
+          && (roleIn() != "agencia" || resource.data.get("createdByRole", "") == "agencia");
+        allow create: if request.auth != null && isParticipant() && roleIn() in ["admin", "colaborador", "agencia"]
+          && request.resource.data.get("createdByRole", roleIn()) == roleIn();
+        allow update, delete: if request.auth != null && isParticipant() && roleIn() in ["admin", "colaborador", "agencia"]
+          && (roleIn() != "agencia" || resource.data.get("createdByRole", "") == "agencia");
+      }
+      match /estadia/{docId} {
+        allow read: if request.auth != null && isParticipant()
+          && (roleIn() != "agencia" || resource.data.get("createdByRole", "") == "agencia");
+        allow create: if request.auth != null && isParticipant() && roleIn() in ["admin", "colaborador", "agencia"]
+          && request.resource.data.get("createdByRole", roleIn()) == roleIn();
+        allow update, delete: if request.auth != null && isParticipant() && roleIn() in ["admin", "colaborador", "agencia"]
+          && (roleIn() != "agencia" || resource.data.get("createdByRole", "") == "agencia");
+      }
+      match /lembretes/{docId} {
+        allow read: if request.auth != null && isParticipant();
+        allow write: if request.auth != null && isParticipant() && roleIn() in ["admin", "colaborador", "agencia", "convidado"];
+      }
+
+      // ---- Mala ----
+      match /mala/{docId} {
+        allow read: if request.auth != null && isParticipant() && roleIn() != "agencia";
+        allow create: if request.auth != null && isParticipant() && (
+          roleIn() in ["admin", "colaborador"] ||
+          (roleIn() == "convidado" && request.resource.data.ownerEmail == request.auth.token.email)
+        );
+        allow update: if request.auth != null && isParticipant() && (
+          roleIn() in ["admin", "colaborador"] ||
+          (roleIn() == "convidado" && resource.data.ownerEmail == request.auth.token.email)
+        );
+        allow delete: if request.auth != null && isParticipant() && (
+          roleIn() in ["admin", "colaborador"] ||
+          (roleIn() == "convidado" && resource.data.ownerEmail == request.auth.token.email)
+        );
+      }
+
+      // ---- Tarefas ----
+      match /tarefas/{docId} {
+        allow read: if request.auth != null && isParticipant() && roleIn() != "agencia";
+        allow write: if request.auth != null && isParticipant() && roleIn() in ["admin", "colaborador", "convidado"];
+      }
+
+      // ---- Documentos / Gastos / Emergência ----
+      match /documentos/{docId} {
+        allow read: if request.auth != null && isParticipant() && (
+          roleIn() in ["admin", "colaborador", "convidado"] ||
+          (roleIn() == "agencia" && resource.data.get("createdByRole", "") == "agencia")
+        );
+        allow create: if request.auth != null && isParticipant() && roleIn() in ["admin", "colaborador", "convidado", "agencia"]
+          && request.resource.data.get("createdByRole", roleIn()) == roleIn();
+        allow update, delete: if request.auth != null && isParticipant() && (
+          roleIn() in ["admin", "colaborador", "convidado"] ||
+          (roleIn() == "agencia" && resource.data.get("createdByRole", "") == "agencia")
+        );
+      }
+      match /gastos/{docId} {
+        allow read, write: if request.auth != null && isParticipant() && roleIn() in ["admin", "colaborador", "convidado"];
+      }
+      match /emergencia/{docId} {
+        allow read: if request.auth != null && isParticipant() && (
+          roleIn() in ["admin", "colaborador", "convidado"] ||
+          (roleIn() == "agencia" && resource.data.get("createdByRole", "") == "agencia")
+        );
+        allow create: if request.auth != null && isParticipant() && roleIn() in ["admin", "colaborador", "convidado", "agencia"]
+          && request.resource.data.get("createdByRole", roleIn()) == roleIn();
+        allow update, delete: if request.auth != null && isParticipant() && (
+          roleIn() in ["admin", "colaborador", "convidado"] ||
+          (roleIn() == "agencia" && resource.data.get("createdByRole", "") == "agencia")
+        );
+      }
+
+      // ---- Histórico ----
+      match /activityLog/{docId} {
+        allow read: if request.auth != null && isParticipant() && roleIn() != "agencia";
+        allow create: if request.auth != null && isParticipant();
+        allow update: if false;
+        allow delete: if request.auth != null && isParticipant() && amRealAdmin();
+      }
+    }
+
+    match /users/{userEmail} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.email == userEmail;
+    }
+
+    // ==== Configuração interna (ARQ-2, 26/set/2026) ====
+    // Guarda valores que não podem ser públicos (ex: config/creation.code,
+    // o código de criação de viagem pessoal). Ninguém lê nem grava pelo
+    // app — só pelo Firebase Console. As próprias regras continuam
+    // conseguindo ler (o get() dentro de uma regra não passa por esta trava).
+    match /config/{docId} {
+      allow read, write: if false;
+    }
+
+    // ==== Agências ====
+    // Cadastro continua manual, só pelo e-mail master. Membro de agência
+    // pode ATUALIZAR só os contadores — e (QA #17, Rodada C, 25/set/2026)
+    // cada mudança precisa vir "assinada" com a viagem que a causou
+    // (lastCounterTripId), gravada na MESMA operação:
+    // - +1: aquela viagem passou a contar agora (criação, reativação ou recontagem);
+    // - -1: aquela viagem contava e deixou de contar agora;
+    // - total criado +1: aquela viagem acabou de nascer.
+    // Sem viagem correspondente, "-1" avulso pela API é recusado.
+    match /agencies/{agencyId} {
+      function agencyCounterWriteOk() {
+        let before = resource.data;
+        let after = request.resource.data;
+        let tid = after.get("lastCounterTripId", "");
+        let tripPath = /databases/$(database)/documents/trips/$(tid);
+        let dCount = after.get("activeTripsCount", 0) - before.get("activeTripsCount", 0);
+        let dTotal = after.get("totalTripsCreated", 0) - before.get("totalTripsCreated", 0);
+        return after.diff(before).affectedKeys().hasOnly(["activeTripsCount", "totalTripsCreated", "lastCounterTripId"])
+          && tid != ""
+          && existsAfter(tripPath)
+          && getAfter(tripPath).data.get("agencyId", "") == agencyId
+          && (dCount == 0 || dCount == 1 || dCount == -1)
+          && after.get("activeTripsCount", 0) >= 0
+          && (dTotal == 0 || (dTotal == 1 && dCount == 1 && !exists(tripPath)))
+          && (dCount != 1 || (
+               getAfter(tripPath).data.get("countsTowardLimit", false) == true
+               && (!exists(tripPath) || get(tripPath).data.get("countsTowardLimit", false) != true)))
+          && (dCount != -1 || (
+               exists(tripPath)
+               && get(tripPath).data.get("countsTowardLimit", false) == true
+               && getAfter(tripPath).data.get("countsTowardLimit", false) == false));
+      }
+      allow read: if request.auth != null && (
+        request.auth.token.email == "dpr1405@gmail.com" ||
+        request.auth.token.email in resource.data.get("memberEmails", [])
+      );
+      allow create, delete: if request.auth != null && request.auth.token.email == "dpr1405@gmail.com";
+      allow update: if request.auth != null && (
+        request.auth.token.email == "dpr1405@gmail.com" ||
+        (
+          request.auth.token.email in resource.data.get("memberEmails", []) &&
+          agencyCounterWriteOk()
+        )
+      );
+    }
+
+    // ==== Estatísticas globais (histórico do Painel Master, Fase 5) ====
+    match /stats/{statId} {
+      allow read: if request.auth != null && request.auth.token.email == "dpr1405@gmail.com";
+      allow create: if request.auth != null && request.auth.token.email == "dpr1405@gmail.com";
+      allow update: if request.auth != null && (
+        request.auth.token.email == "dpr1405@gmail.com" ||
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["totalTripsAllTime"]) &&
+          request.resource.data.totalTripsAllTime == resource.data.get("totalTripsAllTime", 0) + 1
+        )
+      );
+    }
+  }
+}
