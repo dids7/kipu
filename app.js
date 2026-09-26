@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot,
-  query, where, orderBy, serverTimestamp, getDocs, getDocsFromServer, getDoc, arrayUnion, increment, runTransaction, FieldPath, arrayRemove, deleteField, writeBatch
+  query, where, orderBy, serverTimestamp, getDocs, getDocsFromServer, getDoc, arrayUnion, increment, runTransaction, limit, FieldPath, arrayRemove, deleteField, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   ref, uploadBytes, getDownloadURL, deleteObject
@@ -883,11 +883,11 @@ wireDateRange($("tripStart"), $("tripEnd"));
 let currentAgencyPlan = null; // plano da agência logada, lido do Firestore
 
 function normalizePlan(data) {
-  const limit = (v) => (typeof v === "number" && v >= 0 ? v : Infinity);
+  const toLimit = (v) => (typeof v === "number" && v >= 0 ? v : Infinity);
   return {
     label: data.label || "",
-    maxUsers: limit(data.maxUsers),
-    maxActiveTrips: limit(data.maxActiveTrips),
+    maxUsers: toLimit(data.maxUsers),
+    maxActiveTrips: toLimit(data.maxActiveTrips),
     priceBRL: data.priceBRL
   };
 }
@@ -4042,8 +4042,24 @@ async function eraseMyData() {
 $("eraseMyDataBtn")?.addEventListener("click", eraseMyData);
 
 // ================= HISTÓRICO =================
-function subscribeHistorico() {
-  const q = query(collection(db, "trips", currentTripId, "activityLog"), orderBy("timestamp", "desc"));
+// Histórico com limite (ARQ-10, 26/set/2026): carrega só os registros mais
+// recentes (HISTORY_PAGE por vez), em vez da coleção inteira em tempo real —
+// numa viagem de agência, com muita ação registrada, isso ficava pesado.
+// "Carregar mais" amplia o limite e refaz a assinatura. Ao abrir outra
+// viagem, volta pro limite inicial.
+const HISTORY_PAGE = 100;
+let historyLimit = HISTORY_PAGE;
+let historyUnsub = null;
+
+function subscribeHistorico(keepLimit = false) {
+  if (!keepLimit) historyLimit = HISTORY_PAGE;
+  if (historyUnsub) {
+    historyUnsub();
+    const idx = unsubscribers.indexOf(historyUnsub);
+    if (idx !== -1) unsubscribers.splice(idx, 1);
+    historyUnsub = null;
+  }
+  const q = query(collection(db, "trips", currentTripId, "activityLog"), orderBy("timestamp", "desc"), limit(historyLimit));
   const unsub = onSnapshot(q, (snap) => {
     const listEl = $("historyList");
     if (snap.empty) { listEl.innerHTML = `<div class='empty'>${t("empty.history")}</div>`; return; }
@@ -4056,7 +4072,21 @@ function subscribeHistorico() {
       row.innerHTML = `<span class="log-author">${escapeHtml(nameFor(log.authorEmail))}</span> — ${escapeHtml(log.action)}: ${escapeHtml(log.description)} <div class="log-time">${time}</div>`;
       listEl.appendChild(row);
     });
+    // Veio o limite cheio → provavelmente tem mais registros antigos.
+    if (snap.size >= historyLimit) {
+      const moreBtn = document.createElement("button");
+      moreBtn.type = "button";
+      moreBtn.className = "btn btn-outline btn-small";
+      moreBtn.style.marginTop = "10px";
+      moreBtn.textContent = t("history.loadMore");
+      moreBtn.addEventListener("click", () => {
+        historyLimit += HISTORY_PAGE;
+        subscribeHistorico(true);
+      });
+      listEl.appendChild(moreBtn);
+    }
   }, onSnapshotError("Histórico"));
+  historyUnsub = unsub;
   unsubscribers.push(unsub);
 }
 

@@ -16,6 +16,20 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ---- Funções gerais (ARQ-3, 26/set/2026) ----
+    // E-mail de quem administra o Kipu — escrito num lugar só. Pra trocar
+    // (ex: e-mail dedicado do Kipu), muda só aqui.
+    function isMaster() {
+      return request.auth != null && request.auth.token.email == "dpr1405@gmail.com";
+    }
+    // Limite de viagens ativas do plano, lido de plans/{planId} (a mesma
+    // tabela que o app usa). -1 = ilimitado. planId inexistente → o get()
+    // falha → a operação é recusada (antes, planId errado virava ilimitado).
+    function planAllowsAnotherTrip(planId, activeCount) {
+      let maxTrips = get(/databases/$(database)/documents/plans/$(planId)).data.maxActiveTrips;
+      return maxTrips < 0 || activeCount < maxTrips;
+    }
+
     match /trips/{tripId} {
 
       function parentTrip() {
@@ -39,19 +53,20 @@ service cloud.firestore {
         return !agencyCancelled(tripData) || isAgencyMemberOfTrip(tripData);
       }
       // Papel "de exibição" (usado pra decidir o que cada aba mostra).
-      // participantRoles tem prioridade; se o e-mail não está lá mas é
-      // membro da agência dona da viagem, também conta como "agencia".
-      // ATENÇÃO: o "colaborador" do final é só o padrão de quem JÁ É
-      // participante mas não tem papel gravado (viagens antigas). Quem não
-      // é participante também cai aqui — por isso toda regra que usa
-      // roleFrom() pra dar poder de edição TAMBÉM precisa checar
-      // participação (ver QA #15b, 25/set/2026).
+      // ARQ-9 (26/set/2026): só quem É participante recebe papel. Para
+      // participante: participantRoles tem prioridade; sem papel gravado
+      // (viagem antiga) vale "colaborador"; viagem sem participantRoles
+      // nenhum (bem antiga) vale "admin". Quem não é participante: "agencia"
+      // se for membro da agência dona da viagem, senão "nenhum" — antes caía
+      // em "colaborador" (ou até "admin"), origem do QA #15b. As travas de
+      // participação do QA continuam nas regras, como proteção em dobro.
       function roleFrom(tripData) {
-        return !("participantRoles" in tripData)
-          ? "admin"
-          : (request.auth.token.email in tripData.participantRoles
-              ? tripData.participantRoles[request.auth.token.email]
-              : (isAgencyMemberOfTrip(tripData) ? "agencia" : "colaborador"));
+        let email = request.auth.token.email;
+        return email in tripData.get("participantEmails", [])
+          ? (!("participantRoles" in tripData)
+              ? "admin"
+              : (email in tripData.participantRoles ? tripData.participantRoles[email] : "colaborador"))
+          : (isAgencyMemberOfTrip(tripData) ? "agencia" : "nenhum");
       }
       // Admin "de verdade" — precisa estar no campo travado adminEmails,
       // não só o mapa de exibição (que Colaborador também edita).
@@ -73,20 +88,14 @@ service cloud.firestore {
         return (request.auth.token.email in parentTrip().participantEmails || isAgencyMemberOfTrip(parentTrip()))
           && tripAccessible(parentTrip());
       }
-      // ---- Limite de plano (Fase 3, 18/set/2026) ----
-      // Espelha AGENCY_PLANS do app.js — se o limite de algum plano mudar,
-      // atualizar os dois lugares juntos.
-      function agencyMaxActiveTrips(planId) {
-        return planId == "chaski" ? 8
-          : planId == "inti" ? 16
-          : 999999; // "kipuca" (ilimitado) ou planId desconhecido
-      }
+      // ---- Limite de plano (Fase 3, 18/set/2026; ARQ-3, 26/set/2026) ----
+      // Os limites vêm de plans/{planId} (ver planAllowsAnotherTrip, no topo).
       // QA #16 (25/set/2026): além de ter vaga, quem cria a viagem de
       // agência precisa ser MEMBRO daquela agência.
       function agencyAllowsNewTrip(agencyId) {
         let ag = get(/databases/$(database)/documents/agencies/$(agencyId)).data;
         return request.auth.token.email in ag.get("memberEmails", [])
-          && ag.get("activeTripsCount", 0) < agencyMaxActiveTrips(ag.get("planId", "chaski"));
+          && planAllowsAnotherTrip(ag.get("planId", ""), ag.get("activeTripsCount", 0));
       }
 
       // ---- Contador de viagens ativas amarrado à viagem (QA Rodada C, 25/set/2026) ----
@@ -108,7 +117,7 @@ service cloud.firestore {
       }
       function agencyHasRoom(agencyId) {
         let ag = get(/databases/$(database)/documents/agencies/$(agencyId)).data;
-        return ag.get("activeTripsCount", 0) < agencyMaxActiveTrips(ag.get("planId", "chaski"));
+        return planAllowsAnotherTrip(ag.get("planId", ""), ag.get("activeTripsCount", 0));
       }
       // O que o Painel da Agência pode mudar numa viagem (só contador e
       // cancelamento), e em que condições:
@@ -356,8 +365,19 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ==== Planos das agências (ARQ-3, 26/set/2026) ====
+    // plans/{planId}: label, maxUsers, maxActiveTrips, priceBRL (-1 = ilimitado).
+    // Fonte única dos planos — lida pelo app (Painel da Agência) e pelas
+    // regras (limite de viagens). Nada secreto (os preços já são públicos
+    // nos termos); qualquer pessoa logada lê, ninguém grava pelo app —
+    // só pelo Console.
+    match /plans/{planId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
     // ==== Agências ====
-    // Cadastro continua manual, só pelo e-mail master. Membro de agência
+    // Cadastro continua manual, só pelo e-mail master (isMaster()). Membro de agência
     // pode ATUALIZAR só os contadores — e (QA #17, Rodada C, 25/set/2026)
     // cada mudança precisa vir "assinada" com a viagem que a causou
     // (lastCounterTripId), gravada na MESMA operação:
@@ -389,12 +409,12 @@ service cloud.firestore {
                && getAfter(tripPath).data.get("countsTowardLimit", false) == false));
       }
       allow read: if request.auth != null && (
-        request.auth.token.email == "dpr1405@gmail.com" ||
+        isMaster() ||
         request.auth.token.email in resource.data.get("memberEmails", [])
       );
-      allow create, delete: if request.auth != null && request.auth.token.email == "dpr1405@gmail.com";
+      allow create, delete: if isMaster();
       allow update: if request.auth != null && (
-        request.auth.token.email == "dpr1405@gmail.com" ||
+        isMaster() ||
         (
           request.auth.token.email in resource.data.get("memberEmails", []) &&
           agencyCounterWriteOk()
@@ -404,10 +424,10 @@ service cloud.firestore {
 
     // ==== Estatísticas globais (histórico do Painel Master, Fase 5) ====
     match /stats/{statId} {
-      allow read: if request.auth != null && request.auth.token.email == "dpr1405@gmail.com";
-      allow create: if request.auth != null && request.auth.token.email == "dpr1405@gmail.com";
+      allow read: if isMaster();
+      allow create: if isMaster();
       allow update: if request.auth != null && (
-        request.auth.token.email == "dpr1405@gmail.com" ||
+        isMaster() ||
         (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(["totalTripsAllTime"]) &&
           request.resource.data.totalTripsAllTime == resource.data.get("totalTripsAllTime", 0) + 1
