@@ -873,25 +873,38 @@ wireDateRange($("tripStart"), $("tripEnd"));
 // regra do Firestore nem chegava a checar nada — não era proteção real.
 
 // ================= AGÊNCIAS (Fase 1 — fundação, 17/set/2026) =================
-// E-mail de quem administra o Kipu — mesmo princípio do CREATE_TRIP_CODE:
-// não é segurança "de verdade" sozinho (a trava real está no
-// firestore.rules), isso aqui é só o que o app usa pra decidir o que
-// mostrar na tela. Provisório: Diego ainda vai criar um e-mail dedicado
-// pro Kipu — quando isso acontecer, troca só esse valor (e o mesmo valor
-// dentro de firestore.rules) e sobe os dois de novo.
-const AGENCY_MASTER_EMAIL = "dpr1405@gmail.com";
+// Planos (ARQ-3, 26/set/2026): a tabela de planos NÃO fica mais escrita no
+// código — mora na coleção plans/{planId} do Firestore (label, maxUsers,
+// maxActiveTrips, priceBRL; -1 = ilimitado), a mesma que o firestore.rules
+// usa pra travar o limite. Mudar um plano = editar o documento no Console,
+// e o app e as regras passam a usar o valor novo juntos. (O e-mail master
+// também saiu daqui: não era usado no app; nas regras ele fica só na função
+// isMaster().)
+let currentAgencyPlan = null; // plano da agência logada, lido do Firestore
 
-// Tabela de planos — fixa aqui, não copiada em cada documento de agência.
-// Cada agencies/{agencyId} só guarda o planId (ex: "chaski"); mudar um
-// valor aqui afeta todas as agências daquele plano de uma vez. Preços em
-// R$ e nomes ainda provisórios (ver kipu-documentacao.md, seção 8.2).
-// Ainda não usada em nenhum lugar do app — entra em uso nas Fases 2/3
-// (Painel da Agência e limite automático).
-const AGENCY_PLANS = {
-  chaski: { label: "Chaski", maxUsers: 4, maxActiveTrips: 8, priceBRL: 99 },
-  inti: { label: "Inti", maxUsers: 8, maxActiveTrips: 16, priceBRL: 158 },
-  kipuca: { label: "Kipuca", maxUsers: Infinity, maxActiveTrips: Infinity, priceBRL: 249 }
-};
+function normalizePlan(data) {
+  const limit = (v) => (typeof v === "number" && v >= 0 ? v : Infinity);
+  return {
+    label: data.label || "",
+    maxUsers: limit(data.maxUsers),
+    maxActiveTrips: limit(data.maxActiveTrips),
+    priceBRL: data.priceBRL
+  };
+}
+
+// Lê o plano da agência. Devolve null se não achar (planId errado, sem
+// conexão...) — nesse caso o painel avisa e bloqueia "Criar nova viagem",
+// em vez de assumir um plano qualquer.
+async function loadAgencyPlan(planId) {
+  if (!planId) return null;
+  try {
+    const snap = await getDoc(doc(db, "plans", planId));
+    return snap.exists() ? normalizePlan(snap.data()) : null;
+  } catch (err) {
+    console.warn("Não foi possível carregar o plano da agência:", err);
+    return null;
+  }
+}
 
 // Convite por e-mail — grava um documento na coleção "mail", que a extensão
 // "Trigger Email" do Firebase observa e envia sozinha pelo provedor SMTP
@@ -1123,7 +1136,11 @@ function renderAgencyTripCard(trip, container) {
       // QA #2: reativar volta a contar no limite (senão, cancelar + reativar
       // viraria um jeito de ter viagem ativa sem ocupar vaga). Transação: lê o
       // contador atual da agência, confere a vaga e grava viagem + contador juntos.
-      const plan = AGENCY_PLANS[currentAgency.planId] || AGENCY_PLANS.chaski;
+      const plan = currentAgencyPlan;
+      if (!plan) {
+        showToast("Não foi possível carregar o plano da agência. Atualize a página e tente de novo.", "error");
+        return;
+      }
       try {
         const result = await runTransaction(db, async (tx) => {
           const tripRef = doc(db, "trips", trip.id);
@@ -1217,8 +1234,21 @@ function renderAgencyExtraMetrics(activeTrips) {
 // Atualiza só os cards de contador (usuários/viagens ativas) a partir do
 // que já está em currentAgency — sem buscar nada no Firestore.
 function renderAgencyStatsUI() {
-  const plan = AGENCY_PLANS[currentAgency.planId] || AGENCY_PLANS.chaski;
   const memberCount = (currentAgency.memberEmails || []).length;
+  const plan = currentAgencyPlan;
+  if (!plan) {
+    // Plano não encontrado (planId errado no cadastro, ou sem conexão): não
+    // assume nenhum plano — avisa e bloqueia a criação até resolver.
+    $("agencyPanelName").textContent = currentAgency.name || "Agência";
+    $("agencyPanelPlanName").textContent = "Plano não encontrado";
+    $("agencyStatUsersValue").textContent = String(memberCount);
+    $("agencyStatTripsValue").textContent = String(currentAgency.activeTripsCount || 0);
+    const warnEl = $("agencyPanelLimitWarning");
+    warnEl.style.display = "block";
+    warnEl.textContent = "Não foi possível carregar o plano da sua agência. Atualize a página; se continuar, fale com a gente.";
+    $("agencyCreateTripBtn").disabled = true;
+    return;
+  }
   const activeCount = currentAgency.activeTripsCount || 0;
 
   $("agencyPanelName").textContent = currentAgency.name || "Agência";
@@ -1254,6 +1284,7 @@ async function loadAgencyPanel() {
   } catch (err) {
     console.warn("Não foi possível atualizar dados da agência:", err);
   }
+  currentAgencyPlan = await loadAgencyPlan(currentAgency.planId);
   renderAgencyStatsUI();
 
   $("agencyTripList").innerHTML = "<div class='empty'>Carregando...</div>";
