@@ -792,6 +792,20 @@ async function getDocsFreshFirst(q) {
   }
 }
 
+// Ordem de "Suas Viagens" (26/set/2026): a viagem criada por último vem
+// primeiro. Viagem antiga sem createdAt vai pro fim, pela data de início
+// (mais recente primeiro). Sem isso, o Firestore devolvia pela ordem do ID
+// interno do documento, que é aleatória.
+function compareTripsNewestFirst(a, b) {
+  const ta = a.data().createdAt, tb = b.data().createdAt;
+  const ma = ta && typeof ta.toMillis === "function" ? ta.toMillis() : null;
+  const mb = tb && typeof tb.toMillis === "function" ? tb.toMillis() : null;
+  if (ma !== null && mb !== null) return mb - ma;
+  if (ma !== null) return -1;
+  if (mb !== null) return 1;
+  return (b.data().startDate || "").localeCompare(a.data().startDate || "");
+}
+
 async function loadTripList() {
   const listEl = $("tripList");
   listEl.innerHTML = "<div class='empty'>Carregando...</div>";
@@ -807,7 +821,9 @@ async function loadTripList() {
   // QA #3 / bug 8.17 (25/set/2026): viagem cancelada pela agência não
   // aparece mais na lista de quem não é da agência (o acesso já era negado
   // pela regra — só o card continuava aparecendo).
-  const visibleDocs = snap.docs.filter((d) => d.data().agencyCancelled !== true);
+  const visibleDocs = snap.docs
+    .filter((d) => d.data().agencyCancelled !== true)
+    .sort(compareTripsNewestFirst); // mais recente primeiro (26/set/2026)
   if (visibleDocs.length === 0) {
     listEl.innerHTML = `<div class='empty'>${t("empty.noTrips")}</div>`;
     return;
