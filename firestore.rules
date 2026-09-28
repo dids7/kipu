@@ -157,17 +157,22 @@ service cloud.firestore {
           && request.resource.data.get("agencyCancelled", false) == false
           && counterMovedWith(request.resource.data.agencyId, 1);
       }
-      // Viagem pessoal exige o código de criação. ARQ-2 (26/set/2026): o
-      // valor NÃO fica mais escrito aqui — mora no documento
-      // config/creation (campo "code"), que só o Console edita. Pra trocar
-      // o código, é só editar esse campo no Console (sem republicar regra).
-      // Se o documento não existir ou o campo estiver vazio, ninguém cria
-      // viagem pessoal (viagem de agência não é afetada).
+      // Viagem pessoal exige o código de criação. O valor NÃO fica escrito
+      // aqui (ARQ-2) — mora em config/creation (campo "code"), que só o
+      // Console edita. ARQ-12 (28/set/2026): quem cria manda o código num
+      // registro à parte, tripCreationLog/{tripId}, gravado JUNTO com a viagem
+      // (writeBatch), e a regra confere esse registro com getAfter(). Assim a
+      // viagem NÃO guarda o código (antes ficava no documento da viagem e
+      // qualquer participante conseguia ler). Se config/creation faltar ou
+      // estiver vazio, ninguém cria viagem pessoal (agência não é afetada).
       function isPersonalTripCreationAuthorized() {
         let creationCode = get(/databases/$(database)/documents/config/creation).data.get("code", "");
+        let logPath = /databases/$(database)/documents/tripCreationLog/$(tripId);
         return (!("agencyId" in request.resource.data) || request.resource.data.agencyId == "")
+          && !("creationCode" in request.resource.data)
           && creationCode != ""
-          && request.resource.data.get("creationCode", "") == creationCode;
+          && existsAfter(logPath)
+          && getAfter(logPath).data.get("code", "") == creationCode;
       }
 
       // ---- Entrar pelo código de convite (QA #15, 25/set/2026) ----
@@ -363,6 +368,19 @@ service cloud.firestore {
     // conseguindo ler (o get() dentro de uma regra não passa por esta trava).
     match /config/{docId} {
       allow read, write: if false;
+    }
+
+    // ==== Registro de criação de viagem (ARQ-12/13, 28/set/2026) ====
+    // tripCreationLog/{tripId}: quem criou, nome da viagem e o código de
+    // criação usado (a regra da viagem confere esse código). Só dá pra
+    // CRIAR (e o ID tem que ser o da viagem, e o autor o próprio usuário);
+    // ninguém lê, altera ou apaga pelo app — só o Console.
+    match /tripCreationLog/{logId} {
+      allow create: if request.auth != null
+        && logId == request.resource.data.get("tripId", "")
+        && request.resource.data.keys().hasOnly(["tripId", "tripName", "createdBy", "createdAt", "code"])
+        && request.resource.data.get("createdBy", "") == request.auth.token.email;
+      allow read, update, delete: if false;
     }
 
     // ==== Planos das agências (ARQ-3, 26/set/2026) ====
