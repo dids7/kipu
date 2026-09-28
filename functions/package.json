@@ -1,0 +1,13 @@
+{
+  "name": "kipu-functions",
+  "description": "Cloud Functions do Kipu (retencao automatica de dados sensiveis)",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "22"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.0.0"
+  }
+}
