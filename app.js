@@ -956,7 +956,16 @@ $("createTripBtn").addEventListener("click", async () => {
   let docRef;
   setButtonLoading($("createTripBtn"), true);
   try {
-    docRef = await addDoc(collection(db, "trips"), {
+    // ARQ-12/13 (28/set/2026): a viagem NÃO guarda mais o código de criação
+    // (antes ele ficava gravado dentro da viagem, e qualquer participante
+    // conseguia ler). O código vai num registro à parte, tripCreationLog/{tripId},
+    // que ninguém consegue ler pelo app — e a regra do Firestore confere o
+    // código lendo esse registro. Viagem + registro são gravados juntos
+    // (writeBatch): ou grava os dois, ou nenhum. O ID da viagem é gerado antes
+    // pra o registro poder ter o mesmo ID.
+    docRef = doc(collection(db, "trips"));
+    const batch = writeBatch(db);
+    batch.set(docRef, {
       name, destination, startDate, endDate,
       participantEmails,
       participantRoles,
@@ -964,9 +973,13 @@ $("createTripBtn").addEventListener("click", async () => {
       blockedEmails: [],
       defaultJoinRole: "colaborador",
       createdBy: currentUser.email,
-      createdAt: serverTimestamp(),
-      creationCode: code
+      createdAt: serverTimestamp()
     });
+    batch.set(doc(db, "tripCreationLog", docRef.id), {
+      tripId: docRef.id, tripName: name, createdBy: currentUser.email,
+      createdAt: serverTimestamp(), code
+    });
+    await batch.commit();
   } catch (err) {
     // A regra do Firestore recusou — na prática, quase sempre é o código
     // de criação errado (é a única checagem extra que ela faz aqui).
@@ -974,10 +987,6 @@ $("createTripBtn").addEventListener("click", async () => {
     setButtonLoading($("createTripBtn"), false);
     return;
   }
-  // Log simples de quem criou o quê — não trava a criação da viagem se falhar.
-  addDoc(collection(db, "tripCreationLog"), {
-    tripId: docRef.id, tripName: name, createdBy: currentUser.email, createdAt: serverTimestamp()
-  }).catch(() => {});
   // Convite por e-mail pros demais participantes (não pra mim mesmo).
   participantEmails.filter((e) => e !== myEmail).forEach((e) => {
     sendInviteEmail(e, name, docRef.id, myDisplayName || currentUser.email);
