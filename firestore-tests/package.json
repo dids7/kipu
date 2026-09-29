@@ -1,0 +1,14 @@
+{
+  "name": "kipu-firestore-tests",
+  "description": "Testes autom\u00e1ticos das regras do Firestore do Kipu (ARQ-5) \u2014 rodam contra o emulador, nenhum dado real \u00e9 tocado.",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "mocha firestore.rules.test.js --timeout 20000 --reporter spec"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "mocha": "^10.7.3",
+    "firebase": "^11.0.2"
+  }
+}
