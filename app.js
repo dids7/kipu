@@ -930,6 +930,38 @@ function sendInviteEmail(toEmail, tripName, tripId, inviterName) {
   }).catch(() => {});
 }
 
+// Mensagem pronta pro WhatsApp (COM-1/COM-2, 29/set/2026): a agência ou o
+// admin cola essa mensagem direto na conversa com o participante. O e-mail
+// automático (sendInviteEmail) continua sendo o canal de reserva — quem não
+// usa/recebe o WhatsApp tem o link no e-mail do mesmo jeito. A dica do
+// final ("toca nos ⋯...") é de graça aqui: cobre o caso do navegador
+// embutido do WhatsApp sem precisar detectar nada.
+function buildInviteWhatsAppText(tripName, tripId, inviterName) {
+  const joinLink = `https://dids7.github.io/kipu/?code=${tripId}`;
+  return `Oi! ${inviterName} te chamou pra participar da viagem "${tripName}" no Kipu 🎒
+
+Entra por aqui: ${joinLink}
+
+Se o link não abrir direto, toca nos ⋯ (ou no ícone de navegador) e escolhe "Abrir no navegador"/"Abrir no Safari".`;
+}
+
+// Copia texto pro clipboard com fallback pra quando o navegador recusa
+// (ex: sem permissão, ou contexto sem gesto do usuário reconhecido). Sem
+// fallback, a pessoa ficaria sem nenhuma saída pra pegar o texto.
+async function copyTextWithFallback(text, btn, doneLabel = "✓ Copiado!") {
+  const original = btn ? btn.textContent : null;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (err) {
+    window.prompt("Não consegui copiar sozinho — copie o texto abaixo:", text);
+    return;
+  }
+  if (btn) {
+    btn.textContent = doneLabel;
+    setTimeout(() => { btn.textContent = original; }, 2000);
+  }
+}
+
 $("createTripBtn").addEventListener("click", async () => {
   const name = $("tripName").value.trim();
   const destination = $("tripDestination").value.trim();
@@ -1073,8 +1105,13 @@ function buildTripCardRight(trip, started) {
   if (trip.agencyCancelled) {
     return `<button class="btn btn-outline btn-small" data-reactivate-trip type="button">Reativar</button>`;
   }
+  // WhatsApp (COM-1/COM-2, 29/set/2026): a agência pega a mensagem pronta
+  // pra colar na conversa com o cliente — a qualquer momento, não só na
+  // criação (útil se o convite original se perdeu ou o cliente sumiu).
+  const whatsBtn = `<button class="btn btn-outline btn-small" data-copy-whatsapp type="button">Copiar p/ WhatsApp</button>`;
   // Sem switch manual (QA #2): a vaga só abre quando a viagem termina ou é cancelada.
-  return !started ? `<button class="btn btn-outline btn-small" data-cancel-trip type="button">Cancelar</button>` : "";
+  const cancelBtn = !started ? `<button class="btn btn-outline btn-small" data-cancel-trip type="button">Cancelar</button>` : "";
+  return `<div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">${whatsBtn}${cancelBtn}</div>`;
 }
 
 function renderAgencyTripCard(trip, container) {
@@ -1096,9 +1133,17 @@ function renderAgencyTripCard(trip, container) {
     </div>
   `;
   card.addEventListener("click", (e) => {
-    if (e.target.closest("[data-cancel-trip], [data-reactivate-trip]")) return;
+    if (e.target.closest("[data-cancel-trip], [data-reactivate-trip], [data-copy-whatsapp]")) return;
     openTripSafely(trip.id);
   });
+  const whatsBtnEl = card.querySelector("[data-copy-whatsapp]");
+  if (whatsBtnEl) {
+    whatsBtnEl.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const text = buildInviteWhatsAppText(trip.name, trip.id, currentAgency.name || myDisplayName || currentUser.email);
+      copyTextWithFallback(text, e.currentTarget, "✓ Copiado!");
+    });
+  }
   const cancelBtn = card.querySelector("[data-cancel-trip]");
   if (cancelBtn) {
     cancelBtn.addEventListener("click", async (e) => {
@@ -1844,6 +1889,10 @@ $("copyInviteCodeBtn").addEventListener("click", async () => {
   } catch {
     $("inviteCodeValue").select();
   }
+});
+$("copyWhatsAppMsgBtn")?.addEventListener("click", (e) => {
+  const text = buildInviteWhatsAppText(currentTripData.name, currentTripId, myDisplayName || currentUser.email);
+  copyTextWithFallback(text, e.currentTarget, "✓ Copiado!");
 });
 
 function renderParticipants(trip, editable) {
