@@ -48,16 +48,20 @@ afterEach(async () => {
   await testEnv.clearFirestore();
 });
 
-// Contexto sem regras (setup dos testes) — nunca usado para o que está sendo testado.
-function admin() {
-  return testEnv.withSecurityRulesDisabled;
+// Contexto sem regras (setup dos testes) — nunca usado para o que está sendo
+// testado. Precisa ser chamado como testEnv.withSecurityRulesDisabled(...),
+// nunca "destacado" da instância (senão o "this" interno da biblioteca some
+// e ela quebra) — por isso aqui é uma função que já chama direto, em vez de
+// devolver a função pra ser chamada depois.
+function admin(callback) {
+  return testEnv.withSecurityRulesDisabled(callback);
 }
 
 describe("Kipu — firestore.rules", () => {
 
   describe("Criação de viagem pessoal", () => {
     it("código certo, batch com tripCreationLog: cria", async () => {
-      await admin()(async (ctx) => {
+      await admin(async (ctx) => {
         await setDoc(doc(ctx.firestore(), "config/creation"), { code: CREATION_CODE });
       });
       const alice = testEnv.authenticatedContext("alice", { email: "alice@example.com" });
@@ -78,7 +82,7 @@ describe("Kipu — firestore.rules", () => {
     });
 
     it("código errado: recusa", async () => {
-      await admin()(async (ctx) => {
+      await admin(async (ctx) => {
         await setDoc(doc(ctx.firestore(), "config/creation"), { code: CREATION_CODE });
       });
       const alice = testEnv.authenticatedContext("alice", { email: "alice@example.com" });
@@ -96,7 +100,7 @@ describe("Kipu — firestore.rules", () => {
     });
 
     it("viagem de agência sem ser membro: recusa (QA #16)", async () => {
-      await admin()(async (ctx) => {
+      await admin(async (ctx) => {
         await setDoc(doc(ctx.firestore(), "agencies/ag1"), {
           name: "Agência 1", memberEmails: ["dono@agencia.com"], planId: "chaski", activeTripsCount: 0
         });
@@ -119,7 +123,7 @@ describe("Kipu — firestore.rules", () => {
 
   describe("Viagem cancelada pela agência (tripAccessible)", () => {
     async function seedCancelledTrip() {
-      await admin()(async (ctx) => {
+      await admin(async (ctx) => {
         await setDoc(doc(ctx.firestore(), "agencies/ag1"), {
           name: "Agência 1", memberEmails: ["dono@agencia.com"], planId: "chaski", activeTripsCount: 0
         });
@@ -147,7 +151,7 @@ describe("Kipu — firestore.rules", () => {
 
   describe("Entrar pelo código de convite (isSelfJoin, QA #15)", () => {
     async function seedOpenTrip() {
-      await admin()(async (ctx) => {
+      await admin(async (ctx) => {
         await setDoc(doc(ctx.firestore(), "trips/t4"), {
           name: "Aberta", participantEmails: ["dono@x.com"],
           participantRoles: { "dono@x.com": "admin" }, adminEmails: ["dono@x.com"],
@@ -179,7 +183,7 @@ describe("Kipu — firestore.rules", () => {
 
   describe("Sair da viagem (isSelfLeave, QA #7)", () => {
     async function seedTripWithGuest() {
-      await admin()(async (ctx) => {
+      await admin(async (ctx) => {
         await setDoc(doc(ctx.firestore(), "trips/t5"), {
           name: "x", participantEmails: ["dono@x.com", "convidado@x.com"],
           participantRoles: { "dono@x.com": "admin", "convidado@x.com": "convidado" },
@@ -192,7 +196,7 @@ describe("Kipu — firestore.rules", () => {
       await seedTripWithGuest();
       const convidado = testEnv.authenticatedContext("g", { email: "convidado@x.com" });
       const ref = doc(convidado.firestore(), "trips/t5");
-      const before = (await admin()(async (ctx) => (await getDoc(doc(ctx.firestore(), "trips/t5"))).data()));
+      const before = (await admin(async (ctx) => (await getDoc(doc(ctx.firestore(), "trips/t5"))).data()));
       const newRoles = { ...before.participantRoles }; delete newRoles["convidado@x.com"];
       await assertSucceeds(updateDoc(ref, {
         participantEmails: ["dono@x.com"], participantRoles: newRoles, adminEmails: ["dono@x.com"]
@@ -207,7 +211,7 @@ describe("Kipu — firestore.rules", () => {
       // isSelfLeave() quem estaria decidindo. Este teste isola só a trava
       // que isSelfLeave() tem, com um dono que (por algum motivo legado)
       // não está em adminEmails.
-      await admin()(async (ctx) => {
+      await admin(async (ctx) => {
         await setDoc(doc(ctx.firestore(), "trips/t5b"), {
           name: "x", participantEmails: ["dono@x.com"],
           participantRoles: { "dono@x.com": "convidado" },
@@ -224,7 +228,7 @@ describe("Kipu — firestore.rules", () => {
   });
 
   it("quem NÃO participa não edita a viagem só sabendo o ID (QA #15b)", async () => {
-    await admin()(async (ctx) => {
+    await admin(async (ctx) => {
       await setDoc(doc(ctx.firestore(), "trips/t6"), {
         name: "x", participantEmails: ["dono@x.com"],
         participantRoles: { "dono@x.com": "admin" }, adminEmails: ["dono@x.com"], createdBy: "dono@x.com"
@@ -235,7 +239,7 @@ describe("Kipu — firestore.rules", () => {
   });
 
   it("cliente (admin da viagem) não mexe em agencyCancelled/countsTowardLimit", async () => {
-    await admin()(async (ctx) => {
+    await admin(async (ctx) => {
       await setDoc(doc(ctx.firestore(), "trips/t7"), {
         name: "x", startDate: isoDaysFromNow(5), endDate: isoDaysFromNow(10),
         participantEmails: ["cliente@x.com"], participantRoles: { "cliente@x.com": "admin" },
@@ -249,7 +253,7 @@ describe("Kipu — firestore.rules", () => {
 
   describe("Contador da agência (QA #17)", () => {
     it("'-1' avulso, sem viagem correspondente: recusa", async () => {
-      await admin()(async (ctx) => {
+      await admin(async (ctx) => {
         await setDoc(doc(ctx.firestore(), "agencies/ag2"), {
           name: "x", memberEmails: ["m@x.com"], activeTripsCount: 3, totalTripsCreated: 5
         });
@@ -261,7 +265,7 @@ describe("Kipu — firestore.rules", () => {
 
   describe("Configuração e log de criação — ninguém lê pelo app", () => {
     it("config/creation: leitura recusada mesmo autenticado", async () => {
-      await admin()(async (ctx) => {
+      await admin(async (ctx) => {
         await setDoc(doc(ctx.firestore(), "config/creation"), { code: CREATION_CODE });
       });
       const alice = testEnv.authenticatedContext("alice", { email: "alice@example.com" });
@@ -269,7 +273,7 @@ describe("Kipu — firestore.rules", () => {
     });
 
     it("tripCreationLog: leitura recusada mesmo pra quem criou", async () => {
-      await admin()(async (ctx) => {
+      await admin(async (ctx) => {
         await setDoc(doc(ctx.firestore(), "tripCreationLog/t1"), {
           tripId: "t1", tripName: "x", createdBy: "alice@example.com", code: CREATION_CODE
         });
@@ -281,7 +285,7 @@ describe("Kipu — firestore.rules", () => {
 
   describe("Agência só vê o que ela mesma cadastrou (QA #6)", () => {
     async function seedTripWithAgencyItems() {
-      await admin()(async (ctx) => {
+      await admin(async (ctx) => {
         await setDoc(doc(ctx.firestore(), "agencies/ag3"), { name: "x", memberEmails: ["m@x.com"] });
         await setDoc(doc(ctx.firestore(), "trips/t8"), {
           name: "x", participantEmails: ["cliente@x.com"],
@@ -302,7 +306,7 @@ describe("Kipu — firestore.rules", () => {
   });
 
   it("qualquer pessoa logada lê os planos; ninguém grava pelo app", async () => {
-    await admin()(async (ctx) => {
+    await admin(async (ctx) => {
       await setDoc(doc(ctx.firestore(), "plans/chaski"), { label: "Chaski", maxActiveTrips: 8 });
     });
     const alice = testEnv.authenticatedContext("alice", { email: "alice@example.com" });
@@ -311,7 +315,7 @@ describe("Kipu — firestore.rules", () => {
   });
 
   it("ninguém desconhecido do banco (sem login) lê nada", async () => {
-    await admin()(async (ctx) => {
+    await admin(async (ctx) => {
       await setDoc(doc(ctx.firestore(), "trips/t9"), { name: "x", participantEmails: ["a@x.com"] });
     });
     const anonimo = testEnv.unauthenticatedContext();
