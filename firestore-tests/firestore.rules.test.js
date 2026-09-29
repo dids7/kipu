@@ -196,7 +196,11 @@ describe("Kipu — firestore.rules", () => {
       await seedTripWithGuest();
       const convidado = testEnv.authenticatedContext("g", { email: "convidado@x.com" });
       const ref = doc(convidado.firestore(), "trips/t5");
-      const before = (await admin(async (ctx) => (await getDoc(doc(ctx.firestore(), "trips/t5"))).data()));
+      // withSecurityRulesDisabled() não devolve o que o callback retorna (só
+      // roda pro efeito colateral) — por isso a leitura guarda o resultado
+      // numa variável de fora, em vez de tentar usar o retorno da função.
+      let before;
+      await admin(async (ctx) => { before = (await getDoc(doc(ctx.firestore(), "trips/t5"))).data(); });
       const newRoles = { ...before.participantRoles }; delete newRoles["convidado@x.com"];
       await assertSucceeds(updateDoc(ref, {
         participantEmails: ["dono@x.com"], participantRoles: newRoles, adminEmails: ["dono@x.com"]
