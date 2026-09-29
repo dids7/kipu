@@ -1,0 +1,46 @@
+# Testa as regras do Firestore (ARQ-5) sempre que firestore.rules ou a
+# pasta firestore-tests/ mudam. Roda contra o EMULADOR do Firestore, que
+# sobe e desliga dentro desta mesma execução — nenhum dado real é tocado,
+# e não precisa de nenhum segredo (diferente do deploy das Cloud Functions).
+name: Testar regras do Firestore
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "firestore.rules"
+      - "firestore-tests/**"
+      - ".github/workflows/test-rules.yml"
+  pull_request:
+    paths:
+      - "firestore.rules"
+      - "firestore-tests/**"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar o Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Instalar o Java (o emulador do Firestore precisa)
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Instalar as dependências dos testes
+        working-directory: firestore-tests
+        run: npm install
+
+      - name: Instalar o Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Subir o emulador e rodar os testes
+        run: firebase emulators:exec --project kipu-c1e97 --only firestore "npm --prefix firestore-tests test"
