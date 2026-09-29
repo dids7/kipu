@@ -2247,10 +2247,30 @@ $("roleIntroCloseBtn")?.addEventListener("click", () => {
   hide($("roleIntroBanner"));
 });
 
+// COM-5 (29/set/2026): atalho na aba Hoje pro roteiro oficial em PDF que a
+// agência subiu (categoria "roteiro") — o cliente não precisa procurar na
+// aba Documentos. Lê de docsCache, que já vem filtrado pela trava de
+// segurança de sempre (agencyOwnershipVisible). Chamada de novo — não só
+// no render da aba Hoje — sempre que docsCache atualiza (subscribeDocumentos),
+// pra aparecer/sumir na hora, sem precisar trocar de aba.
+function renderHojeOfficialItinerary() {
+  const box = $("hojeOfficialItinerary");
+  if (!box) return;
+  const roteiros = docsCache.filter((d) => d.docType === "roteiro");
+  if (roteiros.length === 0) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+  box.classList.remove("hidden");
+  box.innerHTML = roteiros.map((d) => {
+    const link = safeUrl(d.url);
+    if (!link) return "";
+    return `<a href="${escapeHtml(link)}" target="_blank" rel="noopener" class="btn btn-outline btn-block" style="margin-bottom:6px;">📄 ${t("hoje.officialItinerary")}${roteiros.length > 1 ? ` — ${escapeHtml(d.title)}` : ""}</a>`;
+  }).join("");
+}
+
 function renderHojeTab() {
   if (!currentTripData) return;
   maybeShowRoleIntro();
   maybeShowFeedbackPopup();
+  renderHojeOfficialItinerary();
   const todayISO = localISODate();
   const statusEl = $("hojeStatusLine");
   if (todayISO < currentTripData.startDate) {
@@ -2900,8 +2920,14 @@ let docsCache = [];
 // Ordem fixa das categorias base — "outro" sempre por último. Categorias
 // criadas na hora (customDocTypes, salvas na própria viagem) entram entre
 // as fixas e "outro" — ver getDocTypeOrder().
-const DOC_TYPE_FIXED_ORDER = ["passaporte", "rg", "cpf", "cnh", "passagem", "ingresso", "voucher", "seguro", "vacina"];
+// COM-5 (29/set/2026): "roteiro" é a categoria do PDF oficial que a agência
+// já usa hoje (o template dela) — primeira da lista, de propósito, e com
+// atalho próprio na aba Hoje (ver renderHojeOfficialItinerary). Fora isso é
+// um documento normal: mesmo upload, mesma trava de segurança de sempre
+// (a Agência só vê o que ela mesma cadastrou, achado #6 do QA).
+const DOC_TYPE_FIXED_ORDER = ["roteiro", "passaporte", "rg", "cpf", "cnh", "passagem", "ingresso", "voucher", "seguro", "vacina"];
 const DOC_TYPE_KEYS = {
+  roteiro: "documents.typeRoteiro",
   passaporte: "documents.typePassaporte", rg: "documents.typeRg", cpf: "documents.typeCpf", cnh: "documents.typeCnh",
   passagem: "documents.typePassagem", ingresso: "documents.typeIngresso", voucher: "documents.typeVoucher",
   seguro: "documents.typeSeguro", vacina: "documents.typeVacina", outro: "documents.typeOutro"
@@ -3116,6 +3142,7 @@ function subscribeDocumentos() {
 
     docsCache = visibleDocs.filter(agencyOwnershipVisible);
     renderDocsList();
+    renderHojeOfficialItinerary();
   }, onSnapshotError("Documentos"));
   unsubscribers.push(unsub);
 }
