@@ -18,7 +18,7 @@ const {
   assertSucceeds,
   assertFails
 } = require("@firebase/rules-unit-testing");
-const { doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch, FieldPath } = require("firebase/firestore");
+const { doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc, writeBatch, FieldPath, serverTimestamp, Timestamp } = require("firebase/firestore");
 
 const RULES_PATH = path.join(__dirname, "..", "firestore.rules");
 const CREATION_CODE = "codigo-de-teste-nao-e-o-de-producao";
@@ -306,6 +306,132 @@ describe("Kipu — firestore.rules", () => {
       const agente = testEnv.authenticatedContext("m", { email: "m@x.com" });
       await assertSucceeds(getDoc(doc(agente.firestore(), "trips/t8/itinerario/i2")));
       await assertFails(getDoc(doc(agente.firestore(), "trips/t8/itinerario/i1")));
+    });
+  });
+
+  describe("Presença — cliente já abriu o app? (COM-9)", () => {
+    // Viagem de agência: cliente (admin), convidado da família, e um
+    // funcionário da agência (papel "agencia") que também é participante.
+    async function seedAgencyTripForPresence() {
+      await admin(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), "agencies/ag4"), { name: "Agência 4", memberEmails: ["agente@agencia.com"] });
+        await setDoc(doc(ctx.firestore(), "trips/tp1"), {
+          name: "x", startDate: isoDaysFromNow(5), endDate: isoDaysFromNow(10),
+          participantEmails: ["cliente@x.com", "familiar@x.com", "agente@agencia.com"],
+          participantRoles: { "cliente@x.com": "admin", "familiar@x.com": "convidado", "agente@agencia.com": "agencia" },
+          adminEmails: ["cliente@x.com"], createdBy: "cliente@x.com",
+          agencyId: "ag4", agencyCancelled: false, countsTowardLimit: true
+        });
+      });
+    }
+    const novaPresenca = (email) => ({ email, firstOpenedAt: serverTimestamp(), lastOpenedAt: serverTimestamp() });
+
+    it("cliente registra a PRÓPRIA presença: aceita", async () => {
+      await seedAgencyTripForPresence();
+      const cliente = testEnv.authenticatedContext("c", { email: "cliente@x.com" });
+      await assertSucceeds(setDoc(doc(cliente.firestore(), "trips/tp1/presence/cliente@x.com"), novaPresenca("cliente@x.com")));
+    });
+
+    it("gravar a presença de OUTRA pessoa: recusa", async () => {
+      await seedAgencyTripForPresence();
+      const cliente = testEnv.authenticatedContext("c", { email: "cliente@x.com" });
+      await assertFails(setDoc(doc(cliente.firestore(), "trips/tp1/presence/familiar@x.com"), novaPresenca("familiar@x.com")));
+    });
+
+    it("data de 1º acesso inventada (não é a hora do servidor): recusa", async () => {
+      await seedAgencyTripForPresence();
+      const cliente = testEnv.authenticatedContext("c", { email: "cliente@x.com" });
+      await assertFails(setDoc(doc(cliente.firestore(), "trips/tp1/presence/cliente@x.com"), {
+        email: "cliente@x.com",
+        firstOpenedAt: Timestamp.fromDate(new Date("2020-01-01T00:00:00Z")),
+        lastOpenedAt: serverTimestamp()
+      }));
+    });
+
+    it("campo extra no registro de presença: recusa", async () => {
+      await seedAgencyTripForPresence();
+      const cliente = testEnv.authenticatedContext("c", { email: "cliente@x.com" });
+      await assertFails(setDoc(doc(cliente.firestore(), "trips/tp1/presence/cliente@x.com"), {
+        ...novaPresenca("cliente@x.com"), nota: "qualquer coisa"
+      }));
+    });
+
+    it("quem não participa da viagem não grava presença: recusa", async () => {
+      await seedAgencyTripForPresence();
+      const estranho = testEnv.authenticatedContext("e", { email: "estranho@fora.com" });
+      await assertFails(setDoc(doc(estranho.firestore(), "trips/tp1/presence/estranho@fora.com"), novaPresenca("estranho@fora.com")));
+    });
+
+    it("funcionário da agência (papel 'agencia') não grava presença: recusa", async () => {
+      await seedAgencyTripForPresence();
+      const agente = testEnv.authenticatedContext("a", { email: "agente@agencia.com" });
+      await assertFails(setDoc(doc(agente.firestore(), "trips/tp1/presence/agente@agencia.com"), novaPresenca("agente@agencia.com")));
+    });
+
+    it("atualizar só o último acesso: aceita; mexer no 1º acesso: recusa", async () => {
+      await seedAgencyTripForPresence();
+      await admin(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), "trips/tp1/presence/cliente@x.com"), {
+          email: "cliente@x.com",
+          firstOpenedAt: Timestamp.fromDate(new Date("2026-09-01T10:00:00Z")),
+          lastOpenedAt: Timestamp.fromDate(new Date("2026-09-01T10:00:00Z"))
+        });
+      });
+      const cliente = testEnv.authenticatedContext("c", { email: "cliente@x.com" });
+      const ref = doc(cliente.firestore(), "trips/tp1/presence/cliente@x.com");
+      await assertSucceeds(updateDoc(ref, { lastOpenedAt: serverTimestamp() }));
+      await assertFails(updateDoc(ref, { firstOpenedAt: serverTimestamp() }));
+    });
+
+    it("agência lê a presença de todos os clientes (consulta da coleção inteira)", async () => {
+      await seedAgencyTripForPresence();
+      await admin(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), "trips/tp1/presence/cliente@x.com"), { email: "cliente@x.com", firstOpenedAt: Timestamp.now(), lastOpenedAt: Timestamp.now() });
+      });
+      const agente = testEnv.authenticatedContext("a", { email: "agente@agencia.com" });
+      await assertSucceeds(getDocs(collection(agente.firestore(), "trips/tp1/presence")));
+    });
+
+    it("outro participante NÃO enxerga quem já abriu (nem a coleção, nem o registro alheio)", async () => {
+      await seedAgencyTripForPresence();
+      await admin(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), "trips/tp1/presence/cliente@x.com"), { email: "cliente@x.com", firstOpenedAt: Timestamp.now(), lastOpenedAt: Timestamp.now() });
+      });
+      const familiar = testEnv.authenticatedContext("f", { email: "familiar@x.com" });
+      await assertFails(getDocs(collection(familiar.firestore(), "trips/tp1/presence")));
+      await assertFails(getDoc(doc(familiar.firestore(), "trips/tp1/presence/cliente@x.com")));
+    });
+
+    it("a pessoa lê o próprio registro de presença", async () => {
+      await seedAgencyTripForPresence();
+      await admin(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), "trips/tp1/presence/familiar@x.com"), { email: "familiar@x.com", firstOpenedAt: Timestamp.now(), lastOpenedAt: Timestamp.now() });
+      });
+      const familiar = testEnv.authenticatedContext("f", { email: "familiar@x.com" });
+      await assertSucceeds(getDoc(doc(familiar.firestore(), "trips/tp1/presence/familiar@x.com")));
+    });
+
+    it("apagar: o próprio e o Admin podem; um convidado não apaga o de outro", async () => {
+      await seedAgencyTripForPresence();
+      await admin(async (ctx) => {
+        for (const e of ["cliente@x.com", "familiar@x.com"]) {
+          await setDoc(doc(ctx.firestore(), `trips/tp1/presence/${e}`), { email: e, firstOpenedAt: Timestamp.now(), lastOpenedAt: Timestamp.now() });
+        }
+      });
+      const familiar = testEnv.authenticatedContext("f", { email: "familiar@x.com" });
+      const cliente = testEnv.authenticatedContext("c", { email: "cliente@x.com" });
+      await assertFails(deleteDoc(doc(familiar.firestore(), "trips/tp1/presence/cliente@x.com")));
+      await assertSucceeds(deleteDoc(doc(familiar.firestore(), "trips/tp1/presence/familiar@x.com")));
+      await assertSucceeds(deleteDoc(doc(cliente.firestore(), "trips/tp1/presence/cliente@x.com")));
+    });
+
+    it("viagem cancelada pela agência: cliente não grava presença", async () => {
+      await seedAgencyTripForPresence();
+      await admin(async (ctx) => {
+        await updateDoc(doc(ctx.firestore(), "trips/tp1"), { agencyCancelled: true, countsTowardLimit: false });
+      });
+      const cliente = testEnv.authenticatedContext("c", { email: "cliente@x.com" });
+      await assertFails(setDoc(doc(cliente.firestore(), "trips/tp1/presence/cliente@x.com"), novaPresenca("cliente@x.com")));
     });
   });
 
