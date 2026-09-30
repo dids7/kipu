@@ -1977,7 +1977,7 @@ $("deleteTripBtn").addEventListener("click", async () => {
   if (!ok) return;
 
   const tripId = currentDateTrip.id;
-  const subcollections = ["itinerario", "estadia", "documentos", "mala", "tarefas", "gastos", "emergencia", "activityLog", "lembretes", "presence"];
+  const subcollections = ["itinerario", "estadia", "documentos", "mala", "tarefas", "gastos", "emergencia", "activityLog", "lembretes", "dicas", "presence"];
   for (const sub of subcollections) {
     const snap = await getDocs(collection(db, "trips", tripId, sub));
     await Promise.all(snap.docs.map(async (d) => {
@@ -2667,7 +2667,12 @@ let dicaFilter = "todos";
 function dicaCategoryLabel(cat) { return t("itinerary.cat" + cat.charAt(0).toUpperCase() + cat.slice(1)); }
 
 function subscribeDicas() {
-  const unsub = onSnapshot(collection(db, "trips", currentTripId, "dicas"), (snap) => {
+  // Agência só enxerga as dicas que ela mesma criou (mesmo padrão do Itinerário).
+  // As regras do Firestore não "filtram" sozinhas: a consulta precisa PEDIR só o
+  // que a agência pode ver, senão o Firestore recusa a coleção inteira.
+  const dicasCol = collection(db, "trips", currentTripId, "dicas");
+  const dicasQuery = myRole === "agencia" ? query(dicasCol, where("createdByRole", "==", "agencia")) : dicasCol;
+  const unsub = onSnapshot(dicasQuery, (snap) => {
     dicasCache = [];
     snap.forEach((d) => dicasCache.push({ id: d.id, ...d.data() }));
     renderDicaFilters();
@@ -2768,7 +2773,8 @@ $("saveDicaBtn")?.addEventListener("click", async () => {
       await updateDoc(doc(db, "trips", currentTripId, "dicas", editingDicaId), payload);
       logActivity("dicas", "dica editada", titulo);
     } else {
-      await addDoc(collection(db, "trips", currentTripId, "dicas"), { ...payload, createdBy: currentUser.email });
+      // createdByRole só é gravado na criação — nunca sobrescrito numa edição.
+      await addDoc(collection(db, "trips", currentTripId, "dicas"), { ...payload, createdBy: currentUser.email, createdByRole: myRole });
       logActivity("dicas", "dica adicionada", titulo);
     }
     resetDicaForm();
@@ -4325,7 +4331,7 @@ $("resetModalConfirmBtn")?.addEventListener("click", async () => {
   }
   hideResetModal();
 
-  const subcollections = ["itinerario", "estadia", "documentos", "mala", "tarefas", "gastos", "emergencia", "activityLog", "lembretes"];
+  const subcollections = ["itinerario", "estadia", "documentos", "mala", "tarefas", "gastos", "emergencia", "activityLog", "lembretes", "dicas"];
   let totalDeleted = 0;
   for (const sub of subcollections) {
     const snap = await getDocs(collection(db, "trips", currentTripId, sub));
