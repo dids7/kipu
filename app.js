@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot,
-  query, where, orderBy, serverTimestamp, getDocs, getDocsFromServer, getDoc, arrayUnion, increment, runTransaction, limit, FieldPath, arrayRemove, deleteField, writeBatch
+  query, where, orderBy, serverTimestamp, getDocs, getDocsFromServer, getDocFromServer, getDoc, arrayUnion, increment, runTransaction, limit, FieldPath, arrayRemove, deleteField, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   ref, uploadBytes, getDownloadURL, deleteObject
@@ -1114,6 +1114,66 @@ function buildTripCardRight(trip, started) {
   return `<div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">${whatsBtn}${cancelBtn}</div>`;
 }
 
+// ---------- Indicador "cliente já entrou" (COM-9, 29/set/2026) ----------
+// Quem conta como "cliente": todo participante que NÃO é da agência (nem tem
+// papel "agencia"). O funcionário que criou a viagem fica de fora — óbvio que
+// ele já abriu. Cada cliente novo que o cliente convidar depois entra na conta.
+function getTripClientEmails(trip) {
+  const agencyMembers = (currentAgency?.memberEmails || []).map((e) => e.toLowerCase());
+  const roles = trip.participantRoles || {};
+  return (trip.participantEmails || [])
+    .map((e) => e.toLowerCase())
+    .filter((e) => !agencyMembers.includes(e) && roles[e] !== "agencia");
+}
+function fmtPresenceDate(ts) {
+  const d = ts?.toDate?.();
+  if (!d) return "";
+  return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+// Guarda quais cards estão com a lista aberta, pra não fechar sozinha quando o painel redesenha.
+const expandedPresenceTripIds = new Set();
+function buildPresenceHtml(trip) {
+  // undefined = não carregou (viagem encerrada/cancelada, ou ainda carregando); null = deu erro.
+  if (!trip.presence) return "";
+  const clients = getTripClientEmails(trip);
+  if (clients.length === 0) return "";
+  const entered = clients.filter((e) => trip.presence[e]);
+  const label = entered.length === clients.length
+    ? `✅ Todos já entraram (${entered.length} de ${clients.length})`
+    : entered.length === 0
+      ? `⚪ Ninguém entrou ainda (0 de ${clients.length})`
+      : `👤 ${entered.length} de ${clients.length} já entraram`;
+  const open = expandedPresenceTripIds.has(trip.id);
+  const rows = clients.map((e) => {
+    const p = trip.presence[e];
+    return p
+      ? `<div>✓ ${escapeHtml(e)} <span style="color:var(--muted);">· 1º acesso ${escapeHtml(fmtPresenceDate(p.firstOpenedAt))}${p.lastOpenedAt && p.lastOpenedAt.toMillis?.() !== p.firstOpenedAt?.toMillis?.() ? ` · último ${escapeHtml(fmtPresenceDate(p.lastOpenedAt))}` : ""}</span></div>`
+      : `<div>○ ${escapeHtml(e)} <span style="color:var(--muted);">· ainda não entrou</span></div>`;
+  }).join("");
+  return `
+    <div style="margin-top:8px;">
+      <button class="btn btn-outline btn-small" data-toggle-presence type="button">${label} ${open ? "▴" : "▾"}</button>
+      <div data-presence-details class="${open ? "" : "hidden"}" style="margin-top:6px; font-size:12.5px; display:flex; flex-direction:column; gap:3px; overflow-wrap:anywhere;">${rows}</div>
+    </div>`;
+}
+// Busca a presença das viagens que ainda importam (não canceladas e não encerradas):
+// 1 consulta por viagem, em paralelo. Falha de uma não derruba as outras.
+async function loadAgencyPresence(trips) {
+  const today = localISODate();
+  const targets = trips.filter((t) => !t.agencyCancelled && (!t.endDate || t.endDate >= today));
+  await Promise.all(targets.map(async (t) => {
+    try {
+      const snap = await getDocsFreshFirst(collection(db, "trips", t.id, "presence"));
+      const map = {};
+      snap.forEach((d) => { map[d.id.toLowerCase()] = d.data(); });
+      t.presence = map;
+    } catch (err) {
+      t.presence = null;
+      console.warn("Não foi possível carregar quem já entrou na viagem", t.id, err);
+    }
+  }));
+}
+
 function renderAgencyTripCard(trip, container) {
   const agencyId = currentAgency.id;
   const today = localISODate();
@@ -1131,11 +1191,21 @@ function renderAgencyTripCard(trip, container) {
       </div>
       ${buildTripCardRight(trip, started)}
     </div>
+    ${buildPresenceHtml(trip)}
   `;
   card.addEventListener("click", (e) => {
-    if (e.target.closest("[data-cancel-trip], [data-reactivate-trip], [data-copy-whatsapp]")) return;
+    if (e.target.closest("[data-cancel-trip], [data-reactivate-trip], [data-copy-whatsapp], [data-toggle-presence], [data-presence-details]")) return;
     openTripSafely(trip.id);
   });
+  const presenceBtn = card.querySelector("[data-toggle-presence]");
+  if (presenceBtn) {
+    presenceBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (expandedPresenceTripIds.has(trip.id)) expandedPresenceTripIds.delete(trip.id);
+      else expandedPresenceTripIds.add(trip.id);
+      renderAgencyLists();
+    });
+  }
   const whatsBtnEl = card.querySelector("[data-copy-whatsapp]");
   if (whatsBtnEl) {
     whatsBtnEl.addEventListener("click", (e) => {
@@ -1353,6 +1423,10 @@ async function loadAgencyPanel() {
   }
   lastAgencyTrips = allTrips;
   renderAgencyLists();
+  // COM-9: o indicador "já entraram" chega logo depois — o painel não espera por ele.
+  loadAgencyPresence(allTrips).then(() => {
+    if (lastAgencyTrips === allTrips) renderAgencyLists();
+  });
 }
 
 $("showAgencyHistoryBtn")?.addEventListener("click", () => {
@@ -1781,6 +1855,43 @@ async function openTrip(tripId) {
   // só a ENTRADA na viagem é fixa em "Hoje", não lembra a última aba usada.
   const tabBtn = document.querySelector('.tab[data-tab="hoje"]');
   if (tabBtn) tabBtn.click();
+
+  recordPresence(); // COM-9: melhor esforço, sem await — nunca atrasa nem trava a abertura
+}
+
+// ---------- Presença: "o cliente já abriu o app?" (COM-9, 29/set/2026) ----------
+// Grava trips/{id}/presence/{email} com o 1º acesso (nunca muda) e o último
+// acesso (atualizado no máximo a cada 6h, pra não gerar escrita à toa).
+// Quem é membro de agência (papel "agencia") não grava — não é cliente.
+// Falha em silêncio: o indicador é conveniência, não pode atrapalhar o uso.
+const PRESENCE_REFRESH_MS = 6 * 60 * 60 * 1000;
+async function recordPresence() {
+  try {
+    const email = (currentUser?.email || "").toLowerCase();
+    if (!email || !currentTripId || !currentTripData) return;
+    if (myRole === "agencia") return;
+    const isParticipant = (currentTripData.participantEmails || []).map((e) => e.toLowerCase()).includes(email);
+    if (!isParticipant) return;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return; // offline: tenta na próxima abertura
+    const presenceRef = doc(db, "trips", currentTripId, "presence", email);
+    // Do SERVIDOR, não do cache: se o cache dissesse "não existe" sem ser verdade,
+    // o setDoc tentaria refazer o 1º acesso e a regra recusaria.
+    const snap = await getDocFromServer(presenceRef).catch((err) => {
+      if (err && err.code === "unavailable") return null;
+      throw err;
+    });
+    if (snap === null) return;
+    if (!snap.exists()) {
+      await setDoc(presenceRef, { email, firstOpenedAt: serverTimestamp(), lastOpenedAt: serverTimestamp() });
+      return;
+    }
+    const lastMs = snap.data().lastOpenedAt?.toMillis?.() || 0;
+    if (Date.now() - lastMs > PRESENCE_REFRESH_MS) {
+      await updateDoc(presenceRef, { lastOpenedAt: serverTimestamp() });
+    }
+  } catch (err) {
+    console.warn("Não foi possível registrar a presença nesta viagem:", err);
+  }
 }
 
 function clearSubscriptions() {
@@ -1866,7 +1977,7 @@ $("deleteTripBtn").addEventListener("click", async () => {
   if (!ok) return;
 
   const tripId = currentDateTrip.id;
-  const subcollections = ["itinerario", "estadia", "documentos", "mala", "tarefas", "gastos", "emergencia", "activityLog", "lembretes"];
+  const subcollections = ["itinerario", "estadia", "documentos", "mala", "tarefas", "gastos", "emergencia", "activityLog", "lembretes", "presence"];
   for (const sub of subcollections) {
     const snap = await getDocs(collection(db, "trips", tripId, sub));
     await Promise.all(snap.docs.map(async (d) => {
@@ -1937,6 +2048,9 @@ async function removeParticipantImpl(email) {
   await updateDoc(doc(db, "trips", currentTripId), {
     participantEmails: updated, participantRoles: updatedRoles, adminEmails: updatedAdmins, blockedEmails: updatedBlocked
   });
+  // COM-9: some da contagem "já entraram" também (melhor esforço — a contagem
+  // já ignora quem saiu da lista de participantes, isto só limpa o registro).
+  deleteDoc(doc(db, "trips", currentTripId, "presence", email)).catch(() => {});
   currentTripData.participantEmails = updated;
   currentTripData.participantRoles = updatedRoles;
   currentTripData.adminEmails = updatedAdmins;
@@ -4104,6 +4218,12 @@ async function eraseMyData() {
       jobs.push(deleteWhereOwner("gastos", "ownerEmail")); // só gastos pessoais têm ownerEmail
     }
     await Promise.all(jobs);
+
+    // COM-9: apaga o próprio registro de presença (1º/último acesso) — ainda
+    // como participante, senão a regra recusa.
+    if (!isAgencyRole) {
+      await deleteDoc(doc(db, "trips", currentTripId, "presence", email.toLowerCase())).catch(() => {});
+    }
 
     // Sai da viagem: remove SÓ o próprio e-mail (arrayRemove/deleteField, em
     // vez de regravar as listas inteiras — assim não apaga sem querer alguém

@@ -295,6 +295,42 @@ service cloud.firestore {
         allow write: if request.auth != null && isParticipant() && roleIn() in ["admin", "colaborador", "agencia", "convidado"];
       }
 
+      // ---- Presença: "o cliente já abriu o app?" (COM-9, 29/set/2026) ----
+      // presence/{email}: firstOpenedAt (1º acesso, nunca muda) e lastOpenedAt.
+      // Só guarda e-mail + datas — nenhum conteúdo da viagem.
+      // - Gravar: só a PRÓPRIA pessoa, e só quem é participante de verdade —
+      //   membro de agência (papel "agencia") não grava (não conta como cliente).
+      //   As datas têm que ser a hora do servidor (request.time): ninguém
+      //   consegue "fingir" que entrou, nem reescrever o 1º acesso.
+      // - Ler: o próprio e a agência dona da viagem (é pra ela que o
+      //   indicador existe). Os outros participantes NÃO enxergam quem abriu.
+      // - Apagar: o próprio, ou Admin/Colaborador (remover participante,
+      //   excluir a viagem inteira).
+      match /presence/{presenceEmail} {
+        allow read: if request.auth != null && tripAccessible(parentTrip()) && (
+          (request.auth.token.email == presenceEmail
+            && request.auth.token.email in parentTrip().get("participantEmails", []))
+          || isAgencyMemberOfTrip(parentTrip())
+        );
+        allow create: if request.auth != null && isParticipant()
+          && request.auth.token.email == presenceEmail
+          && request.auth.token.email in parentTrip().get("participantEmails", [])
+          && roleIn() != "agencia"
+          && request.resource.data.keys().hasOnly(["email", "firstOpenedAt", "lastOpenedAt"])
+          && request.resource.data.keys().hasAll(["email", "firstOpenedAt", "lastOpenedAt"])
+          && request.resource.data.email == presenceEmail
+          && request.resource.data.firstOpenedAt == request.time
+          && request.resource.data.lastOpenedAt == request.time;
+        allow update: if request.auth != null && isParticipant()
+          && request.auth.token.email == presenceEmail
+          && request.auth.token.email in parentTrip().get("participantEmails", [])
+          && roleIn() != "agencia"
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["lastOpenedAt"])
+          && request.resource.data.lastOpenedAt == request.time;
+        allow delete: if request.auth != null && isParticipant()
+          && (request.auth.token.email == presenceEmail || roleIn() in ["admin", "colaborador"]);
+      }
+
       // ---- Mala ----
       match /mala/{docId} {
         allow read: if request.auth != null && isParticipant() && roleIn() != "agencia";
