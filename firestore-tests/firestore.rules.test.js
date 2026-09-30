@@ -18,7 +18,7 @@ const {
   assertSucceeds,
   assertFails
 } = require("@firebase/rules-unit-testing");
-const { doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc, writeBatch, FieldPath, serverTimestamp, Timestamp } = require("firebase/firestore");
+const { doc, getDoc, getDocs, collection, query, where, setDoc, updateDoc, deleteDoc, writeBatch, FieldPath, serverTimestamp, Timestamp } = require("firebase/firestore");
 
 const RULES_PATH = path.join(__dirname, "..", "firestore.rules");
 const CREATION_CODE = "codigo-de-teste-nao-e-o-de-producao";
@@ -432,6 +432,84 @@ describe("Kipu — firestore.rules", () => {
       });
       const cliente = testEnv.authenticatedContext("c", { email: "cliente@x.com" });
       await assertFails(setDoc(doc(cliente.firestore(), "trips/tp1/presence/cliente@x.com"), novaPresenca("cliente@x.com")));
+    });
+  });
+
+  describe("Dicas do grupo — agência só vê o que ela criou", () => {
+    // Viagem de agência com cliente (admin), um convidado e um funcionário da
+    // agência (papel "agencia"). Uma dica de cada um já cadastrada.
+    async function seedTripWithDicas() {
+      await admin(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), "agencies/ag5"), { name: "Agência 5", memberEmails: ["agente@agencia.com"] });
+        await setDoc(doc(ctx.firestore(), "trips/td1"), {
+          name: "x", startDate: isoDaysFromNow(5), endDate: isoDaysFromNow(10),
+          participantEmails: ["cliente@x.com", "convidado@x.com", "agente@agencia.com"],
+          participantRoles: { "cliente@x.com": "admin", "convidado@x.com": "convidado", "agente@agencia.com": "agencia" },
+          adminEmails: ["cliente@x.com"], createdBy: "cliente@x.com",
+          agencyId: "ag5", agencyCancelled: false, countsTowardLimit: true
+        });
+        await setDoc(doc(ctx.firestore(), "trips/td1/dicas/d-cliente"), { titulo: "Torre Eiffel", category: "outro", createdBy: "cliente@x.com", createdByRole: "admin" });
+        await setDoc(doc(ctx.firestore(), "trips/td1/dicas/d-agencia"), { titulo: "Câmbio da agência", category: "cambio", createdBy: "agente@agencia.com", createdByRole: "agencia" });
+      });
+    }
+
+    it("qualquer papel de participante cria dica com o próprio papel: aceita", async () => {
+      await seedTripWithDicas();
+      for (const [uid, email, role] of [["c", "cliente@x.com", "admin"], ["g", "convidado@x.com", "convidado"], ["a", "agente@agencia.com", "agencia"]]) {
+        const ctx = testEnv.authenticatedContext(uid, { email });
+        await assertSucceeds(setDoc(doc(ctx.firestore(), `trips/td1/dicas/nova-${uid}`), { titulo: "Nova", category: "outro", createdBy: email, createdByRole: role }));
+      }
+    });
+
+    it("criar dica se passando por agência (createdByRole falso): recusa", async () => {
+      await seedTripWithDicas();
+      const convidado = testEnv.authenticatedContext("g", { email: "convidado@x.com" });
+      await assertFails(setDoc(doc(convidado.firestore(), "trips/td1/dicas/fake"), { titulo: "x", category: "outro", createdBy: "convidado@x.com", createdByRole: "agencia" }));
+    });
+
+    it("quem não participa da viagem não lê nem cria dica: recusa", async () => {
+      await seedTripWithDicas();
+      const estranho = testEnv.authenticatedContext("e", { email: "estranho@fora.com" });
+      await assertFails(getDoc(doc(estranho.firestore(), "trips/td1/dicas/d-cliente")));
+      await assertFails(setDoc(doc(estranho.firestore(), "trips/td1/dicas/x"), { titulo: "x", category: "outro", createdBy: "estranho@fora.com", createdByRole: "colaborador" }));
+    });
+
+    it("cliente (admin) e convidado leem todas as dicas, inclusive as da agência", async () => {
+      await seedTripWithDicas();
+      for (const [uid, email] of [["c", "cliente@x.com"], ["g", "convidado@x.com"]]) {
+        const ctx = testEnv.authenticatedContext(uid, { email });
+        await assertSucceeds(getDocs(collection(ctx.firestore(), "trips/td1/dicas")));
+      }
+    });
+
+    it("agência lê a própria dica, mas não a do cliente", async () => {
+      await seedTripWithDicas();
+      const agente = testEnv.authenticatedContext("a", { email: "agente@agencia.com" });
+      await assertSucceeds(getDoc(doc(agente.firestore(), "trips/td1/dicas/d-agencia")));
+      await assertFails(getDoc(doc(agente.firestore(), "trips/td1/dicas/d-cliente")));
+    });
+
+    it("agência: consulta filtrada por createdByRole funciona; a coleção inteira sem filtro é recusada", async () => {
+      await seedTripWithDicas();
+      const agente = testEnv.authenticatedContext("a", { email: "agente@agencia.com" });
+      await assertSucceeds(getDocs(query(collection(agente.firestore(), "trips/td1/dicas"), where("createdByRole", "==", "agencia"))));
+      await assertFails(getDocs(collection(agente.firestore(), "trips/td1/dicas")));
+    });
+
+    it("agência edita/apaga a própria dica, mas não a do cliente", async () => {
+      await seedTripWithDicas();
+      const agente = testEnv.authenticatedContext("a", { email: "agente@agencia.com" });
+      await assertSucceeds(updateDoc(doc(agente.firestore(), "trips/td1/dicas/d-agencia"), { nota: "atualizada" }));
+      await assertFails(updateDoc(doc(agente.firestore(), "trips/td1/dicas/d-cliente"), { nota: "invadida" }));
+      await assertFails(deleteDoc(doc(agente.firestore(), "trips/td1/dicas/d-cliente")));
+      await assertSucceeds(deleteDoc(doc(agente.firestore(), "trips/td1/dicas/d-agencia")));
+    });
+
+    it("editar a dica não deixa trocar o createdByRole (nem pra expor à agência)", async () => {
+      await seedTripWithDicas();
+      const cliente = testEnv.authenticatedContext("c", { email: "cliente@x.com" });
+      await assertSucceeds(updateDoc(doc(cliente.firestore(), "trips/td1/dicas/d-cliente"), { nota: "ok" }));
+      await assertFails(updateDoc(doc(cliente.firestore(), "trips/td1/dicas/d-cliente"), { createdByRole: "agencia" }));
     });
   });
 
