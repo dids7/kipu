@@ -235,7 +235,8 @@ service cloud.firestore {
       //   participante de verdade (QA #15b).
       // - Entrar pelo código: só o próprio e-mail (isSelfJoin).
       // - Sair da viagem: só o próprio e-mail (isSelfLeave).
-      // - Migração única de viagens antigas (sem adminEmails).
+      // (Migração única de viagens antigas sem adminEmails: REMOVIDA em 1/out/2026 —
+      //  ARQ-9 parte 2. Todas as viagens em trips já têm adminEmails.)
       // - Painel da Agência: só contador e cancelamento (agencyTripChangeOk).
       allow update: if request.auth != null && tripAccessible(resource.data) && (
         (
@@ -254,15 +255,6 @@ service cloud.firestore {
         isSelfJoin()
         ||
         isSelfLeave()
-        ||
-        (
-          // Migração única: se a viagem AINDA não tem o campo adminEmails,
-          // qualquer participante pode criar esse campo (e os vizinhos da
-          // migração). Assim que adminEmails existir, fecha sozinha.
-          !("adminEmails" in resource.data) &&
-          request.auth.token.email in resource.data.participantEmails &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["participantRoles", "adminEmails", "blockedEmails", "defaultJoinRole"])
-        )
         ||
         (
           // Painel da Agência: só membro de verdade da agência dona da
