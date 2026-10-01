@@ -141,6 +141,15 @@ function can(action) {
 function agencyOwnershipVisible(data) {
   return myRole !== "agencia" || data.createdByRole === "agencia";
 }
+// Fase 4 (consulta): as regras do Firestore NÃO "filtram" sozinhas — se a
+// consulta puder trazer um documento que o usuário não pode ler, o Firestore
+// recusa a coleção inteira. Por isso a Agência precisa PEDIR só o que ela
+// mesma criou (createdByRole == "agencia"), em vez de pedir tudo e esconder
+// na tela. Cliente/colaborador/convidado seguem consultando a coleção toda.
+function tripSubcollectionForRole(sub) {
+  const col = collection(db, "trips", currentTripId, sub);
+  return myRole === "agencia" ? query(col, where("createdByRole", "==", "agencia")) : col;
+}
 function canAddParticipant() {
   const val = myPerms().addParticipant;
   if (val === true) return true;
@@ -2500,11 +2509,19 @@ let editingItinerarioId = null;
 let itinerarioByDate = {}; // { "YYYY-MM-DD": [items] } — alimenta os marcadores do calendário
 
 function subscribeItinerario() {
-  const q = query(collection(db, "trips", currentTripId, "itinerario"), orderBy("date"));
+  // Agência: filtro por createdByRole + orderBy("date") exigiria um índice composto
+  // no Firestore. Pra não depender disso, a consulta da agência vem sem orderBy e a
+  // ordenação por data é feita aqui (mesmo resultado: empate de data mantém a ordem).
+  const q = myRole === "agencia"
+    ? tripSubcollectionForRole("itinerario")
+    : query(collection(db, "trips", currentTripId, "itinerario"), orderBy("date"));
   const unsub = onSnapshot(q, (snap) => {
+    const itinDocs = myRole === "agencia"
+      ? [...snap.docs].sort((a, b) => String(a.data().date || "").localeCompare(String(b.data().date || "")))
+      : snap.docs;
     itinerarioByDate = {};
     const listEl = $("itinerarioList");
-    const visibleCount = snap.docs.filter((d) => agencyOwnershipVisible(d.data())).length;
+    const visibleCount = itinDocs.filter((d) => agencyOwnershipVisible(d.data())).length;
     updateBulkImportDefaultVisibility(visibleCount === 0);
     if (visibleCount === 0) {
       listEl.innerHTML = `<div class='empty'>${t("empty.itinerary")}</div>`;
@@ -2514,7 +2531,7 @@ function subscribeItinerario() {
       return;
     }
     listEl.innerHTML = "";
-    snap.forEach((d) => {
+    itinDocs.forEach((d) => {
       const it = d.data();
       // Fase 4 (18/set/2026): Agência só enxerga o que ela mesma criou —
       // o que o cliente/colaborador acrescentar por conta própria fica
@@ -2949,7 +2966,7 @@ let editingEstadiaId = null;
 let estadiaCache = [];
 
 function subscribeEstadia() {
-  const unsub = onSnapshot(collection(db, "trips", currentTripId, "estadia"), (snap) => {
+  const unsub = onSnapshot(tripSubcollectionForRole("estadia"), (snap) => {
     estadiaCache = [];
     const listEl = $("estadiaList");
     const visibleCount = snap.docs.filter((d) => agencyOwnershipVisible(d.data())).length;
@@ -3242,7 +3259,7 @@ $("docDetailCloseBtn")?.addEventListener("click", () => $("docDetailModal").clas
 function subscribeDocumentos() {
   populateDocFilterPerson();
   populateDocTypeOptions();
-  const unsub = onSnapshot(collection(db, "trips", currentTripId, "documentos"), (snap) => {
+  const unsub = onSnapshot(tripSubcollectionForRole("documentos"), (snap) => {
     const todayISO = localISODate();
     const visibleDocs = [];
 
@@ -4091,7 +4108,7 @@ function renderEmergencyList() {
 }
 
 function subscribeEmergencia() {
-  const unsub = onSnapshot(collection(db, "trips", currentTripId, "emergencia"), (snap) => {
+  const unsub = onSnapshot(tripSubcollectionForRole("emergencia"), (snap) => {
     const todayISO = localISODate();
     emergItemsCache = [];
     snap.forEach((d) => {
