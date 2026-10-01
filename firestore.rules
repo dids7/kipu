@@ -331,6 +331,28 @@ service cloud.firestore {
           && (request.auth.token.email == presenceEmail || roleIn() in ["admin", "colaborador"]);
       }
 
+      // ---- Dicas do grupo (31/ago/2026; regra criada em 30/set/2026) ----
+      // Achados úteis sem data (câmbio, restaurante...). Aberta pros 4 papéis
+      // (mesmo padrão dos Lembretes), MAS a Agência só lê/edita o que ela mesma
+      // criou (createdByRole == "agencia"), igual ao Itinerário. Como regra não
+      // é filtro, o app faz a consulta da agência com where(createdByRole == "agencia").
+      // Ninguém consegue trocar o createdByRole depois de criado.
+      // (Antes desta regra a coleção não tinha nenhuma → o Firestore recusava tudo.)
+      match /dicas/{docId} {
+        allow read: if request.auth != null && isParticipant()
+          && (roleIn() != "agencia" || resource.data.get("createdByRole", "") == "agencia");
+        allow create: if request.auth != null && isParticipant()
+          && roleIn() in ["admin", "colaborador", "agencia", "convidado"]
+          && request.resource.data.get("createdByRole", roleIn()) == roleIn();
+        allow update: if request.auth != null && isParticipant()
+          && roleIn() in ["admin", "colaborador", "agencia", "convidado"]
+          && (roleIn() != "agencia" || resource.data.get("createdByRole", "") == "agencia")
+          && request.resource.data.get("createdByRole", "") == resource.data.get("createdByRole", "");
+        allow delete: if request.auth != null && isParticipant()
+          && roleIn() in ["admin", "colaborador", "agencia", "convidado"]
+          && (roleIn() != "agencia" || resource.data.get("createdByRole", "") == "agencia");
+      }
+
       // ---- Mala ----
       match /mala/{docId} {
         allow read: if request.auth != null && isParticipant() && roleIn() != "agencia";
