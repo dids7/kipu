@@ -1879,6 +1879,9 @@ async function recordPresence() {
     const email = (currentUser?.email || "").toLowerCase();
     if (!email || !currentTripId || !currentTripData) return;
     if (myRole === "agencia") return;
+    // Minimização (LGPD): só viagens criadas por agência têm quem leia o registro.
+    // Em viagem pessoal não há ninguém pra quem isso sirva, então nem grava.
+    if (!currentTripData.agencyId) return;
     const isParticipant = (currentTripData.participantEmails || []).map((e) => e.toLowerCase()).includes(email);
     if (!isParticipant) return;
     if (typeof navigator !== "undefined" && navigator.onLine === false) return; // offline: tenta na próxima abertura

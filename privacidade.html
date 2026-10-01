@@ -40,16 +40,18 @@
   <p>Ao usar o Kipu, tratamos os seguintes dados, sempre relacionados à viagem em grupo que você participa:</p>
   <ul>
     <li><strong>Identificação</strong>: nome de exibição e e-mail (via login com sua conta Google).</li>
-    <li><strong>Conteúdo da viagem</strong>: itinerário, hospedagem, tarefas, itens de mala, gastos e divisão de contas.</li>
+    <li><strong>Conteúdo da viagem</strong>: itinerário, hospedagem, tarefas, itens de mala, gastos e divisão de contas, dicas e lembretes do grupo.</li>
     <li><strong>Documentos</strong>: arquivos ou links que você ou outros participantes decidirem anexar (ex: vouchers, passaportes, comprovantes).</li>
     <li><strong>Informações de emergência</strong>: contatos e informações que você ou outros participantes cadastrarem para uso em caso de emergência durante a viagem — que podem incluir dado de saúde (ex: alergias, condições médicas).</li>
     <li><strong>Histórico de uso</strong>: um registro de quem alterou o quê e quando, dentro de cada viagem.</li>
-    <li><strong>Preferências locais</strong>: idioma escolhido e cotação de câmbio, guardados apenas no seu navegador (seção 9).</li>
+    <li><strong>Registro de acesso</strong> (só em viagens criadas por agência parceira): a data em que você abriu a viagem pela primeira vez e a data da sua visita mais recente. Não inclui nenhum conteúdo da viagem.</li>
+    <li><strong>Preferências locais</strong>: idioma escolhido e cotação de câmbio, guardados apenas no seu navegador (seção 10).</li>
   </ul>
   <p>Você decide o que compartilha. Documentos e informações de emergência são as duas categorias mais sensíveis — sempre que você for adicionar uma delas, o app mostra um aviso específico pedindo sua confirmação antes de salvar.</p>
 
   <h2>3. Para que usamos esses dados</h2>
   <p>Usamos os dados exclusivamente para operar o app: mostrar o conteúdo da viagem aos participantes certos, calcular saldos de gastos, aplicar as permissões de cada papel (Admin, Colaborador, Parceiro/Agência, Convidado), e manter um histórico de alterações para segurança e rastreabilidade.</p>
+  <p>Em viagens criadas por agência, o registro de acesso permite que a agência saiba quais participantes já abriram o app e possa orientar quem ainda não entrou.</p>
   <p><strong>Não usamos seus dados para publicidade, não vendemos dados a terceiros, e não fazemos nenhum uso além do necessário para o funcionamento do app.</strong></p>
 
   <h2>4. Base legal do tratamento</h2>
@@ -59,6 +61,7 @@
     <li><strong>Conteúdo da viagem (itinerário, hospedagem, tarefas, mala, gastos)</strong>: também tratado com base na <strong>execução do serviço</strong> (Art. 7º, V) — é o próprio propósito do app: organizar esse conteúdo entre os participantes que você escolheu incluir na viagem.</li>
     <li><strong>Documentos (ex: vouchers, passaportes) e informações de emergência (que podem incluir dado de saúde, como alergias)</strong>: tratados com base no <strong>seu consentimento explícito</strong> (Art. 7º, I, e Art. 11 para dado sensível de saúde) — por serem mais sensíveis, o app sempre pede uma confirmação específica antes de salvar, distinta da simples aceitação dos Termos de Uso. Você pode retirar esse consentimento a qualquer momento excluindo o item enviado (seção 9).</li>
     <li><strong>Histórico de atividades (quem alterou o quê e quando)</strong>: tratado com base no <strong>legítimo interesse</strong> em manter a segurança e a integridade do serviço (Art. 7º, IX) — sem esse registro, não seria possível investigar uso indevido ou reverter um erro dentro de uma viagem compartilhada.</li>
+    <li><strong>Registro de acesso à viagem</strong>: tratado com base no legítimo interesse (Art. 7º, IX) da agência, controladora dos dados do cliente, de acompanhar se a viagem que ela organizou já foi aberta. O dado é mínimo (apenas datas) e você pode removê-lo a qualquer momento (seção 9).</li>
     <li><strong>Preferências locais (idioma, cotação de câmbio)</strong>: guardadas só no seu navegador, nunca chegam ao nosso banco de dados — não há tratamento de dado pessoal aqui, então não se aplica uma base legal do Art. 7º (ver seção 10).</li>
     <li><strong>Dados inseridos por uma agência de turismo parceira em nome de um cliente final</strong>: a base legal é definida pela própria agência, como controladora desses dados junto ao seu cliente — o Kipu atua como operador técnico nesse caso (ver seção 6).</li>
   </ul>
@@ -66,6 +69,7 @@
   <h2>5. Com quem seus dados são compartilhados</h2>
   <ul>
     <li><strong>Com o grupo da viagem</strong>: qualquer dado marcado como compartilhado fica visível aos demais participantes, de acordo com o papel de cada um.</li>
+    <li><strong>Com a agência</strong>: em viagens criadas por agência parceira, a agência vê quais participantes já abriram a viagem e quando (primeiro e último acesso). Os demais participantes não veem esse registro.</li>
     <li><strong>Com nossos prestadores de infraestrutura</strong>: usamos Google Firebase/Google Cloud para armazenar e processar os dados, como operador técnico.</li>
     <li><strong>Com uma API de cotação de câmbio</strong>: uma consulta simples (USD→BRL/PEN) que não envia nenhum dado pessoal seu.</li>
     <li><strong>Com uma ferramenta de monitoramento técnico de erros (Sentry)</strong>: captura automaticamente informações técnicas do seu navegador (tipo de erro, navegador, sistema operacional) quando algo trava no app, pra nos ajudar a corrigir bugs — não inclui dados pessoais da sua viagem (nome, documentos, itinerário etc.).</li>
@@ -84,14 +88,15 @@
   <ul>
     <li>Documentos: por padrão, apagados automaticamente 30 dias após o fim da viagem, a não ser que você configure um prazo diferente (7, 15 ou 90 dias, ou "nunca").</li>
     <li>Informações de emergência: apagadas automaticamente 30 dias após o fim da viagem.</li>
-    <li>Demais dados da viagem (itinerário, gastos, mala, tarefas): permanecem enquanto a viagem existir, ou até serem apagados manualmente por quem tem permissão.</li>
+    <li>Registro de acesso: permanece enquanto a viagem existir, e é apagado junto com ela, ou quando você remove seus dados da viagem ou é removido(a) dela.</li>
+    <li>Demais dados da viagem (itinerário, gastos, mala, tarefas, dicas, lembretes): permanecem enquanto a viagem existir, ou até serem apagados manualmente por quem tem permissão.</li>
   </ul>
 
   <h2>9. Seus direitos</h2>
   <ul>
     <li><strong>Acessar</strong> os dados que temos sobre você — você já vê a maior parte diretamente na interface do app.</li>
     <li><strong>Corrigir</strong> dados incorretos — diretamente pela interface, se tiver permissão de edição.</li>
-    <li><strong>Excluir seus dados</strong>: use o botão "🗑️ Remover meus dados desta viagem", disponível na aba Histórico de qualquer viagem em que você participa.</li>
+    <li><strong>Excluir seus dados</strong>: use o botão "🗑️ Remover meus dados desta viagem", disponível na aba Histórico de qualquer viagem em que você participa (isso também remove o seu registro de acesso).</li>
     <li><strong>Revogar consentimento</strong>: você pode excluir, a qualquer momento, um documento ou informação de emergência específica que tenha enviado.</li>
   </ul>
   <p>Se precisar de ajuda com qualquer um desses direitos, entre em contato: dpr1405@gmail.com.</p>
@@ -112,7 +117,7 @@
   <h2>14. Contato</h2>
   <p>Dúvidas sobre esta política ou sobre seus dados: dpr1405@gmail.com.</p>
 
-  <p class="updated">Última atualização: 19 de setembro de 2026.</p>
+  <p class="updated">Última atualização: 1 de outubro de 2026.</p>
 </div>
 </body>
 </html>
