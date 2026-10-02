@@ -146,6 +146,28 @@ service cloud.firestore {
           && (countsBefore == countsAfter || counterMovedWith(before.agencyId, countsAfter ? 1 : -1));
       }
 
+      // ---- Funcionários da agência não saem nem mudam de papel (1/out/2026) ----
+      // Em viagem de agência, o cliente (Admin) e os Colaboradores NÃO podem tirar da
+      // lista de participantes um membro da agência dona da viagem, nem mudar o papel
+      // dele. Antes dava pra remover a agência (a tela dela quebrava) e até promovê-la a
+      // Colaborador (aí ela passava a ler mala, tarefas, gastos — contra a regra de que
+      // a agência só vê o que ela mesma criou). Viagem pessoal (sem agencyId): sem efeito.
+      function agencyMembersOf(tripData) {
+        return get(/databases/$(database)/documents/agencies/$(tripData.agencyId)).data.get("memberEmails", []);
+      }
+      function agencyStaffUntouched() {
+        return resource.data.get("agencyId", "") == ""
+          || (
+            // quem é da agência e participava continua participando…
+            agencyMembersOf(resource.data).toSet()
+              .intersection(resource.data.get("participantEmails", []).toSet())
+              .difference(request.resource.data.get("participantEmails", []).toSet()).size() == 0
+            // …e nenhum papel de membro da agência foi mexido.
+            && request.resource.data.get("participantRoles", {}).diff(resource.data.get("participantRoles", {}))
+              .affectedKeys().intersection(agencyMembersOf(resource.data).toSet()).size() == 0
+          );
+      }
+
       // ---- Criação de viagem ----
       function isAgencyTripCreation() {
         return "agencyId" in request.resource.data
@@ -230,7 +252,8 @@ service cloud.firestore {
       allow delete: if request.auth != null && isRealAdmin(resource.data);
 
       // Editar dados da viagem:
-      // - Admin de verdade: tudo, menos os campos de controle da agência.
+      // - Admin de verdade: tudo, menos os campos de controle da agência — e, em
+      //   viagem de agência, sem mexer nos funcionários da agência (agencyStaffUntouched).
       // - Colaborador: tudo MENOS os campos sensíveis — e SÓ se for
       //   participante de verdade (QA #15b).
       // - Entrar pelo código: só o próprio e-mail (isSelfJoin).
@@ -243,13 +266,15 @@ service cloud.firestore {
           // O cliente final é Admin da própria viagem de agência, e não pode
           // desvinculá-la da agência nem mexer no contador/cancelamento.
           isRealAdmin(resource.data) &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["agencyId", "agencyCancelled", "countsTowardLimit"])
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["agencyId", "agencyCancelled", "countsTowardLimit"]) &&
+          agencyStaffUntouched()
         )
         ||
         (
           request.auth.token.email in resource.data.participantEmails &&
           roleFrom(resource.data) in ["admin", "colaborador"] &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["adminEmails", "createdBy", "defaultJoinRole", "agencyId", "agencyCancelled", "countsTowardLimit"])
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["adminEmails", "createdBy", "defaultJoinRole", "agencyId", "agencyCancelled", "countsTowardLimit"]) &&
+          agencyStaffUntouched()
         )
         ||
         isSelfJoin()
