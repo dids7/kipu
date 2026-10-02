@@ -138,6 +138,12 @@ function can(action) {
 // Contatos) o que ela mesma criou — usado tanto pra filtrar a lista quanto
 // pra decidir se mostra "nenhum item" (sem isso, sobrariam itens do
 // cliente contados como se a Agência devesse vê-los).
+// Funcionário da agência numa viagem de agência: o cliente (Admin/Colaborador) não
+// pode removê-lo nem mudar o papel dele. As regras do Firestore também impedem
+// (firestore.rules → agencyStaffUntouched); aqui é a trava na tela.
+function isAgencyLockedParticipant(trip, email) {
+  return !!trip?.agencyId && (trip.participantRoles || {})[email] === "agencia";
+}
 function agencyOwnershipVisible(data) {
   return myRole !== "agencia" || data.createdByRole === "agencia";
 }
@@ -160,6 +166,15 @@ function canAddParticipant() {
 }
 function computeMyRole() {
   if (!currentTripData || !currentUser) return "colaborador";
+  // Funcionário da agência dona da viagem que NÃO está na lista de participantes
+  // (ex: 2º funcionário abrindo a viagem de um colega, ou quem foi tirado da lista):
+  // as regras do Firestore já tratam essa pessoa como "agencia". O app precisa
+  // concordar — senão ele consulta o que a agência não pode ler e todas as abas falham.
+  const myEmailLower = (currentUser.email || "").toLowerCase();
+  const inTripList = (currentTripData.participantEmails || []).some((e) => String(e).toLowerCase() === myEmailLower);
+  if (!inTripList && currentTripData.agencyId && currentAgency && currentAgency.id === currentTripData.agencyId) {
+    return "agencia";
+  }
   const roles = currentTripData.participantRoles || {};
   const claimed = roles[currentUser.email] || "colaborador";
   if (claimed === "admin") {
@@ -200,6 +215,7 @@ function applyRolePermissions() {
 
   // Ações administrativas.
   $("resetAppBtn")?.classList.toggle("hidden", !can("reset"));
+  $("editTripShortcutBtn")?.classList.toggle("hidden", !can("editTrip"));
 }
 
 // ================= IDIOMA =================
@@ -1142,28 +1158,66 @@ function fmtPresenceDate(ts) {
 // Guarda quais cards estão com a lista aberta, pra não fechar sozinha quando o painel redesenha.
 const expandedPresenceTripIds = new Set();
 function buildPresenceHtml(trip) {
-  // undefined = não carregou (viagem encerrada/cancelada, ou ainda carregando); null = deu erro.
-  if (!trip.presence) return "";
-  const clients = getTripClientEmails(trip);
-  if (clients.length === 0) return "";
-  const entered = clients.filter((e) => trip.presence[e]);
-  const label = entered.length === clients.length
-    ? `✅ Todos já entraram (${entered.length} de ${clients.length})`
-    : entered.length === 0
-      ? `⚪ Ninguém entrou ainda (0 de ${clients.length})`
-      : `👤 ${entered.length} de ${clients.length} já entraram`;
+  // Participantes da viagem no card da agência (1/out/2026): TODOS os participantes,
+  // com nome, e-mail e papel. Dos clientes, mostra também se já abriu o app (COM-9).
+  // A equipe da agência aparece identificada e fora da conta do "já entraram".
+  const agencyMembers = (currentAgency?.memberEmails || []).map((e) => e.toLowerCase());
+  const roles = trip.participantRoles || {};
+  const everyone = (trip.participantEmails || []).map((e) => e.toLowerCase());
+  if (everyone.length === 0) return "";
+  const isStaff = (e) => agencyMembers.includes(e) || roles[e] === "agencia";
+  const clients = everyone.filter((e) => !isStaff(e));
+  const staff = everyone.filter((e) => isStaff(e));
+  // trip.presence: undefined = não carregou (encerrada/cancelada/ainda carregando); null = erro.
+  const hasPresence = !!trip.presence;
+  const entered = hasPresence ? clients.filter((e) => trip.presence[e]) : [];
+  let summary = `👥 ${everyone.length} ${everyone.length === 1 ? "participante" : "participantes"}`;
+  if (hasPresence && clients.length > 0) {
+    summary += entered.length === clients.length
+      ? ` · ✅ todos os clientes já entraram`
+      : entered.length === 0
+        ? ` · ⚪ nenhum cliente entrou ainda`
+        : ` · ${entered.length} de ${clients.length} clientes já entraram`;
+  }
   const open = expandedPresenceTripIds.has(trip.id);
-  const rows = clients.map((e) => {
-    const p = trip.presence[e];
-    return p
-      ? `<div>✓ ${escapeHtml(e)} <span style="color:var(--muted);">· 1º acesso ${escapeHtml(fmtPresenceDate(p.firstOpenedAt))}${p.lastOpenedAt && p.lastOpenedAt.toMillis?.() !== p.firstOpenedAt?.toMillis?.() ? ` · último ${escapeHtml(fmtPresenceDate(p.lastOpenedAt))}` : ""}</span></div>`
-      : `<div>○ ${escapeHtml(e)} <span style="color:var(--muted);">· ainda não entrou</span></div>`;
+  const row = (e, statusHtml) => {
+    const name = participantNames[e] && participantNames[e] !== e ? participantNames[e] : "";
+    const role = roles[e] || (isStaff(e) ? "agencia" : "colaborador");
+    return `<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding:5px 0; border-top:1px solid var(--line);">
+      <div style="min-width:0;">
+        <div>${escapeHtml(name || e)}</div>
+        ${name ? `<div style="color:var(--muted); font-size:11.5px;">${escapeHtml(e)}</div>` : ""}
+      </div>
+      <div style="text-align:right; flex:none;">
+        <span class="badge" style="font-size:9.5px; background:var(--panel-raised); color:var(--muted);">${escapeHtml(roleLabel(role))}</span>
+        ${statusHtml ? `<div style="font-size:11.5px; margin-top:2px;">${statusHtml}</div>` : ""}
+      </div>
+    </div>`;
+  };
+  const clientRows = clients.map((e) => {
+    if (!hasPresence) return row(e, "");
+    const pr = trip.presence[e];
+    if (!pr) return row(e, `<span style="color:var(--muted);">○ ainda não entrou</span>`);
+    const first = fmtPresenceDate(pr.firstOpenedAt);
+    const last = pr.lastOpenedAt && pr.lastOpenedAt.toMillis?.() !== pr.firstOpenedAt?.toMillis?.() ? fmtPresenceDate(pr.lastOpenedAt) : "";
+    return row(e, `✓ entrou <span style="color:var(--muted);">· 1º acesso ${escapeHtml(first)}${last ? ` · último ${escapeHtml(last)}` : ""}</span>`);
   }).join("");
+  const staffRows = staff.map((e) => row(e, `<span style="color:var(--muted);">🏢 equipe da agência</span>`)).join("");
   return `
     <div style="margin-top:8px;">
-      <button class="btn btn-outline btn-small" data-toggle-presence type="button">${label} ${open ? "▴" : "▾"}</button>
-      <div data-presence-details class="${open ? "" : "hidden"}" style="margin-top:6px; font-size:12.5px; display:flex; flex-direction:column; gap:3px; overflow-wrap:anywhere;">${rows}</div>
+      <button class="btn btn-outline btn-small" data-toggle-presence type="button">${summary} ${open ? "▴" : "▾"}</button>
+      <div data-presence-details class="${open ? "" : "hidden"}" style="margin-top:6px; font-size:12.5px; overflow-wrap:anywhere;">${clientRows}${staffRows}</div>
     </div>`;
+}
+// Carrega os nomes (users/{email}) sem apagar os já carregados — usado ao abrir a lista de
+// participantes de um card do Painel da Agência.
+async function addParticipantNames(emails) {
+  await Promise.all((emails || []).filter((e) => !participantNames[e]).map(async (e) => {
+    try {
+      const snap = await getDoc(doc(db, "users", e));
+      if (snap.exists() && snap.data().name) participantNames[e] = snap.data().name;
+    } catch (err) { /* segue só com o e-mail */ }
+  }));
 }
 // Busca a presença das viagens que ainda importam (não canceladas e não encerradas):
 // 1 consulta por viagem, em paralelo. Falha de uma não derruba as outras.
@@ -1210,8 +1264,15 @@ function renderAgencyTripCard(trip, container) {
   if (presenceBtn) {
     presenceBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (expandedPresenceTripIds.has(trip.id)) expandedPresenceTripIds.delete(trip.id);
-      else expandedPresenceTripIds.add(trip.id);
+      if (expandedPresenceTripIds.has(trip.id)) {
+        expandedPresenceTripIds.delete(trip.id);
+      } else {
+        expandedPresenceTripIds.add(trip.id);
+        // os nomes chegam logo depois de abrir; a lista já aparece com os e-mails
+        addParticipantNames(trip.participantEmails).then(() => {
+          if (expandedPresenceTripIds.has(trip.id)) renderAgencyLists();
+        });
+      }
       renderAgencyLists();
     });
   }
@@ -1590,22 +1651,28 @@ function renderAdminParticipants() {
   emails.forEach((email) => {
     const isOriginalAdmin = email === adminPanelTripData.createdBy;
     const role = roles[email] || "colaborador";
+    const agencyLocked = isAgencyLockedParticipant(adminPanelTripData, email);
     const row = document.createElement("div");
     row.className = "list-row";
     row.style.padding = "8px 0";
     row.innerHTML = `
-      <span class="card-meta" title="${escapeHtml(email)}">${escapeHtml(nameFor(email))} ${isOriginalAdmin ? "🔒" : ""}</span>
+      <span class="card-meta" title="${escapeHtml(email)}">${escapeHtml(nameFor(email))} ${isOriginalAdmin ? "🔒" : agencyLocked ? "🏢" : ""}</span>
       <div style="display:flex; align-items:center; gap:6px;">
-        <select data-role-select ${isOriginalAdmin ? "disabled" : ""} style="width:auto; font-size:11px; padding:5px 7px;">
+        <select data-role-select ${isOriginalAdmin || agencyLocked ? "disabled" : ""} style="width:auto; font-size:11px; padding:5px 7px;">
           <option value="admin" data-i18n="role.admin">Admin</option>
           <option value="colaborador" data-i18n="role.colaborador">Colaborador</option>
           <option value="agencia" data-i18n="role.agencia">Agência</option>
           <option value="convidado" data-i18n="role.convidado">Convidado</option>
         </select>
-        ${isOriginalAdmin ? `<button class="item-del" data-transfer title="Transferir titularidade">🔁</button>` : `<button class="item-del" data-remove>✕</button>`}
+        ${isOriginalAdmin ? `<button class="item-del" data-transfer title="Transferir titularidade">🔁</button>` : agencyLocked ? `<span class="card-meta" style="font-size:10px;" title="Agência da viagem — não pode ser removida nem ter o papel alterado">🔒</span>` : `<button class="item-del" data-remove>✕</button>`}
       </div>
     `;
     const select = row.querySelector("[data-role-select]");
+    // Em viagem de agência, o papel "Agência" não é oferecido a quem ainda não o tem
+    // (só a própria agência entra com esse papel).
+    if (adminPanelTripData.agencyId && role !== "agencia") {
+      select.querySelector('option[value="agencia"]')?.remove();
+    }
     select.value = role;
     applyLanguageToElement(select);
     select.addEventListener("change", () => onAdminRoleChange(email, select.value, select));
@@ -1626,6 +1693,11 @@ function onAdminRoleChange(...args) {
   return withErrorToast(onAdminRoleChangeImpl, "Não foi possível mudar o papel. Atualize a página e tente de novo.")(...args);
 }
 async function onAdminRoleChangeImpl(email, newRole, selectEl) {
+  if (isAgencyLockedParticipant(adminPanelTripData, email)) {
+    selectEl.value = "agencia";
+    showToast("O papel da agência não pode ser alterado pelo cliente.");
+    return;
+  }
   if (newRole === "admin") {
     const ok = await new Promise((resolve) => {
       $("promoteConfirmMessage").textContent = `Tem certeza? Isso dá a ${nameFor(email)} o mesmo poder que você tem, incluindo excluir a viagem e resetar dados.`;
@@ -1667,6 +1739,10 @@ function onAdminRemoveParticipant(...args) {
   return withErrorToast(onAdminRemoveParticipantImpl, "Não foi possível remover o participante. Atualize a página e tente de novo.")(...args);
 }
 async function onAdminRemoveParticipantImpl(email) {
+  if (isAgencyLockedParticipant(adminPanelTripData, email)) {
+    showToast("A agência não pode ser removida da viagem pelo cliente.");
+    return;
+  }
   const ok = await confirmDialog(`Remover ${email} da viagem?`);
   if (!ok) return;
   const updated = adminPanelTripData.participantEmails.filter((e) => e !== email);
@@ -1947,6 +2023,16 @@ $("editTripBtn").addEventListener("click", () => {
   $("editTripEnd").value = currentDateTrip.endDate || "";
   $("editTripForm").classList.remove("hidden");
 });
+// Atalho "✎ Editar viagem" no cabeçalho (1/out/2026): leva ao Calendário e abre o
+// mesmo formulário do ✎ de lá (nome, destino e datas) — sem precisar achar uma data.
+$("editTripShortcutBtn")?.addEventListener("click", () => {
+  if (!currentTripData || !can("editTrip")) return;
+  document.querySelector('.tab[data-tab="geral"]')?.click();
+  if (!selectedCalDate || !findTripForDate(selectedCalDate)) selectedCalDate = currentTripData.startDate;
+  updateDateTripInfo(selectedCalDate);
+  $("editTripBtn")?.click();
+  $("editTripForm")?.scrollIntoView({ behavior: "smooth", block: "center" });
+});
 $("cancelTripEditBtn").addEventListener("click", () => {
   $("editTripForm").classList.add("hidden");
 });
@@ -2029,10 +2115,11 @@ function renderParticipants(trip, editable) {
     const isLast = emails.length === 1;
     const isOriginalAdmin = email === trip.createdBy;
     const role = roles[email] || "colaborador";
-    const canRemoveThis = editable && !isLast && !isOriginalAdmin;
+    const agencyLocked = isAgencyLockedParticipant(trip, email);
+    const canRemoveThis = editable && !isLast && !isOriginalAdmin && !agencyLocked;
     row.innerHTML = `
       <span class="card-meta" title="${escapeHtml(email)}">${escapeHtml(nameFor(email))} ${isOriginalAdmin ? "🔒" : ""}<span class="badge" style="margin-left:6px; font-size:9.5px; background:var(--panel-raised); color:var(--muted);">${escapeHtml(roleLabel(role))}</span></span>
-      ${canRemoveThis ? `<button class="item-del">✕</button>` : isOriginalAdmin ? `<span class="card-meta" style="font-size:10px;" title="Admin original — não pode ser removido">🔒</span>` : ""}
+      ${canRemoveThis ? `<button class="item-del">✕</button>` : isOriginalAdmin ? `<span class="card-meta" style="font-size:10px;" title="Admin original — não pode ser removido">🔒</span>` : agencyLocked ? `<span class="card-meta" style="font-size:10px;" title="Agência da viagem — não pode ser removida">🏢</span>` : ""}
     `;
     if (canRemoveThis) {
       row.querySelector("button").addEventListener("click", () => removeParticipant(email));
@@ -2046,6 +2133,10 @@ function removeParticipant(...args) {
   return withErrorToast(removeParticipantImpl, "Não foi possível remover o participante. Atualize a página e tente de novo.")(...args);
 }
 async function removeParticipantImpl(email) {
+  if (isAgencyLockedParticipant(currentTripData, email)) {
+    showToast("A agência não pode ser removida da viagem pelo cliente.");
+    return;
+  }
   if (email === currentTripData.createdBy) {
     await confirmDialog("O Admin original não pode ser removido da viagem. Só excluindo a viagem inteira.", "Entendi");
     return;
