@@ -513,6 +513,101 @@ describe("Kipu — firestore.rules", () => {
     });
   });
 
+  describe("Agência na viagem — o cliente não remove nem muda o papel dos funcionários", () => {
+    // Viagem de agência: cliente (admin), um colaborador, e DOIS funcionários da
+    // agência: agente (participante, papel "agencia") e agente2 (da agência, mas
+    // fora da lista de participantes — ex: colega abrindo a viagem).
+    async function seedAgencyStaffTrip() {
+      await admin(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), "agencies/ag7"), { name: "Agência 7", memberEmails: ["agente@agencia.com", "agente2@agencia.com"] });
+        await setDoc(doc(ctx.firestore(), "trips/ts1"), {
+          name: "x", startDate: isoDaysFromNow(5), endDate: isoDaysFromNow(10),
+          participantEmails: ["cliente@x.com", "colab@x.com", "agente@agencia.com"],
+          participantRoles: { "cliente@x.com": "admin", "colab@x.com": "colaborador", "agente@agencia.com": "agencia" },
+          adminEmails: ["cliente@x.com"], blockedEmails: [], createdBy: "cliente@x.com",
+          agencyId: "ag7", agencyCancelled: false, countsTowardLimit: true
+        });
+        await setDoc(doc(ctx.firestore(), "trips/ts1/itinerario/i-cliente"), { title: "do cliente", date: isoDaysFromNow(6), createdBy: "cliente@x.com", createdByRole: "admin" });
+        await setDoc(doc(ctx.firestore(), "trips/ts1/itinerario/i-agencia"), { title: "da agência", date: isoDaysFromNow(7), createdBy: "agente@agencia.com", createdByRole: "agencia" });
+      });
+    }
+
+    it("cliente (Admin) tentando remover a agência da lista de participantes: recusa", async () => {
+      await seedAgencyStaffTrip();
+      const cliente = testEnv.authenticatedContext("c", { email: "cliente@x.com" });
+      await assertFails(updateDoc(doc(cliente.firestore(), "trips/ts1"), {
+        participantEmails: ["cliente@x.com", "colab@x.com"],
+        participantRoles: { "cliente@x.com": "admin", "colab@x.com": "colaborador" },
+        blockedEmails: ["agente@agencia.com"]
+      }));
+    });
+
+    it("cliente (Admin) tentando mudar o papel da agência: recusa", async () => {
+      await seedAgencyStaffTrip();
+      const cliente = testEnv.authenticatedContext("c", { email: "cliente@x.com" });
+      await assertFails(updateDoc(doc(cliente.firestore(), "trips/ts1"), {
+        participantRoles: { "cliente@x.com": "admin", "colab@x.com": "colaborador", "agente@agencia.com": "colaborador" }
+      }));
+    });
+
+    it("Colaborador promovendo a agência a Colaborador (pra ela ler mala/gastos): recusa", async () => {
+      await seedAgencyStaffTrip();
+      const colab = testEnv.authenticatedContext("k", { email: "colab@x.com" });
+      await assertFails(updateDoc(doc(colab.firestore(), "trips/ts1"), {
+        participantRoles: { "cliente@x.com": "admin", "colab@x.com": "colaborador", "agente@agencia.com": "colaborador" }
+      }));
+    });
+
+    it("cliente continua removendo e mudando o papel de participante comum: aceita", async () => {
+      await seedAgencyStaffTrip();
+      const cliente = testEnv.authenticatedContext("c", { email: "cliente@x.com" });
+      const ref = doc(cliente.firestore(), "trips/ts1");
+      await assertSucceeds(updateDoc(ref, {
+        participantRoles: { "cliente@x.com": "admin", "colab@x.com": "convidado", "agente@agencia.com": "agencia" }
+      }));
+      await assertSucceeds(updateDoc(ref, {
+        participantEmails: ["cliente@x.com", "agente@agencia.com"],
+        participantRoles: { "cliente@x.com": "admin", "agente@agencia.com": "agencia" },
+        blockedEmails: ["colab@x.com"]
+      }));
+    });
+
+    it("cliente convida alguém novo em viagem de agência: aceita (a trava não atrapalha)", async () => {
+      await seedAgencyStaffTrip();
+      const cliente = testEnv.authenticatedContext("c", { email: "cliente@x.com" });
+      await assertSucceeds(updateDoc(doc(cliente.firestore(), "trips/ts1"), {
+        participantEmails: ["cliente@x.com", "colab@x.com", "agente@agencia.com", "novo@x.com"],
+        participantRoles: { "cliente@x.com": "admin", "colab@x.com": "colaborador", "agente@agencia.com": "agencia", "novo@x.com": "convidado" }
+      }));
+    });
+
+    it("viagem pessoal (sem agência): remover participante continua funcionando", async () => {
+      await admin(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), "trips/tp-pessoal"), {
+          name: "x", startDate: isoDaysFromNow(5), endDate: isoDaysFromNow(10),
+          participantEmails: ["dono@x.com", "amigo@x.com"],
+          participantRoles: { "dono@x.com": "admin", "amigo@x.com": "colaborador" },
+          adminEmails: ["dono@x.com"], blockedEmails: [], createdBy: "dono@x.com"
+        });
+      });
+      const dono = testEnv.authenticatedContext("d", { email: "dono@x.com" });
+      await assertSucceeds(updateDoc(doc(dono.firestore(), "trips/tp-pessoal"), {
+        participantEmails: ["dono@x.com"],
+        participantRoles: { "dono@x.com": "admin" },
+        blockedEmails: ["amigo@x.com"]
+      }));
+    });
+
+    it("2º funcionário da agência (fora da lista de participantes): abre a viagem e lê só o que a agência criou", async () => {
+      await seedAgencyStaffTrip();
+      const agente2 = testEnv.authenticatedContext("a2", { email: "agente2@agencia.com" });
+      await assertSucceeds(getDoc(doc(agente2.firestore(), "trips/ts1")));
+      await assertSucceeds(getDocs(query(collection(agente2.firestore(), "trips/ts1/itinerario"), where("createdByRole", "==", "agencia"))));
+      await assertFails(getDoc(doc(agente2.firestore(), "trips/ts1/itinerario/i-cliente")));
+      await assertFails(getDocs(collection(agente2.firestore(), "trips/ts1/mala")));
+    });
+  });
+
   it("qualquer pessoa logada lê os planos; ninguém grava pelo app", async () => {
     await admin(async (ctx) => {
       await setDoc(doc(ctx.firestore(), "plans/chaski"), { label: "Chaski", maxActiveTrips: 8 });
