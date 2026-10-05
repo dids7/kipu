@@ -264,6 +264,14 @@ function applyLanguage(lang) {
       if (typeof renderMalaList === "function") renderMalaList();
       if (typeof renderExpenses === "function") renderExpenses();
       if (typeof renderParticipantsButton === "function") renderParticipantsButton();
+      // calendário, clima, previsão e contagem regressiva são desenhados uma vez ao abrir a
+      // viagem — sem isso ficavam no idioma antigo até recarregar a página (5/out/2026)
+      if (typeof renderCalendar === "function") renderCalendar();
+      if (currentTripData) {
+        if (typeof renderCountdown === "function") renderCountdown();
+        if (typeof renderHojeWeather === "function") renderHojeWeather();
+        if (typeof renderCalWeatherStrip === "function") renderCalWeatherStrip();
+      }
     } catch (err) {
       console.warn("Não foi possível re-renderizar listas ao trocar idioma:", err);
     }
@@ -2486,8 +2494,8 @@ function renderCountdown() {
   const diff = Math.round((start - today) / (1000 * 60 * 60 * 24));
   $("countdownNum").textContent = diff >= 0 ? diff : Math.abs(diff);
   $("countdownText").textContent = diff >= 0
-    ? `dias para embarque · ${fmtDate(currentTripData.startDate)}–${fmtDate(currentTripData.endDate)}`
-    : `dias desde o início da viagem`;
+    ? t("countdown.daysToGo").replace("{start}", fmtDate(currentTripData.startDate)).replace("{end}", fmtDate(currentTripData.endDate))
+    : t("countdown.daysSince");
 }
 
 // ================= HOJE =================
@@ -4651,8 +4659,18 @@ function subscribeReminders() {
   unsubscribers.push(unsub);
 }
 
-const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-const DIAS_SEMANA = ["D","S","T","Q","Q","S","S"];
+// Nome do mês e iniciais dos dias da semana no idioma escolhido (pt/en/es), via Intl —
+// antes eram listas fixas em português (5/out/2026).
+function calLocale() { return currentLang === "en" ? "en-US" : currentLang === "es" ? "es-ES" : "pt-BR"; }
+function calMonthName(m) {
+  const name = new Intl.DateTimeFormat(calLocale(), { month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(2026, m, 1)));
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+function calWeekdayInitials() {
+  // 4/jan/2026 é domingo: de domingo a sábado
+  return [0, 1, 2, 3, 4, 5, 6].map((i) =>
+    new Intl.DateTimeFormat(calLocale(), { weekday: "narrow", timeZone: "UTC" }).format(new Date(Date.UTC(2026, 0, 4 + i))).toUpperCase());
+}
 
 function toISODate(y, m, day) {
   return `${y}-${String(m + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -4662,11 +4680,11 @@ function renderCalendar() {
   if (!calendarViewDate) return;
   const y = calendarViewDate.getFullYear();
   const m = calendarViewDate.getMonth();
-  $("calMonthLabel").textContent = `${MESES[m]} ${y}`;
+  $("calMonthLabel").textContent = `${calMonthName(m)} ${y}`;
 
   const grid = $("calendarGrid");
   grid.innerHTML = "";
-  DIAS_SEMANA.forEach((d) => {
+  calWeekdayInitials().forEach((d) => {
     const el = document.createElement("div");
     el.className = "cal-weekday";
     el.textContent = d;
