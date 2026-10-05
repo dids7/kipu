@@ -263,6 +263,7 @@ function applyLanguage(lang) {
     try {
       if (typeof renderMalaList === "function") renderMalaList();
       if (typeof renderExpenses === "function") renderExpenses();
+      if (typeof renderParticipantsButton === "function") renderParticipantsButton();
     } catch (err) {
       console.warn("Não foi possível re-renderizar listas ao trocar idioma:", err);
     }
@@ -611,7 +612,9 @@ function isDateInsideTrip(iso) {
   return true;
 }
 function outsideTripMessage() {
-  return `Essa data está fora da viagem (${fmtDate(currentTripData?.startDate)} a ${fmtDate(currentTripData?.endDate)}). Para estender a viagem, use ✎ Editar viagem.`;
+  return t("date.outsideTrip")
+    .replace("{start}", fmtDate(currentTripData?.startDate))
+    .replace("{end}", fmtDate(currentTripData?.endDate));
 }
 // Limita os seletores de data (calendário abre no mês da viagem e só deixa escolher
 // dias do período). A validação de verdade fica nos botões de salvar — quem digita
@@ -1977,6 +1980,7 @@ async function openTrip(tripId) {
   $("currentTripTitle").textContent = currentTripData.name;
   renderCountdown();
   applyTripDateLimits();
+  renderParticipantsButton();
   renderHojeTab();
   fetchWeatherIfNeeded();
   initBulkImportToggle();
@@ -2090,6 +2094,72 @@ $("editTripBtn").addEventListener("click", () => {
   $("editTripEnd").value = currentDateTrip.endDate || "";
   $("editTripForm").classList.remove("hidden");
 });
+// ---- Botão "👥 N participantes" no cabeçalho da viagem (5/out/2026) ----
+// Qualquer papel vê quem está na viagem sem trocar de aba nem voltar ao Painel. A
+// AGÊNCIA vê, além disso, quais clientes já abriram o app (COM-9) — só ela lê a presença.
+function renderParticipantsButton() {
+  const btn = $("participantsHeaderBtn");
+  if (!btn || !currentTripData) return;
+  const n = (currentTripData.participantEmails || []).length;
+  btn.textContent = t(n === 1 ? "participants.btnOne" : "participants.btnMany").replace("{n}", n);
+  btn.classList.remove("hidden");
+}
+async function openParticipantsModal() {
+  if (!currentTripData) return;
+  const emails = (currentTripData.participantEmails || []).map((e) => String(e).toLowerCase());
+  const roles = currentTripData.participantRoles || {};
+  const isAgencyViewer = myRole === "agencia";
+  const agencyMembers = isAgencyViewer ? (currentAgency?.memberEmails || []).map((e) => e.toLowerCase()) : [];
+  const isStaff = (e) => roles[e] === "agencia" || agencyMembers.includes(e);
+  let presence = null; // só a agência consegue ler; falha em silêncio (aí não mostra o status)
+  if (isAgencyViewer) {
+    try {
+      const snap = await getDocsFreshFirst(collection(db, "trips", currentTripId, "presence"));
+      presence = {};
+      snap.forEach((d) => { presence[d.id.toLowerCase()] = d.data(); });
+    } catch (err) { presence = null; }
+  }
+  const clients = emails.filter((e) => !isStaff(e));
+  const staff = emails.filter((e) => isStaff(e));
+  let summary = t(emails.length === 1 ? "participants.btnOne" : "participants.btnMany").replace("{n}", emails.length);
+  if (presence && clients.length > 0) {
+    const entered = clients.filter((e) => presence[e]).length;
+    summary += " · " + (entered === clients.length ? t("participants.allEntered")
+      : entered === 0 ? t("participants.noneEntered")
+      : t("participants.clientsEntered").replace("{e}", entered).replace("{c}", clients.length));
+  }
+  const row = (e, statusHtml) => {
+    const nm = nameFor(e);
+    const name = nm && nm !== e ? nm : "";
+    const role = roles[e] || (isStaff(e) ? "agencia" : "colaborador");
+    return `<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding:6px 0; border-top:1px solid var(--line);">
+      <div style="min-width:0;">
+        <div>${escapeHtml(name || e)}</div>
+        ${name ? `<div style="color:var(--muted); font-size:11.5px;">${escapeHtml(e)}</div>` : ""}
+      </div>
+      <div style="text-align:right; flex:none;">
+        <span class="badge" style="font-size:9.5px; background:var(--panel-raised); color:var(--muted);">${escapeHtml(roleLabel(role))}</span>
+        ${statusHtml ? `<div style="font-size:11.5px; margin-top:2px;">${statusHtml}</div>` : ""}
+      </div>
+    </div>`;
+  };
+  const clientRows = clients.map((e) => {
+    if (!presence) return row(e, "");
+    const pr = presence[e];
+    if (!pr) return row(e, `<span style="color:var(--muted);">${escapeHtml(t("participants.notEntered"))}</span>`);
+    const first = fmtPresenceDate(pr.firstOpenedAt);
+    const last = pr.lastOpenedAt && pr.lastOpenedAt.toMillis?.() !== pr.firstOpenedAt?.toMillis?.() ? fmtPresenceDate(pr.lastOpenedAt) : "";
+    return row(e, `${escapeHtml(t("participants.entered"))} <span style="color:var(--muted);">· ${escapeHtml(t("participants.firstAccess"))} ${escapeHtml(first)}${last ? ` · ${escapeHtml(t("participants.lastAccess"))} ${escapeHtml(last)}` : ""}</span>`);
+  }).join("");
+  const staffRows = staff.map((e) => row(e, `<span style="color:var(--muted);">${escapeHtml(t("participants.agencyTeam"))}</span>`)).join("");
+  $("participantsModalSummary").textContent = summary;
+  $("participantsModalList").innerHTML = clientRows + staffRows;
+  $("participantsModal").classList.remove("hidden");
+}
+$("participantsHeaderBtn")?.addEventListener("click", openParticipantsModal);
+$("participantsModalCloseBtn")?.addEventListener("click", () => $("participantsModal").classList.add("hidden"));
+$("participantsModal")?.addEventListener("click", (e) => { if (e.target === $("participantsModal")) $("participantsModal").classList.add("hidden"); });
+
 // Atalho "✎ Editar viagem" no cabeçalho (1/out/2026): leva ao Calendário e abre o
 // mesmo formulário do ✎ de lá (nome, destino e datas) — sem precisar achar uma data.
 $("editTripShortcutBtn")?.addEventListener("click", () => {
@@ -2110,7 +2180,7 @@ $("saveTripEditBtn").addEventListener("click", async () => {
   const endDate = $("editTripEnd").value;
   if (!name || !startDate || !endDate) { showToast("Preencha nome e as duas datas."); return; }
   if (endDate < startDate) { showToast("A data de fim não pode ser antes da data de início."); return; } // QA #8
-  if (myRole === "agencia" && startDate < localISODate()) { showToast("A data de início não pode ficar no passado."); return; }
+  if (myRole === "agencia" && startDate < localISODate()) { showToast(t("date.startInPast")); return; }
   const destinationChanged = destination !== currentTripData.destination;
   try {
     await updateDoc(doc(db, "trips", currentTripId), { name, destination, startDate, endDate });
@@ -2225,6 +2295,7 @@ async function removeParticipantImpl(email) {
   deleteDoc(doc(db, "trips", currentTripId, "presence", email)).catch(() => {});
   currentTripData.participantEmails = updated;
   currentTripData.participantRoles = updatedRoles;
+  renderParticipantsButton();
   currentTripData.adminEmails = updatedAdmins;
   currentTripData.blockedEmails = updatedBlocked;
   const idx = allUserTrips.findIndex((t) => t.id === currentTripId);
@@ -2249,6 +2320,7 @@ $("addParticipantBtn").addEventListener("click", async () => {
   await updateDoc(doc(db, "trips", currentTripId), { participantEmails: updated, participantRoles: updatedRoles, blockedEmails: updatedBlocked });
   currentTripData.participantEmails = updated;
   currentTripData.participantRoles = updatedRoles;
+  renderParticipantsButton();
   currentTripData.blockedEmails = updatedBlocked;
   sendInviteEmail(email, currentTripData.name, currentTripId, myDisplayName || currentUser.email);
   const idx = allUserTrips.findIndex((t) => t.id === currentTripId);
@@ -3098,7 +3170,11 @@ $("importItinerarioBtn")?.addEventListener("click", async () => {
 
   const outsideDates = [...new Set(items.filter((it) => !isDateInsideTrip(it.date)).map((it) => it.date))].sort();
   if (outsideDates.length > 0) {
-    statusEl.textContent = `Nada foi importado: ${outsideDates.length} data(s) fora da viagem (${fmtDate(currentTripData?.startDate)} a ${fmtDate(currentTripData?.endDate)}): ${outsideDates.map(fmtDate).join(", ")}. Corrija as datas ou estenda a viagem em ✎ Editar viagem.`;
+    statusEl.textContent = t("date.importOutside")
+      .replace("{n}", outsideDates.length)
+      .replace("{start}", fmtDate(currentTripData?.startDate))
+      .replace("{end}", fmtDate(currentTripData?.endDate))
+      .replace("{dates}", outsideDates.map(fmtDate).join(", "));
     statusEl.classList.remove("hidden");
     return;
   }
@@ -3213,7 +3289,7 @@ $("saveEstadiaBtn").addEventListener("click", async () => {
   const checkin = $("stayCheckin").value, checkout = $("stayCheckout").value;
   const address = $("stayAddress").value.trim(), status = $("stayStatus").value;
   if (!name || !checkin || !checkout) { showToast("Preencha nome e datas."); return; }
-  if (checkout < checkin) { showToast("O check-out não pode ser antes do check-in.", "error"); return; }
+  if (checkout < checkin) { showToast(t("date.checkoutBeforeCheckin"), "error"); return; }
   if (!isDateInsideTrip(checkin) || !isDateInsideTrip(checkout)) { showToast(outsideTripMessage(), "error"); return; }
   const payload = { name, checkin, checkout, address, status };
   setButtonLoading($("saveEstadiaBtn"), true);

@@ -110,6 +110,16 @@
     </div>
   </div>
 </div>
+<div id="participantsModal" class="modal-overlay hidden">
+  <div class="modal-box" style="max-width:440px;">
+    <div class="modal-title" data-i18n="participants.modalTitle">Participantes da viagem</div>
+    <div class="modal-message" id="participantsModalSummary" style="margin-bottom:10px;"></div>
+    <div id="participantsModalList" style="max-height:55vh; overflow-y:auto; margin-bottom:14px; font-size:13px; overflow-wrap:anywhere;"></div>
+    <div class="modal-actions">
+      <button id="participantsModalCloseBtn" class="btn btn-outline" type="button" data-i18n="participants.close">Fechar</button>
+    </div>
+  </div>
+</div>
 <div id="promoteConfirmModal" class="modal-overlay hidden">
   <div class="modal-box">
     <div class="modal-title" data-i18n="admin.promoteTitle">Promover a Admin?</div>
@@ -363,7 +373,10 @@
         <span class="countdown-num" id="countdownNum">—</span>
         <span class="countdown-text" id="countdownText"></span>
       </div>
-      <button id="editTripShortcutBtn" class="btn btn-outline btn-small hidden" style="display:block; margin:10px auto 0;" data-i18n="trip.editShortcut">✎ Editar viagem</button>
+      <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:10px auto 0;">
+        <button id="participantsHeaderBtn" class="btn btn-outline btn-small hidden" type="button">👥</button>
+        <button id="editTripShortcutBtn" class="btn btn-outline btn-small hidden" type="button" data-i18n="trip.editShortcut">✎ Editar viagem</button>
+      </div>
     </header>
 
     <nav class="tabs" id="tabNav">
