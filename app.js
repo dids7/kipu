@@ -134,6 +134,14 @@ function myPerms() {
 function can(action) {
   return !!myPerms()[action];
 }
+// Editar nome, destino e datas da viagem. Admin/Colaborador: sempre. Agência (4/out/2026):
+// só ANTES da viagem começar e enquanto não estiver cancelada — as regras do Firestore
+// exigem o mesmo (firestore.rules → agencyTripEditOk).
+function canEditTrip() {
+  if (can("editTrip")) return true;
+  return myRole === "agencia" && !!currentTripData && !currentTripData.agencyCancelled
+    && localISODate() < (currentTripData.startDate || "");
+}
 // Fase 4 (18/set/2026): Agência só enxerga (Itinerário/Estadia/Documentos/
 // Contatos) o que ela mesma criou — usado tanto pra filtrar a lista quanto
 // pra decidir se mostra "nenhum item" (sem isso, sobrariam itens do
@@ -215,7 +223,7 @@ function applyRolePermissions() {
 
   // Ações administrativas.
   $("resetAppBtn")?.classList.toggle("hidden", !can("reset"));
-  $("editTripShortcutBtn")?.classList.toggle("hidden", !can("editTrip"));
+  $("editTripShortcutBtn")?.classList.toggle("hidden", !canEditTrip());
 }
 
 // ================= IDIOMA =================
@@ -2039,7 +2047,7 @@ function updateDateTripInfo(iso) {
   renderParticipants(trip, isCurrentTrip && can("removeParticipant"));
   $("participantEditRow").classList.toggle("hidden", !isCurrentTrip || !canAddParticipant());
   $("inviteCodeBlock").classList.toggle("hidden", !isCurrentTrip);
-  $("editTripBtn").classList.toggle("hidden", !isCurrentTrip || !can("editTrip"));
+  $("editTripBtn").classList.toggle("hidden", !isCurrentTrip || !canEditTrip());
   $("deleteTripBlock").classList.toggle("hidden", !isCurrentTrip || !can("deleteTrip"));
   $("editTripForm").classList.add("hidden");
   if (isCurrentTrip) $("inviteCodeValue").value = trip.id;
@@ -2056,7 +2064,7 @@ $("editTripBtn").addEventListener("click", () => {
 // Atalho "✎ Editar viagem" no cabeçalho (1/out/2026): leva ao Calendário e abre o
 // mesmo formulário do ✎ de lá (nome, destino e datas) — sem precisar achar uma data.
 $("editTripShortcutBtn")?.addEventListener("click", () => {
-  if (!currentTripData || !can("editTrip")) return;
+  if (!currentTripData || !canEditTrip()) return;
   document.querySelector('.tab[data-tab="geral"]')?.click();
   if (!selectedCalDate || !findTripForDate(selectedCalDate)) selectedCalDate = currentTripData.startDate;
   updateDateTripInfo(selectedCalDate);
@@ -2073,6 +2081,7 @@ $("saveTripEditBtn").addEventListener("click", async () => {
   const endDate = $("editTripEnd").value;
   if (!name || !startDate || !endDate) { showToast("Preencha nome e as duas datas."); return; }
   if (endDate < startDate) { showToast("A data de fim não pode ser antes da data de início."); return; } // QA #8
+  if (myRole === "agencia" && startDate < localISODate()) { showToast("A data de início não pode ficar no passado."); return; }
   const destinationChanged = destination !== currentTripData.destination;
   try {
     await updateDoc(doc(db, "trips", currentTripId), { name, destination, startDate, endDate });
