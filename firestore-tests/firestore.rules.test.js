@@ -695,6 +695,84 @@ describe("Kipu — firestore.rules", () => {
     });
   });
 
+  describe("Agência edita nome, destino e datas da viagem — só antes de começar", () => {
+    // Viagem de agência futura (começa em 10 dias, termina em 15). Cliente (admin),
+    // funcionário da agência (participante) e um 2º funcionário (da agência, fora da lista).
+    async function seedEditableTrip(extra = {}) {
+      await admin(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), "agencies/ag10"), { name: "Agência 10", memberEmails: ["agente@agencia.com", "agente2@agencia.com"] });
+        await setDoc(doc(ctx.firestore(), "trips/te1"), {
+          name: "Lisboa", destination: "Lisboa", startDate: isoDaysFromNow(10), endDate: isoDaysFromNow(15),
+          participantEmails: ["cliente@x.com", "agente@agencia.com"],
+          participantRoles: { "cliente@x.com": "admin", "agente@agencia.com": "agencia" },
+          adminEmails: ["cliente@x.com"], createdBy: "cliente@x.com",
+          agencyId: "ag10", agencyCancelled: false, countsTowardLimit: true, ...extra
+        });
+      });
+    }
+    const agente = () => testEnv.authenticatedContext("a", { email: "agente@agencia.com" });
+
+    it("agência corrige nome, destino e datas antes da viagem começar: aceita", async () => {
+      await seedEditableTrip();
+      await assertSucceeds(updateDoc(doc(agente().firestore(), "trips/te1"), {
+        name: "Lisboa e Porto", destination: "Portugal", startDate: isoDaysFromNow(12), endDate: isoDaysFromNow(20)
+      }));
+    });
+
+    it("2º funcionário da agência (fora da lista de participantes) também corrige: aceita", async () => {
+      await seedEditableTrip();
+      const a2 = testEnv.authenticatedContext("a2", { email: "agente2@agencia.com" });
+      await assertSucceeds(updateDoc(doc(a2.firestore(), "trips/te1"), { name: "Lisboa 2" }));
+    });
+
+    it("agência jogando o fim da viagem pro passado (liberaria vaga do plano): recusa", async () => {
+      await seedEditableTrip();
+      await assertFails(updateDoc(doc(agente().firestore(), "trips/te1"), { startDate: isoDaysFromNow(-5), endDate: isoDaysFromNow(-2) }));
+    });
+
+    it("agência puxando o início pro passado: recusa", async () => {
+      await seedEditableTrip();
+      await assertFails(updateDoc(doc(agente().firestore(), "trips/te1"), { startDate: isoDaysFromNow(-1) }));
+    });
+
+    it("fim antes do início: recusa", async () => {
+      await seedEditableTrip();
+      await assertFails(updateDoc(doc(agente().firestore(), "trips/te1"), { startDate: isoDaysFromNow(20), endDate: isoDaysFromNow(18) }));
+    });
+
+    it("viagem que já começou: a agência não edita mais: recusa", async () => {
+      await seedEditableTrip({ startDate: isoDaysFromNow(-2), endDate: isoDaysFromNow(3) });
+      await assertFails(updateDoc(doc(agente().firestore(), "trips/te1"), { name: "Outro nome" }));
+    });
+
+    it("viagem cancelada: a agência não edita: recusa", async () => {
+      await seedEditableTrip({ agencyCancelled: true, countsTowardLimit: false });
+      await assertFails(updateDoc(doc(agente().firestore(), "trips/te1"), { name: "Outro nome" }));
+    });
+
+    it("agência não aproveita a edição pra mexer em outros campos (participantes, admin, agência): recusa", async () => {
+      await seedEditableTrip();
+      const ref = doc(agente().firestore(), "trips/te1");
+      await assertFails(updateDoc(ref, { name: "x", adminEmails: ["agente@agencia.com"] }));
+      await assertFails(updateDoc(ref, { name: "x", participantEmails: ["cliente@x.com", "agente@agencia.com", "intruso@x.com"] }));
+      await assertFails(updateDoc(ref, { name: "x", agencyId: "outra" }));
+      await assertFails(updateDoc(ref, { name: "x", countsTowardLimit: false }));
+    });
+
+    it("data em formato inválido ou nome vazio: recusa", async () => {
+      await seedEditableTrip();
+      const ref = doc(agente().firestore(), "trips/te1");
+      await assertFails(updateDoc(ref, { startDate: "amanhã" }));
+      await assertFails(updateDoc(ref, { name: "" }));
+    });
+
+    it("o cliente (Admin) continua editando a própria viagem como antes: aceita", async () => {
+      await seedEditableTrip();
+      const cliente = testEnv.authenticatedContext("c", { email: "cliente@x.com" });
+      await assertSucceeds(updateDoc(doc(cliente.firestore(), "trips/te1"), { name: "Nome do cliente", startDate: isoDaysFromNow(11) }));
+    });
+  });
+
   it("qualquer pessoa logada lê os planos; ninguém grava pelo app", async () => {
     await admin(async (ctx) => {
       await setDoc(doc(ctx.firestore(), "plans/chaski"), { label: "Chaski", maxActiveTrips: 8 });
