@@ -327,8 +327,9 @@
             </div>
           </div>
           <div>
-            <label>E-mail do cliente final (dono da viagem)</label>
-            <input type="text" id="agencyTripClientEmail" placeholder="cliente@gmail.com">
+            <label>E-mail(s) do(s) cliente(s) final(is)</label>
+            <textarea id="agencyTripClientEmail" rows="3" placeholder="cliente@gmail.com&#10;familiar@gmail.com"></textarea>
+            <div class="screen-sub" style="margin:4px 0 0; font-size:11.5px;">Um por linha ou separados por vírgula (até 10). O <strong>primeiro</strong> é o dono da viagem (Admin); os demais entram como Colaborador. Todos recebem o convite por e-mail, e o botão "Copiar p/ WhatsApp" do card serve para todos.</div>
           </div>
           <div id="agencyTripFormStatus" class="screen-sub hidden" style="margin:8px 0 0;"></div>
           <button id="agencyCreateTripBtn" class="btn btn-primary btn-block">Criar viagem</button>

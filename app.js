@@ -1541,6 +1541,15 @@ $("showAgencyHistoryBtn")?.addEventListener("click", () => {
   renderAgencyLists();
 });
 
+// Vários clientes na criação da viagem pela agência (4/out/2026): aceita e-mails separados
+// por linha, vírgula, ponto e vírgula ou espaço. Tira repetidos, confere o formato e o limite.
+const AGENCY_MAX_CLIENT_EMAILS = 10;
+function parseClientEmails(text) {
+  const all = String(text || "").split(/[\s,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
+  const unique = [...new Set(all)];
+  const invalid = unique.filter((e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+  return { emails: unique.filter((e) => !invalid.includes(e)), invalid };
+}
 $("agencyCreateTripBtn")?.addEventListener("click", async () => {
   const statusEl = $("agencyTripFormStatus");
   statusEl.classList.add("hidden");
@@ -1548,9 +1557,25 @@ $("agencyCreateTripBtn")?.addEventListener("click", async () => {
   const destination = $("agencyTripDestination").value.trim();
   const startDate = $("agencyTripStart").value;
   const endDate = $("agencyTripEnd").value;
-  const clientEmail = $("agencyTripClientEmail").value.trim().toLowerCase();
+  const myEmail = currentUser.email.toLowerCase();
+  const parsed = parseClientEmails($("agencyTripClientEmail").value);
+  // O e-mail da própria agência não entra como cliente (ela já é participante, com papel Agência).
+  const clientEmails = parsed.emails.filter((e) => e !== myEmail);
+  const clientEmail = clientEmails[0]; // o primeiro é o dono da viagem (Admin)
   if (!name || !startDate || !endDate || !clientEmail) {
-    statusEl.textContent = "Preencha nome, datas e o e-mail do cliente.";
+    statusEl.textContent = parsed.invalid.length === 0
+      ? "Preencha nome, datas e o e-mail do cliente."
+      : `E-mail inválido: ${parsed.invalid.join(", ")}.`;
+    statusEl.classList.remove("hidden");
+    return;
+  }
+  if (parsed.invalid.length > 0) {
+    statusEl.textContent = `E-mail inválido: ${parsed.invalid.join(", ")}. Corrija e tente de novo.`;
+    statusEl.classList.remove("hidden");
+    return;
+  }
+  if (clientEmails.length > AGENCY_MAX_CLIENT_EMAILS) {
+    statusEl.textContent = `No máximo ${AGENCY_MAX_CLIENT_EMAILS} e-mails por viagem (você colocou ${clientEmails.length}). Os demais podem entrar pelo link do WhatsApp.`;
     statusEl.classList.remove("hidden");
     return;
   }
@@ -1560,9 +1585,11 @@ $("agencyCreateTripBtn")?.addEventListener("click", async () => {
     return;
   }
   const agencyId = currentAgency.id;
-  const myEmail = currentUser.email.toLowerCase();
-  const participantEmails = [clientEmail, myEmail];
-  const participantRoles = { [clientEmail]: "admin", [myEmail]: "agencia" };
+  // Primeiro cliente = dono (Admin); os demais entram como Colaborador (mesmo papel de
+  // quem entra pelo link); a agência fica como participante com o papel "agencia".
+  const participantEmails = [...clientEmails, myEmail];
+  const participantRoles = { [myEmail]: "agencia" };
+  clientEmails.forEach((e, i) => { participantRoles[e] = i === 0 ? "admin" : "colaborador"; });
   setButtonLoading($("agencyCreateTripBtn"), true);
   try {
     // QA Rodada C (25/set/2026): viagem + contador gravados JUNTOS numa
@@ -1594,7 +1621,9 @@ $("agencyCreateTripBtn")?.addEventListener("click", async () => {
     // trava a criação da viagem se o doc stats/global ainda não existir.
     updateDoc(doc(db, "stats", "global"), { totalTripsAllTime: increment(1) }).catch(() => {});
     logActivityFor(docRef.id, "agencia", "create", `Viagem criada pela agência "${currentAgency.name || agencyId}".`);
-    sendInviteEmail(clientEmail, name, docRef.id, currentAgency.name || myDisplayName || currentUser.email);
+    // Um convite por e-mail para CADA cliente (cada um é um documento na fila "mail").
+    clientEmails.forEach((e) => sendInviteEmail(e, name, docRef.id, currentAgency.name || myDisplayName || currentUser.email));
+    showToast(`Viagem criada. Convites por e-mail em envio para ${clientEmails.length} ${clientEmails.length === 1 ? "cliente" : "clientes"}.`, "info");
     $("agencyNewTripForm").classList.add("hidden");
     $("agencyTripName").value = ""; $("agencyTripDestination").value = "";
     $("agencyTripStart").value = ""; $("agencyTripEnd").value = ""; $("agencyTripClientEmail").value = "";
