@@ -592,6 +592,32 @@ function fmtDate(d) {
   return escapeHtml(`${day}/${m}`); // data vem do banco — escapada por segurança (QA #1)
 }
 
+// ---- Datas dentro do período da viagem (4/out/2026) ----
+// Itinerário e estadia só aceitam datas entre o início e o fim da viagem. Quem precisar
+// de uma data fora estende a viagem em "✎ Editar viagem" (o período da viagem é a regra).
+function isDateInsideTrip(iso) {
+  if (!iso) return false;
+  const start = currentTripData?.startDate, end = currentTripData?.endDate;
+  if (start && iso < start) return false;
+  if (end && iso > end) return false;
+  return true;
+}
+function outsideTripMessage() {
+  return `Essa data está fora da viagem (${fmtDate(currentTripData?.startDate)} a ${fmtDate(currentTripData?.endDate)}). Para estender a viagem, use ✎ Editar viagem.`;
+}
+// Limita os seletores de data (calendário abre no mês da viagem e só deixa escolher
+// dias do período). A validação de verdade fica nos botões de salvar — quem digita
+// a data à mão também é barrado.
+function applyTripDateLimits() {
+  const start = currentTripData?.startDate, end = currentTripData?.endDate;
+  ["itDate", "stayCheckin", "stayCheckout"].forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    if (start) el.min = start; else el.removeAttribute("min");
+    if (end) el.max = end; else el.removeAttribute("max");
+  });
+}
+
 // Soma dias a uma data "YYYY-MM-DD" sem cair em bug de fuso — cria a data
 // como meia-noite LOCAL (não UTC), igual ao princípio do localISODate().
 function addDaysISO(iso, days) {
@@ -1913,6 +1939,7 @@ async function openTrip(tripId) {
   show($("appScreen"));
   $("currentTripTitle").textContent = currentTripData.name;
   renderCountdown();
+  applyTripDateLimits();
   renderHojeTab();
   fetchWeatherIfNeeded();
   initBulkImportToggle();
@@ -2057,6 +2084,7 @@ $("saveTripEditBtn").addEventListener("click", async () => {
   logActivity("geral", "viagem editada", `${name} (${startDate} – ${endDate})`);
   $("currentTripTitle").textContent = name;
   renderCountdown();
+  applyTripDateLimits();
   renderHojeTab();
   if (destinationChanged) {
     localStorage.removeItem(`kipu_weather_v2_${currentTripId}`); // destino mudou, o clima cacheado não vale mais
@@ -2733,6 +2761,7 @@ $("saveItinerarioBtn").addEventListener("click", async () => {
   const paymentStatus = $("itPaymentStatus").value;
   const responsible = $("itResponsible").value;
   if (!date || !title) { showToast("Preencha data e atividade."); return; }
+  if (!isDateInsideTrip(date)) { showToast(outsideTripMessage(), "error"); return; }
   const payload = { date, time, endTime, title, location, status, value, paymentStatus, responsible };
 
   setButtonLoading($("saveItinerarioBtn"), true);
@@ -3029,6 +3058,13 @@ $("importItinerarioBtn")?.addEventListener("click", async () => {
     return;
   }
 
+  const outsideDates = [...new Set(items.filter((it) => !isDateInsideTrip(it.date)).map((it) => it.date))].sort();
+  if (outsideDates.length > 0) {
+    statusEl.textContent = `Nada foi importado: ${outsideDates.length} data(s) fora da viagem (${fmtDate(currentTripData?.startDate)} a ${fmtDate(currentTripData?.endDate)}): ${outsideDates.map(fmtDate).join(", ")}. Corrija as datas ou estenda a viagem em ✎ Editar viagem.`;
+    statusEl.classList.remove("hidden");
+    return;
+  }
+
   statusEl.textContent = `Importando ${items.length} item(ns)...`;
   statusEl.classList.remove("hidden");
 
@@ -3110,9 +3146,19 @@ function openEstadiaForEdit(id, s) {
   $("estadiaForm").classList.remove("hidden");
   $("estadiaForm").scrollIntoView({ behavior: "smooth", block: "center" });
 }
+// O seletor de check-out não deixa escolher dia antes do check-in escolhido.
+$("stayCheckin")?.addEventListener("change", () => {
+  const ci = $("stayCheckin").value;
+  const co = $("stayCheckout");
+  if (!co) return;
+  if (ci) co.min = ci;
+  else if (currentTripData?.startDate) co.min = currentTripData.startDate;
+  if (ci && co.value && co.value < ci) co.value = ci;
+});
 function resetEstadiaForm() {
   editingEstadiaId = null;
   $("stayName").value = ""; $("stayCheckin").value = ""; $("stayCheckout").value = "";
+  applyTripDateLimits();
   $("stayAddress").value = ""; $("stayStatus").value = "pendente";
   $("saveEstadiaBtn").textContent = "Salvar";
   $("estadiaForm").classList.add("hidden");
@@ -3129,6 +3175,8 @@ $("saveEstadiaBtn").addEventListener("click", async () => {
   const checkin = $("stayCheckin").value, checkout = $("stayCheckout").value;
   const address = $("stayAddress").value.trim(), status = $("stayStatus").value;
   if (!name || !checkin || !checkout) { showToast("Preencha nome e datas."); return; }
+  if (checkout < checkin) { showToast("O check-out não pode ser antes do check-in.", "error"); return; }
+  if (!isDateInsideTrip(checkin) || !isDateInsideTrip(checkout)) { showToast(outsideTripMessage(), "error"); return; }
   const payload = { name, checkin, checkout, address, status };
   setButtonLoading($("saveEstadiaBtn"), true);
   try {
