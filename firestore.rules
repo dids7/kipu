@@ -146,6 +146,26 @@ service cloud.firestore {
           && (countsBefore == countsAfter || counterMovedWith(before.agencyId, countsAfter ? 1 : -1));
       }
 
+      // ---- Agência edita nome, destino e datas da viagem (4/out/2026) ----
+      // Só ANTES da viagem começar e com a viagem não cancelada (mesmo critério de
+      // cancelar). Só esses 4 campos mudam. A data de início não vai pro passado e o
+      // fim não pode ficar no passado — senão a agência "encerraria" a viagem e
+      // liberaria vaga do plano sem cancelar.
+      function agencyTripEditOk() {
+        let before = resource.data;
+        let after = request.resource.data;
+        let today = todayUTC();
+        return after.diff(before).affectedKeys().hasOnly(["name", "destination", "startDate", "endDate"])
+          && before.get("agencyCancelled", false) == false
+          && today < before.get("startDate", "0000-01-01")
+          && after.name is string && after.name.size() > 0 && after.name.size() <= 120
+          && after.get("destination", "") is string && after.get("destination", "").size() <= 120
+          && after.startDate is string && after.startDate.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+          && after.endDate is string && after.endDate.matches("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+          && after.startDate >= today
+          && after.startDate <= after.endDate;
+      }
+
       // ---- Funcionários da agência não saem nem mudam de papel (1/out/2026) ----
       // Em viagem de agência, o cliente (Admin) e os Colaboradores NÃO podem tirar da
       // lista de participantes um membro da agência dona da viagem, nem mudar o papel
@@ -261,6 +281,7 @@ service cloud.firestore {
       // (Migração única de viagens antigas sem adminEmails: REMOVIDA em 1/out/2026 —
       //  ARQ-9 parte 2. Todas as viagens em trips já têm adminEmails.)
       // - Painel da Agência: só contador e cancelamento (agencyTripChangeOk).
+      // - Agência: nome, destino e datas, só antes de a viagem começar (agencyTripEditOk).
       allow update: if request.auth != null && tripAccessible(resource.data) && (
         (
           // O cliente final é Admin da própria viagem de agência, e não pode
@@ -287,6 +308,13 @@ service cloud.firestore {
           roleFrom(resource.data) == "agencia" &&
           isAgencyMemberOfTrip(resource.data) &&
           agencyTripChangeOk()
+        )
+        ||
+        (
+          // Agência corrigindo nome/destino/datas antes da viagem começar (agencyTripEditOk).
+          roleFrom(resource.data) == "agencia" &&
+          isAgencyMemberOfTrip(resource.data) &&
+          agencyTripEditOk()
         )
       );
 
