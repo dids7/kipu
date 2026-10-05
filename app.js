@@ -949,10 +949,13 @@ function sendInviteEmail(toEmail, tripName, tripId, inviterName) {
       <p style="font-size:12px; color:#6b7684; margin:0;">Você recebeu este e-mail porque foi adicionado(a) como participante desta viagem no Kipu.</p>
     </div>
   `;
+  // tripId vai junto: a regra do Firestore (coleção mail) só aceita o e-mail se o
+  // destinatário for participante dessa viagem e quem envia também fizer parte dela.
   return addDoc(collection(db, "mail"), {
     to: toEmail,
+    tripId,
     message: { subject: `${inviterName} te convidou pra "${tripName}" 🎒`, html }
-  }).catch(() => {});
+  }).catch((err) => { console.warn("Não foi possível enfileirar o e-mail de convite:", err); });
 }
 
 // Mensagem pronta pro WhatsApp (COM-1/COM-2, 29/set/2026): a agência ou o

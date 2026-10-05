@@ -436,6 +436,46 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.token.email == userEmail;
     }
 
+    // ==== Fila de e-mails de convite (regra restaurada em 3/out/2026) ====
+    // O app grava um documento aqui e a extensão "Trigger Email" (que usa credencial
+    // de servidor e NÃO depende destas regras) envia o e-mail. Esta regra tinha se
+    // perdido na reescrita das regras (26/set): sem ela o Firestore recusava a
+    // gravação e nenhum convite saía (o app engole o erro de propósito).
+    // Pra ninguém usar o Gmail do Kipu como máquina de e-mail, só entra documento com:
+    // - exatamente os campos to (UM e-mail), tripId e message{subject, html};
+    // - destinatário que JÁ É participante da viagem tripId;
+    // - remetente que é participante dessa viagem (menos Convidado) ou membro da
+    //   agência dona dela; e viagem não cancelada.
+    // Ninguém lê, altera ou apaga pelo app.
+    match /mail/{mailId} {
+      function mailTripOk(tripId, toEmail) {
+        let trip = get(/databases/$(database)/documents/trips/$(tripId)).data;
+        let me = request.auth.token.email;
+        return trip.get("agencyCancelled", false) != true
+          && toEmail in trip.get("participantEmails", [])
+          && (
+            (me in trip.get("participantEmails", [])
+              && trip.get("participantRoles", {}).get(me, "colaborador") != "convidado")
+            || (trip.get("agencyId", "") != ""
+              && me in get(/databases/$(database)/documents/agencies/$(trip.agencyId)).data.get("memberEmails", []))
+          );
+      }
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(["to", "tripId", "message"])
+        && request.resource.data.keys().hasAll(["to", "tripId", "message"])
+        && request.resource.data.to is string
+        && request.resource.data.tripId is string
+        && request.resource.data.message is map
+        && request.resource.data.message.keys().hasOnly(["subject", "html"])
+        && request.resource.data.message.keys().hasAll(["subject", "html"])
+        && request.resource.data.message.subject is string
+        && request.resource.data.message.html is string
+        && request.resource.data.message.subject.size() < 300
+        && request.resource.data.message.html.size() < 30000
+        && mailTripOk(request.resource.data.tripId, request.resource.data.to);
+      allow read, update, delete: if false;
+    }
+
     // ==== Configuração interna (ARQ-2, 26/set/2026) ====
     // Guarda valores que não podem ser públicos (ex: config/creation.code,
     // o código de criação de viagem pessoal). Ninguém lê nem grava pelo
