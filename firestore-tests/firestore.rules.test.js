@@ -608,6 +608,93 @@ describe("Kipu — firestore.rules", () => {
     });
   });
 
+  describe("E-mail de convite (coleção mail) — só pra participantes da viagem", () => {
+    // Viagem de agência: cliente (admin), colaborador, convidado, funcionário da
+    // agência (participante, papel "agencia") e um 2º funcionário (da agência, fora da lista).
+    async function seedMailTrip(extra = {}) {
+      await admin(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), "agencies/ag9"), { name: "Agência 9", memberEmails: ["agente@agencia.com", "agente2@agencia.com"] });
+        await setDoc(doc(ctx.firestore(), "trips/tm1"), {
+          name: "Viagem", startDate: isoDaysFromNow(5), endDate: isoDaysFromNow(10),
+          participantEmails: ["cliente@x.com", "colab@x.com", "convidado@x.com", "agente@agencia.com"],
+          participantRoles: { "cliente@x.com": "admin", "colab@x.com": "colaborador", "convidado@x.com": "convidado", "agente@agencia.com": "agencia" },
+          adminEmails: ["cliente@x.com"], createdBy: "cliente@x.com",
+          agencyId: "ag9", agencyCancelled: false, countsTowardLimit: true, ...extra
+        });
+      });
+    }
+    const convite = (to, over = {}) => ({ to, tripId: "tm1", message: { subject: "Te convidou", html: "<p>oi</p>" }, ...over });
+    const como = (uid, email) => testEnv.authenticatedContext(uid, { email });
+
+    it("Admin envia convite pra outro participante da viagem: aceita", async () => {
+      await seedMailTrip();
+      await assertSucceeds(setDoc(doc(como("c", "cliente@x.com").firestore(), "mail/m1"), convite("colab@x.com")));
+    });
+
+    it("funcionário da agência (participante) envia convite ao cliente: aceita", async () => {
+      await seedMailTrip();
+      await assertSucceeds(setDoc(doc(como("a", "agente@agencia.com").firestore(), "mail/m1"), convite("cliente@x.com")));
+    });
+
+    it("2º funcionário da agência (fora da lista de participantes) envia convite: aceita", async () => {
+      await seedMailTrip();
+      await assertSucceeds(setDoc(doc(como("a2", "agente2@agencia.com").firestore(), "mail/m1"), convite("cliente@x.com")));
+    });
+
+    it("destinatário que NÃO é participante da viagem: recusa", async () => {
+      await seedMailTrip();
+      await assertFails(setDoc(doc(como("c", "cliente@x.com").firestore(), "mail/m1"), convite("qualquer@fora.com")));
+    });
+
+    it("quem não participa da viagem não consegue mandar e-mail: recusa", async () => {
+      await seedMailTrip();
+      await assertFails(setDoc(doc(como("e", "estranho@fora.com").firestore(), "mail/m1"), convite("cliente@x.com")));
+    });
+
+    it("Convidado não envia convite: recusa", async () => {
+      await seedMailTrip();
+      await assertFails(setDoc(doc(como("g", "convidado@x.com").firestore(), "mail/m1"), convite("colab@x.com")));
+    });
+
+    it("campo extra no documento (ex: bcc pra espalhar o e-mail): recusa", async () => {
+      await seedMailTrip();
+      await assertFails(setDoc(doc(como("c", "cliente@x.com").firestore(), "mail/m1"), convite("colab@x.com", { bcc: "spam@fora.com" })));
+    });
+
+    it("mais de um destinatário (lista no campo to): recusa", async () => {
+      await seedMailTrip();
+      await assertFails(setDoc(doc(como("c", "cliente@x.com").firestore(), "mail/m1"), convite(["colab@x.com", "convidado@x.com"])));
+    });
+
+    it("campo extra dentro da mensagem (ex: anexo): recusa", async () => {
+      await seedMailTrip();
+      await assertFails(setDoc(doc(como("c", "cliente@x.com").firestore(), "mail/m1"), convite("colab@x.com", {
+        message: { subject: "x", html: "<p>x</p>", attachments: [{ filename: "a.txt", content: "x" }] }
+      })));
+    });
+
+    it("sem tripId (como era antes da correção): recusa", async () => {
+      await seedMailTrip();
+      await assertFails(setDoc(doc(como("c", "cliente@x.com").firestore(), "mail/m1"), { to: "colab@x.com", message: { subject: "x", html: "<p>x</p>" } }));
+    });
+
+    it("viagem cancelada pela agência: ninguém dispara convite", async () => {
+      await seedMailTrip({ agencyCancelled: true, countsTowardLimit: false });
+      await assertFails(setDoc(doc(como("c", "cliente@x.com").firestore(), "mail/m1"), convite("colab@x.com")));
+    });
+
+    it("ninguém lê, altera nem apaga os e-mails da fila pelo app", async () => {
+      await seedMailTrip();
+      await admin(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), "mail/m9"), convite("colab@x.com"));
+      });
+      const cliente = como("c", "cliente@x.com");
+      await assertFails(getDoc(doc(cliente.firestore(), "mail/m9")));
+      await assertFails(updateDoc(doc(cliente.firestore(), "mail/m9"), { to: "outro@x.com" }));
+      await assertFails(deleteDoc(doc(cliente.firestore(), "mail/m9")));
+    });
+  });
+
   it("qualquer pessoa logada lê os planos; ninguém grava pelo app", async () => {
     await admin(async (ctx) => {
       await setDoc(doc(ctx.firestore(), "plans/chaski"), { label: "Chaski", maxActiveTrips: 8 });
